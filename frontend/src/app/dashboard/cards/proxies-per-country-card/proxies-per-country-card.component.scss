@@ -4,11 +4,62 @@
   justify-content: space-between;
 }
 
-.swatch {
-  width: 0.9rem;
-  height: 0.9rem;
-  border-radius: 9999px;
-  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.3), 0 8px 20px rgba(0, 0, 0, 0.35);
+.flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.2rem;
+  font-size: 1.05rem;
+  border-radius: 0.35rem;
+  background: #0b1220;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.35), 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+.more-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.5rem;
+  background: #0f172a;
+  color: #e5e7eb;
+  border: 1px solid #1f2937;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+}
+
+.more-btn:hover {
+  background: #111827;
+  border-color: #334155;
+  color: #ffffff;
+}
+
+.all-countries-list {
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.search-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 0.4rem;
+}
+
+.search-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #1f2937;
+  background: #252525;
+  color: #e5e7eb;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--theme-primary-500, #348566);
+  box-shadow: 0 0 0 1px var(--theme-primary-500, #348566);
 }
 
 .map-panel {

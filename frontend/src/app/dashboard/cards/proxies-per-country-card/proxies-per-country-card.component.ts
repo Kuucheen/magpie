@@ -1,8 +1,9 @@
 import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
-import {NgStyle} from '@angular/common';
+import {FormsModule} from '@angular/forms';
 import {Card} from 'primeng/card';
 import {PrimeTemplate} from 'primeng/api';
 import {UIChart} from 'primeng/chart';
+import {Dialog} from 'primeng/dialog';
 import Chart from 'chart.js/auto';
 import {ChartData, ChartOptions, TooltipItem} from 'chart.js';
 import {ChoroplethController, GeoFeature, ColorScale, ProjectionScale} from 'chartjs-chart-geo';
@@ -64,12 +65,16 @@ const COUNTRY_ALIASES: Record<string, string> = {
   'bosnia and herzegovina': 'Bosnia and Herz.',
   'democratic republic of the congo': 'Dem. Rep. Congo',
   'republic of the congo': 'Congo',
+  'congo republic': 'Congo',
   congo: 'Congo',
+  'dr congo': 'Dem. Rep. Congo',
   ivorycoast: "Côte d'Ivoire",
   "cote d'ivoire": "Côte d'Ivoire",
   'ivory coast': "Côte d'Ivoire",
   swaziland: 'eSwatini',
-  eswatini: 'eSwatini'
+  eswatini: 'eSwatini',
+  'the netherlands': 'Netherlands',
+  'trinidad and tobago': 'Trinidad and Tobago'
 };
 
 Object.entries(COUNTRY_ALIASES).forEach(([alias, canonical]) => {
@@ -79,10 +84,66 @@ Object.entries(COUNTRY_ALIASES).forEach(([alias, canonical]) => {
   }
 });
 
+const REGION_CODES = [
+  'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ',
+  'BA', 'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS',
+  'BT', 'BV', 'BW', 'BY', 'BZ', 'CA', 'CC', 'CD', 'CF', 'CG', 'CH', 'CI', 'CK', 'CL', 'CM', 'CN',
+  'CO', 'CR', 'CU', 'CV', 'CW', 'CX', 'CY', 'CZ', 'DE', 'DJ', 'DK', 'DM', 'DO', 'DZ', 'EC', 'EE',
+  'EG', 'EH', 'ER', 'ES', 'ET', 'FI', 'FJ', 'FK', 'FM', 'FO', 'FR', 'GA', 'GB', 'GD', 'GE', 'GF',
+  'GG', 'GH', 'GI', 'GL', 'GM', 'GN', 'GP', 'GQ', 'GR', 'GS', 'GT', 'GU', 'GW', 'GY', 'HK', 'HM',
+  'HN', 'HR', 'HT', 'HU', 'ID', 'IE', 'IL', 'IM', 'IN', 'IO', 'IQ', 'IR', 'IS', 'IT', 'JE', 'JM',
+  'JO', 'JP', 'KE', 'KG', 'KH', 'KI', 'KM', 'KN', 'KP', 'KR', 'KW', 'KY', 'KZ', 'LA', 'LB', 'LC',
+  'LI', 'LK', 'LR', 'LS', 'LT', 'LU', 'LV', 'LY', 'MA', 'MC', 'MD', 'ME', 'MF', 'MG', 'MH', 'MK',
+  'ML', 'MM', 'MN', 'MO', 'MP', 'MQ', 'MR', 'MS', 'MT', 'MU', 'MV', 'MW', 'MX', 'MY', 'MZ', 'NA',
+  'NC', 'NE', 'NF', 'NG', 'NI', 'NL', 'NO', 'NP', 'NR', 'NU', 'NZ', 'OM', 'PA', 'PE', 'PF', 'PG',
+  'PH', 'PK', 'PL', 'PM', 'PN', 'PR', 'PS', 'PT', 'PW', 'PY', 'QA', 'RE', 'RO', 'RS', 'RU', 'RW',
+  'SA', 'SB', 'SC', 'SD', 'SE', 'SG', 'SH', 'SI', 'SJ', 'SK', 'SL', 'SM', 'SN', 'SO', 'SR', 'SS',
+  'ST', 'SV', 'SX', 'SY', 'SZ', 'TC', 'TD', 'TF', 'TG', 'TH', 'TJ', 'TK', 'TL', 'TM', 'TN', 'TO',
+  'TR', 'TT', 'TV', 'TW', 'TZ', 'UA', 'UG', 'UM', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VG', 'VI',
+  'VN', 'VU', 'WF', 'WS', 'XK', 'YE', 'YT', 'ZA', 'ZM', 'ZW'
+];
+
+const COUNTRY_CODE_OVERRIDES: Record<string, string> = {
+  usa: 'US',
+  'united states': 'US',
+  'united states of america': 'US',
+  uk: 'GB',
+  'united kingdom': 'GB',
+  'south korea': 'KR',
+  'north korea': 'KP',
+  russia: 'RU',
+  'czech republic': 'CZ',
+  laos: 'LA',
+  vietnam: 'VN',
+  venezuela: 'VE',
+  bolivia: 'BO',
+  tanzania: 'TZ',
+  syria: 'SY',
+  iran: 'IR',
+  moldova: 'MD',
+  palestine: 'PS',
+  'palestinian territories': 'PS',
+  macedonia: 'MK',
+  'north macedonia': 'MK',
+  'bosnia and herzegovina': 'BA',
+  'democratic republic of the congo': 'CD',
+  'republic of the congo': 'CG',
+  'congo republic': 'CG',
+  congo: 'CG',
+  'dr congo': 'CD',
+  ivorycoast: 'CI',
+  "cote d'ivoire": 'CI',
+  'ivory coast': 'CI',
+  swaziland: 'SZ',
+  eswatini: 'SZ',
+  'the netherlands': 'NL',
+  'trinidad and tobago': 'TT'
+};
+
 @Component({
   selector: 'app-proxies-per-country-card',
   standalone: true,
-  imports: [Card, PrimeTemplate, UIChart, NgStyle],
+  imports: [Card, PrimeTemplate, UIChart, Dialog, FormsModule],
   templateUrl: './proxies-per-country-card.component.html',
   styleUrl: './proxies-per-country-card.component.scss'
 })
@@ -96,10 +157,14 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
   mapOptions: ChartOptions<'choropleth'> = {};
   maxCountryValue = 1;
   readonly mapChartType: any = 'choropleth';
+  readonly listLimit = 7;
+  showAllCountries = false;
+  searchTerm = '';
 
   private readonly regionNames = typeof Intl.DisplayNames !== 'undefined'
     ? new Intl.DisplayNames(['en'], { type: 'region' })
     : null;
+  private readonly regionLookup = this.buildRegionLookup();
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['countries']) {
@@ -107,13 +172,139 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
     }
   }
 
-  previewColor(country: CountryBreakdown): string {
-    const normalized = Math.min(1, Math.max(0, this.resolveValue(country) / this.maxCountryValue));
-    return this.interpolateColor(normalized);
+  countryFlag(country: CountryBreakdown): string {
+    const code = this.resolveCountryCode(country?.name);
+    const emoji = code ? this.toFlagEmoji(code) : undefined;
+    return emoji ?? '🌐';
+  }
+
+  visibleCountries(): CountryBreakdown[] {
+    if (!Array.isArray(this.countries)) {
+      return [];
+    }
+    return this.countries.slice(0, this.listLimit);
+  }
+
+  hasMoreCountries(): boolean {
+    return (this.countries?.length ?? 0) > this.listLimit;
+  }
+
+  filteredCountries(): CountryBreakdown[] {
+    const term = this.searchTerm.trim().toLowerCase();
+    const entries = this.countries ?? [];
+    if (!term) {
+      return entries;
+    }
+    return entries.filter((entry) => (entry.name ?? '').toLowerCase().includes(term));
   }
 
   setViewMode(mode: 'map' | 'countries'): void {
     this.viewMode = mode;
+  }
+
+  private buildRegionLookup(): Map<string, string> {
+    if (!this.regionNames) {
+      return new Map<string, string>();
+    }
+
+    const entries: Array<[string, string]> = [];
+
+    for (const code of REGION_CODES) {
+      let name: string | undefined;
+      try {
+        name = this.regionNames.of(code);
+      } catch {
+        continue;
+      }
+
+      if (!name) {
+        continue;
+      }
+
+      const lower = name.toLowerCase();
+      entries.push([lower, code]);
+
+      const normalized = this.normalizeNameKey(name);
+      if (normalized && normalized !== lower) {
+        entries.push([normalized, code]);
+      }
+    }
+
+    return new Map(entries);
+  }
+
+  private resolveCountryCode(name: string | undefined | null): string | undefined {
+    const normalized = (name ?? '').trim();
+    if (!normalized) {
+      return undefined;
+    }
+
+    const lower = normalized.toLowerCase();
+    if (lower === 'unknown' || lower === 'others' || lower === 'n/a') {
+      return undefined;
+    }
+
+    if (/^[a-z]{2}$/i.test(normalized)) {
+      return normalized.toUpperCase();
+    }
+
+    const override = COUNTRY_CODE_OVERRIDES[lower];
+    if (override) {
+      return override;
+    }
+
+    const lookup = this.regionLookup.get(lower);
+    if (lookup) {
+      return lookup;
+    }
+
+    const compact = this.normalizeNameKey(normalized);
+    if (compact) {
+      const compactMatch = this.regionLookup.get(compact);
+      if (compactMatch) {
+        return compactMatch;
+      }
+    }
+
+    const alias = COUNTRY_ALIASES[lower];
+    if (alias) {
+      const aliasKey = alias.toLowerCase();
+      const aliasMatch = this.regionLookup.get(aliasKey)
+        ?? this.regionLookup.get(this.normalizeNameKey(aliasKey));
+      if (aliasMatch) {
+        return aliasMatch;
+      }
+    }
+
+    for (const [key, code] of this.regionLookup.entries()) {
+      if (key.startsWith(lower) || lower.startsWith(key)) {
+        return code;
+      }
+      if (compact && (key.startsWith(compact) || compact.startsWith(key))) {
+        return code;
+      }
+    }
+
+    return undefined;
+  }
+
+  private normalizeNameKey(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z]/g, '');
+  }
+
+  private toFlagEmoji(code: string): string | undefined {
+    if (!code || code.length !== 2 || !/^[A-Z]{2}$/i.test(code)) {
+      return undefined;
+    }
+
+    const upper = code.toUpperCase();
+    const base = 0x1f1e6;
+    const offset = (char: string) => base + (char.charCodeAt(0) - 65);
+    return String.fromCodePoint(offset(upper[0]), offset(upper[1]));
   }
 
   private buildMap(): void {

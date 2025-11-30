@@ -256,21 +256,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }))
       : this.buildCountryCountsFromProxies(proxies);
 
-    const sorted = aggregated.sort((a, b) => b.value - a.value);
+    const sorted = aggregated
+      .filter((entry) => entry.value > 0)
+      .sort((a, b) => b.value - a.value);
     const total = sorted.reduce((sum, entry) => sum + entry.value, 0);
 
-    const primaryEntries = sorted.slice(0, 10);
-    const othersValue = sorted.slice(4).reduce((sum, entry) => sum + entry.value, 0);
-    if (othersValue > 0) {
-      primaryEntries.push({ name: 'Others', value: othersValue });
-    }
-
-    const palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1', '#34d399'];
-
-    this.majorCountries.set(primaryEntries.map((entry, index) => ({
+    this.majorCountries.set(sorted.map((entry) => ({
       name: entry.name,
       value: entry.value,
-      color: palette[index % palette.length],
       percentage: total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0.0'
     })));
   }

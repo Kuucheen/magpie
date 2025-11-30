@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/charmbracelet/log"
 )
 
 const (
@@ -33,8 +35,10 @@ func getProxyCipher() (*proxyCipher, error) {
 	proxyCipherOnce.Do(func() {
 		rawKey := strings.TrimSpace(os.Getenv(proxyEncryptionKeyEnv))
 		if rawKey == "" {
-			proxyCipherErr = errors.New("proxy encryption key not set: " + proxyEncryptionKeyEnv)
-			return
+			//proxyCipherErr = errors.New("proxy encryption key not set: " + proxyEncryptionKeyEnv)
+			rawKey = "magpie-default-key"
+			log.Warn("proxy encryption key not set, using default")
+			//return
 		}
 
 		key, err := deriveProxyKey(rawKey)

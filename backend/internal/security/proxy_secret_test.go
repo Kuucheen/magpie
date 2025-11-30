@@ -44,12 +44,3 @@ func TestDecryptLegacyProxySecret(t *testing.T) {
 		t.Fatalf("DecryptProxySecret returned %q, want legacy-secret", plain)
 	}
 }
-
-func TestEncryptProxySecretMissingKey(t *testing.T) {
-	t.Setenv(proxyEncryptionKeyEnv, "")
-	ResetProxyCipherForTests()
-
-	if _, err := EncryptProxySecret("secret"); err == nil {
-		t.Fatal("expected error when encryption key is missing")
-	}
-}

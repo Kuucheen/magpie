@@ -2,9 +2,11 @@ package rotatingproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,6 +114,13 @@ func newProxyServer(rotator domain.RotatingProxy) *proxyServer {
 }
 
 func (ps *proxyServer) Start() error {
+	if isSocksProtocol(ps.rotator.Protocol.Name) {
+		return ps.startSocksServer()
+	}
+	return ps.startHTTPServer()
+}
+
+func (ps *proxyServer) startHTTPServer() error {
 	address := fmt.Sprintf(":%d", ps.rotator.ListenPort)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -138,6 +147,33 @@ func (ps *proxyServer) Start() error {
 	return nil
 }
 
+func (ps *proxyServer) startSocksServer() error {
+	address := fmt.Sprintf(":%d", ps.rotator.ListenPort)
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return err
+	}
+
+	handler := newSocksProxyHandler(ps.rotator)
+	ps.listener = listener
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
+				log.Error("rotating proxy server: accept error", "rotator_id", ps.rotator.ID, "error", err)
+				continue
+			}
+			go handler.handle(conn)
+		}
+	}()
+
+	return nil
+}
+
 func (ps *proxyServer) Stop() {
 	ps.closeOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -151,4 +187,13 @@ func (ps *proxyServer) Stop() {
 			_ = ps.listener.Close()
 		}
 	})
+}
+
+func isSocksProtocol(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "socks4", "socks5":
+		return true
+	default:
+		return false
+	}
 }

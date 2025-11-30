@@ -93,11 +93,13 @@ func TestAuthenticateClient_AllowsUnauthenticatedAccessWhenDisabled(t *testing.T
 
 func TestSupportedUpstream(t *testing.T) {
 	cases := map[string]bool{
-		"http":  true,
-		"HTTP":  true,
-		"https": true,
-		"socks": false,
-		"":      false,
+		"http":   true,
+		"HTTP":   true,
+		"https":  true,
+		"socks4": true,
+		"socks5": true,
+		"socks":  false,
+		"":       false,
 	}
 
 	for protocol, want := range cases {
@@ -261,6 +263,219 @@ func TestHandleConnect_ProxiesDataThroughUpstream(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("handleConnect did not return after closing connections")
+	}
+}
+
+func TestSocks5Handler_WithAuthenticationAndPiping(t *testing.T) {
+	handler := newSocksProxyHandler(domain.RotatingProxy{
+		ID:           10,
+		UserID:       5,
+		AuthRequired: true,
+		AuthUsername: "rot-user",
+		AuthPassword: "rot-pass",
+		Protocol:     domain.Protocol{Name: "socks5"},
+	})
+
+	origNext := getNextRotatingProxyFunc
+	getNextRotatingProxyFunc = func(userID uint, rotatorID uint64) (*dto.RotatingProxyNext, error) {
+		if userID != 5 || rotatorID != 10 {
+			t.Fatalf("unexpected identifiers: userID=%d rotatorID=%d", userID, rotatorID)
+		}
+		return &dto.RotatingProxyNext{
+			ProxyID:  99,
+			IP:       "192.0.2.44",
+			Port:     1080,
+			Protocol: "socks5",
+			HasAuth:  true,
+			Username: "up-user",
+			Password: "up-pass",
+		}, nil
+	}
+	t.Cleanup(func() { getNextRotatingProxyFunc = origNext })
+
+	upClient, upServer := net.Pipe()
+	origConnect := connectThroughUpstreamFunc
+	connectThroughUpstreamFunc = func(target string, next *dto.RotatingProxyNext) (net.Conn, error) {
+		if target != "example.com:80" {
+			t.Fatalf("expected target example.com:80, got %s", target)
+		}
+		return upServer, nil
+	}
+	t.Cleanup(func() { connectThroughUpstreamFunc = origConnect })
+
+	clientConn, serverConn := net.Pipe()
+
+	done := make(chan struct{})
+	go func() {
+		handler.handle(serverConn)
+		close(done)
+	}()
+
+	if _, err := clientConn.Write([]byte{0x05, 0x01, 0x02}); err != nil {
+		t.Fatalf("write greeting: %v", err)
+	}
+	greetResp := make([]byte, 2)
+	if _, err := io.ReadFull(clientConn, greetResp); err != nil {
+		t.Fatalf("read greeting response: %v", err)
+	}
+	if greetResp[1] != 0x02 {
+		t.Fatalf("expected auth method 0x02, got %02x", greetResp[1])
+	}
+
+	authPayload := []byte{0x01, byte(len("rot-user"))}
+	authPayload = append(authPayload, []byte("rot-user")...)
+	authPayload = append(authPayload, byte(len("rot-pass")))
+	authPayload = append(authPayload, []byte("rot-pass")...)
+	if _, err := clientConn.Write(authPayload); err != nil {
+		t.Fatalf("write auth payload: %v", err)
+	}
+
+	authResp := make([]byte, 2)
+	if _, err := io.ReadFull(clientConn, authResp); err != nil {
+		t.Fatalf("read auth response: %v", err)
+	}
+	if authResp[1] != 0x00 {
+		t.Fatalf("authentication failed with code %02x", authResp[1])
+	}
+
+	host := []byte("example.com")
+	request := []byte{0x05, 0x01, 0x00, 0x03, byte(len(host))}
+	request = append(request, host...)
+	request = append(request, 0x00, 0x50) // port 80
+
+	if _, err := clientConn.Write(request); err != nil {
+		t.Fatalf("write connect request: %v", err)
+	}
+
+	reply := make([]byte, 10)
+	if _, err := io.ReadFull(clientConn, reply); err != nil {
+		t.Fatalf("read connect reply: %v", err)
+	}
+	if reply[1] != 0x00 {
+		t.Fatalf("expected success reply, got %02x", reply[1])
+	}
+
+	if _, err := clientConn.Write([]byte("ping")); err != nil {
+		t.Fatalf("write data to handler: %v", err)
+	}
+
+	payload := make([]byte, 4)
+	if _, err := io.ReadFull(upClient, payload); err != nil {
+		t.Fatalf("read payload upstream: %v", err)
+	}
+	if string(payload) != "ping" {
+		t.Fatalf("upstream payload = %q, want ping", string(payload))
+	}
+
+	if _, err := upClient.Write([]byte("pong")); err != nil {
+		t.Fatalf("write response upstream: %v", err)
+	}
+
+	if _, err := io.ReadFull(clientConn, payload); err != nil {
+		t.Fatalf("read response from handler: %v", err)
+	}
+	if string(payload) != "pong" {
+		t.Fatalf("client received %q, want pong", string(payload))
+	}
+
+	_ = clientConn.Close()
+	_ = upClient.Close()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("socks5 handler did not finish")
+	}
+}
+
+func TestSocks4Handler_WithUserIDAuth(t *testing.T) {
+	handler := newSocksProxyHandler(domain.RotatingProxy{
+		ID:           22,
+		UserID:       9,
+		AuthRequired: true,
+		AuthUsername: "rot-user",
+		AuthPassword: "rot-pass",
+		Protocol:     domain.Protocol{Name: "socks4"},
+	})
+
+	origNext := getNextRotatingProxyFunc
+	getNextRotatingProxyFunc = func(userID uint, rotatorID uint64) (*dto.RotatingProxyNext, error) {
+		if userID != 9 || rotatorID != 22 {
+			t.Fatalf("unexpected identifiers: userID=%d rotatorID=%d", userID, rotatorID)
+		}
+		return &dto.RotatingProxyNext{
+			ProxyID:  101,
+			IP:       "198.51.100.10",
+			Port:     9050,
+			Protocol: "socks4",
+		}, nil
+	}
+	t.Cleanup(func() { getNextRotatingProxyFunc = origNext })
+
+	upClient, upServer := net.Pipe()
+	origConnect := connectThroughUpstreamFunc
+	connectThroughUpstreamFunc = func(target string, next *dto.RotatingProxyNext) (net.Conn, error) {
+		if target != "1.1.1.1:1080" {
+			t.Fatalf("expected target 1.1.1.1:1080, got %s", target)
+		}
+		return upServer, nil
+	}
+	t.Cleanup(func() { connectThroughUpstreamFunc = origConnect })
+
+	clientConn, serverConn := net.Pipe()
+
+	done := make(chan struct{})
+	go func() {
+		handler.handle(serverConn)
+		close(done)
+	}()
+
+	req := []byte{0x04, 0x01, 0x04, 0x38, 0x01, 0x01, 0x01, 0x01} // port 1080, ip 1.1.1.1
+	req = append(req, []byte("rot-user:rot-pass")...)
+	req = append(req, 0x00)
+
+	if _, err := clientConn.Write(req); err != nil {
+		t.Fatalf("write socks4 request: %v", err)
+	}
+
+	resp := make([]byte, 8)
+	if _, err := io.ReadFull(clientConn, resp); err != nil {
+		t.Fatalf("read socks4 response: %v", err)
+	}
+	if resp[1] != 0x5A {
+		t.Fatalf("expected request granted, got %02x", resp[1])
+	}
+
+	if _, err := clientConn.Write([]byte("test")); err != nil {
+		t.Fatalf("write payload: %v", err)
+	}
+
+	payload := make([]byte, 4)
+	if _, err := io.ReadFull(upClient, payload); err != nil {
+		t.Fatalf("read upstream payload: %v", err)
+	}
+	if string(payload) != "test" {
+		t.Fatalf("unexpected upstream payload %q", string(payload))
+	}
+
+	if _, err := upClient.Write([]byte("back")); err != nil {
+		t.Fatalf("write upstream response: %v", err)
+	}
+
+	if _, err := io.ReadFull(clientConn, payload); err != nil {
+		t.Fatalf("read payload from handler: %v", err)
+	}
+	if string(payload) != "back" {
+		t.Fatalf("unexpected response %q", string(payload))
+	}
+
+	_ = clientConn.Close()
+	_ = upClient.Close()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("socks4 handler did not finish")
 	}
 }
 

@@ -26,12 +26,15 @@
     "@primeuix/themes": "^1.2.3",
     "@tailwindcss/postcss": "^4.1.12",
     "chart.js": "^4.5.0",
+    "chartjs-chart-geo": "^4.3.6",
     "primeicons": "^7.0.0",
     "primeng": "^20.0.1",
     "rxjs": "~7.8.0",
     "tailwindcss": "^4.1.12",
     "tailwindcss-primeui": "^0.6.1",
-    "tslib": "^2.3.0"
+    "topojson-client": "^3.1.0",
+    "tslib": "^2.3.0",
+    "world-atlas": "^2.0.2"
   },
   "devDependencies": {
     "@angular/build": "^20.3.6",

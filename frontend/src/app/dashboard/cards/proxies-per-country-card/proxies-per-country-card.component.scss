@@ -1,0 +1,62 @@
+.country-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.3), 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.map-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.map-frame {
+  position: relative;
+  height: 22rem;
+  //border-radius: 1rem;
+  //overflow: hidden;
+  //border: 1px solid #1f2937;
+}
+
+.map-caption {
+  letter-spacing: 0.01em;
+}
+
+:host ::ng-deep .map-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.tab-toggle {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.tab-btn {
+  padding: 0.35rem 0.75rem;
+  color: #cbd5e1;
+  background: #0f172a;
+  border: 1px solid #1f2937;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:not(.active):hover {
+  color: #e5e7eb;
+  background: #111827;
+  border-color: #1f2937;
+}
+
+.tab-btn.active {
+  color: var(--theme-primary-contrast, #0b1220);
+  background: var(--theme-primary-500, #348566);
+  border-color: var(--theme-primary-500, #348566);
+}

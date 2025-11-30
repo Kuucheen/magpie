@@ -76,44 +76,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   proxyHistory = signal<ProxyCheck[]>([]);
 
-  visitorPieData = signal({
-    labels: [] as string[],
-    datasets: [
-      {
-        data: [] as number[],
-        backgroundColor: [] as string[],
-        hoverBackgroundColor: [] as string[]
-      }
-    ]
-  });
-
   reputationBreakdown = signal<ReputationBreakdown>({ good: 0, neutral: 0, poor: 0, unknown: 0 });
   reputationChartData = signal<any>({});
   reputationChartOptions = signal<any>({});
 
   private readonly numberFormatter = new Intl.NumberFormat('de-DE');
-
-  readonly pieChartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'right',
-        labels: {
-          color: '#e5e7eb'
-        }
-      },
-      tooltip: {
-        callbacks: {
-          label: (context: any) => {
-            const label = context?.label ?? '';
-            const value = typeof context?.parsed === 'number' ? context.parsed : 0;
-            const formatted = this.numberFormatter.format(value);
-            return label ? `${label}: ${formatted}` : formatted;
-          }
-        }
-      }
-    }
-  };
 
   judgeTrafficData = signal<Record<string, number>>({});
   judgePeriodOptions = ['Yearly', 'Monthly', 'Weekly'];
@@ -189,7 +156,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.updateKpis(viewer.dashboard, viewer.proxyCount, viewer.proxySnapshots, viewer.proxyHistory);
     this.updateCountryBreakdown(
       viewer.proxies?.items ?? [],
-      viewer.proxyCount,
       viewer.dashboard?.countryBreakdown ?? []
     );
     this.updateReputationOverview(viewer.dashboard);
@@ -279,7 +245,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private updateCountryBreakdown(
     proxies: ProxyNode[],
-    proxyTotal: number,
     breakdown: CountryBreakdownEntry[] = []
   ): void {
     const aggregated = breakdown.length
@@ -308,37 +273,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
       color: palette[index % palette.length],
       percentage: total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0.0'
     })));
-
-    const labels = this.majorCountries().map((entry) => entry.name);
-    const data = this.majorCountries().map((entry) => entry.value);
-    const backgroundColors = this.majorCountries().map((entry, index) => entry.color ?? palette[index % palette.length]);
-    const hoverColors = backgroundColors.map((color) => this.adjustColor(color, 25));
-
-    let pieData = {
-      labels,
-      datasets: [
-        {
-          data,
-          backgroundColor: backgroundColors,
-          hoverBackgroundColor: hoverColors
-        }
-      ]
-    };
-
-    if (!labels.length && proxyTotal > 0) {
-      pieData = {
-        labels: ['Total'],
-        datasets: [
-          {
-            data: [proxyTotal],
-            backgroundColor: ['#3b82f6'],
-            hoverBackgroundColor: ['#60a5fa']
-          }
-        ]
-      };
-    }
-
-    this.visitorPieData.set(pieData);
   }
 
   private buildCountryCountsFromProxies(proxies: ProxyNode[]): Array<{ name: string; value: number }> {
@@ -738,25 +672,5 @@ export class DashboardComponent implements OnInit, OnDestroy {
       hour: '2-digit',
       minute: '2-digit'
     }).format(date);
-  }
-
-  private adjustColor(hex: string, amount: number): string {
-    const normalized = hex.replace('#', '');
-    if (normalized.length !== 6) {
-      return hex;
-    }
-
-    const r = parseInt(normalized.slice(0, 2), 16);
-    const g = parseInt(normalized.slice(2, 4), 16);
-    const b = parseInt(normalized.slice(4, 6), 16);
-
-    const clamp = (channel: number) => Math.max(0, Math.min(255, channel + amount));
-
-    const nr = clamp(r);
-    const ng = clamp(g);
-    const nb = clamp(b);
-
-    const toHex = (value: number) => value.toString(16).padStart(2, '0');
-    return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`;
   }
 }

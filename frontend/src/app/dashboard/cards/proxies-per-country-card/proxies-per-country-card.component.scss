@@ -1,9 +1,3 @@
-.country-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .flag {
   display: inline-flex;
   align-items: center;
@@ -12,24 +6,22 @@
   height: 1.2rem;
   font-size: 1.05rem;
   border-radius: 0.35rem;
-  background: #0b1220;
-  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.35), 0 10px 24px rgba(0, 0, 0, 0.4);
 }
 
 .more-btn {
   padding: 0.4rem 0.85rem;
   border-radius: 0.5rem;
-  background: #0f172a;
+  background: #29292b;
   color: #e5e7eb;
-  border: 1px solid #1f2937;
+  border: 1px solid #313132;
   font-weight: 600;
   font-size: 0.85rem;
   transition: all 0.15s ease;
 }
 
 .more-btn:hover {
-  background: #111827;
-  border-color: #334155;
+  background: #3a3a3c;
+  border-color: #424243;
   color: #ffffff;
 }
 
@@ -70,9 +62,6 @@
 .map-frame {
   position: relative;
   height: 22rem;
-  //border-radius: 1rem;
-  //overflow: hidden;
-  //border: 1px solid #1f2937;
 }
 
 .map-caption {
@@ -92,8 +81,8 @@
 .tab-btn {
   padding: 0.35rem 0.75rem;
   color: #cbd5e1;
-  background: #0f172a;
-  border: 1px solid #1f2937;
+  background: #29292b;
+  border: 1px solid #313132;
   border-radius: 0.5rem;
   font-weight: 600;
   font-size: 0.85rem;
@@ -102,12 +91,48 @@
 
 .tab-btn:not(.active):hover {
   color: #e5e7eb;
-  background: #111827;
-  border-color: #1f2937;
+  background: #3a3a3c;
+  border-color: #424243;
 }
 
 .tab-btn.active {
   color: var(--theme-primary-contrast, #0b1220);
   background: var(--theme-primary-500, #348566);
   border-color: var(--theme-primary-500, #348566);
+}
+
+.country-row {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.country-row__progress {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: #292929;
+  border-radius: 0.2rem;
+  opacity: 0.6;
+  z-index: 0;
+  transition: width 0.2s ease, opacity 0.2s ease;
+}
+
+.country-row__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-left: 0.2rem;
+}
+
+.country-row:hover {
+  background: #1f2125;
+  border-radius: 0.2rem;
+}
+
+.country-row:hover .country-row__progress {
+  opacity: 0.75;
 }

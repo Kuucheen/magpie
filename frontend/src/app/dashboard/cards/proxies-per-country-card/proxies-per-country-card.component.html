@@ -43,15 +43,18 @@
           <ul class="space-y-3">
             @for (c of visibleCountries(); track c.name) {
               <li class="country-row">
-                <div class="flex items-center gap-3">
-                  <span class="flag">{{ countryFlag(c) }}</span>
-                  <span class="text-white font-medium truncate">{{ c.name }}</span>
-                </div>
-                <div class="text-right leading-tight">
-                  <div class="text-white font-semibold text-sm">{{ c.percentage }}%</div>
-                  @if (c.value !== undefined) {
-                    <div class="text-neutral-500 text-xs">{{ c.value }} proxies</div>
-                  }
+                <div class="country-row__progress" [style.width.%]="countryPercent(c)"></div>
+                <div class="country-row__content">
+                  <div class="flex items-center gap-3">
+                    <span class="flag">{{ countryFlag(c) }}</span>
+                    <span class="text-white font-medium truncate">{{ c.name }}</span>
+                  </div>
+                  <div class="text-right leading-tight">
+                    <div class="text-white font-semibold text-sm">{{ c.percentage }}%</div>
+                    @if (c.value !== undefined) {
+                      <div class="text-neutral-500 text-xs">{{ c.value }} proxies</div>
+                    }
+                  </div>
                 </div>
               </li>
             }
@@ -92,16 +95,19 @@
       </div>
       <ul class="space-y-3 p-2">
         @for (c of filteredCountries(); track c.name) {
-          <li class="country-row">
-            <div class="flex items-center gap-3">
-              <span class="flag">{{ countryFlag(c) }}</span>
-              <span class="text-white font-medium truncate">{{ c.name }}</span>
-            </div>
-            <div class="text-right leading-tight">
-              <div class="text-white font-semibold text-sm">{{ c.percentage }}%</div>
-              @if (c.value !== undefined) {
-                <div class="text-neutral-500 text-xs">{{ c.value }} proxies</div>
-              }
+          <li class="country-row text-xs">
+            <div class="country-row__progress" [style.width.%]="countryPercent(c)"></div>
+            <div class="country-row__content">
+              <div class="flex items-center gap-3">
+                <span class="flag">{{ countryFlag(c) }}</span>
+                <span class="text-white font-medium truncate">{{ c.name }}</span>
+              </div>
+              <div class="text-right leading-tight">
+                <div class="text-white font-semibold text-sm">{{ c.percentage }}%</div>
+                @if (c.value !== undefined) {
+                  <div class="text-neutral-500 text-xs">{{ c.value }} proxies</div>
+                }
+              </div>
             </div>
           </li>
         }

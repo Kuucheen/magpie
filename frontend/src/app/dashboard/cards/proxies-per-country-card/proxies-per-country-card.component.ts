@@ -156,6 +156,7 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
   mapData: ChartData<'choropleth'> = { labels: [], datasets: [] };
   mapOptions: ChartOptions<'choropleth'> = {};
   maxCountryValue = 1;
+  totalValue = 0;
   readonly mapChartType: any = 'choropleth';
   readonly listLimit = 7;
   showAllCountries = false;
@@ -168,6 +169,7 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['countries']) {
+      this.recalculateTotals();
       this.buildMap();
     }
   }
@@ -200,6 +202,25 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
 
   setViewMode(mode: 'map' | 'countries'): void {
     this.viewMode = mode;
+  }
+
+  countryPercent(country: CountryBreakdown): number {
+    const percent = this.resolvePercentage(country);
+    if (percent !== undefined) {
+      return percent;
+    }
+
+    if (this.totalValue <= 0) {
+      return 0;
+    }
+
+    const value = this.resolveValue(country);
+    if (value <= 0) {
+      return 0;
+    }
+
+    const normalized = (value / this.totalValue) * 100;
+    return this.clampPercentage(normalized);
   }
 
   private buildRegionLookup(): Map<string, string> {
@@ -411,6 +432,41 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
 
     const parsed = Number.parseFloat(country.percentage?.toString() ?? '0');
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private resolvePercentage(country: CountryBreakdown): number | undefined {
+    if (typeof country?.percentage === 'number' && Number.isFinite(country.percentage)) {
+      return this.clampPercentage(country.percentage);
+    }
+
+    if (typeof country?.percentage === 'string') {
+      const parsed = Number.parseFloat(country.percentage.replace(/[^\d.-]/g, ''));
+      if (Number.isFinite(parsed)) {
+        return this.clampPercentage(parsed);
+      }
+    }
+
+    return undefined;
+  }
+
+  private clampPercentage(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, value));
+  }
+
+  private recalculateTotals(): void {
+    let sum = 0;
+
+    for (const entry of this.countries ?? []) {
+      const value = this.resolveValue(entry);
+      if (value > 0) {
+        sum += value;
+      }
+    }
+
+    this.totalValue = sum;
   }
 
   private createMapOptions(maxValue: number): ChartOptions<'choropleth'> {

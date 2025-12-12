@@ -15,6 +15,12 @@ else
   exit 1
 fi
 
+if [ ! -f .env ] && [ -z "${PROXY_ENCRYPTION_KEY:-}" ]; then
+  echo "Missing .env (required for PROXY_ENCRYPTION_KEY)." >&2
+  echo "Create it from .env.example (or export PROXY_ENCRYPTION_KEY) and rerun." >&2
+  exit 1
+fi
+
 stash_applied=0
 echo "Checking for local changes..."
 if ! git diff --quiet --ignore-submodules -- || ! git diff --cached --quiet --ignore-submodules --; then

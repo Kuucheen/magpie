@@ -16,10 +16,14 @@
 
 ---
 
-> [!NOTE]
-> Magpie is in active development. Expect frequent UI polish and API nudges while we harden the core workers.
+Magpie is a self-hosted proxy manager that turns messy proxy lists into something you can actually use: 
+- it scrapes proxies from public sources
+- continuously checks which ones are alive
+- filters out dead/bad entries
+- assigns each proxy a reputation score (uptime/latency/anonymity)
+- lets you create your own rotating proxy endpoints from the healthy pool
 
-Magpie runs the boring parts of shared proxy operations: it discovers fresh HTTP/SOCKS endpoints, checks them with configurable judges, enriches them with Geo data, and hands them back through a dashboard, REST, GraphQL, or on-demand rotating listeners.
+all via a web dashboard.
 
 <details>
     <summary>Screenshots</summary>
@@ -31,27 +35,33 @@ Magpie runs the boring parts of shared proxy operations: it discovers fresh HTTP
 </details>
 
 ## Features
-- **Automated scraping** — Continuously gathers HTTP/SOCKS proxies from public APIs, text dumps, and feeds.
-- **Configurable health checks** — Verifies and checks proxy uptime and latency on an adjustable schedule.
-- **Multi-user isolation** — Supports separate accounts and permission scopes for shared hosting.
-- **Rotating proxy endpoints** — Instantly spawn self-hosted rotating gateways without manual list management.
-- **Enrichment pipeline** — Augments proxies with **geolocation, ISP, and reputation** metadata for advanced filtering.
+- Multi-user
+- Auto-scraping
+- Proxy Checking / Health checks
+- Reputation & filters
+- Rotating proxy endpoints
+- Dashboard + API
 
 ## Quick Start
 
 1. **Install Prerequisites:**
-    - [Docker Desktop](https://www.docker.com/)
-    - [Git](https://git-scm.com/downloads)
+    - [Docker Desktop](https://www.docker.com/) (or Docker Engine + Compose)
+    - `curl` (or `wget`) and `bash` for the one-liner installer
 
-2. **Clone the project**
+2. **One-command install (recommended)**
+   **macOS/Linux**:
    ```bash
-   git clone https://github.com/Kuucheen/magpie.git
-   cd magpie
+   curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/install.sh | bash
    ```
-3. **Change secrets** – This step is optional but highly recommended. Change the proxy encryption key in the docker-compose.yml to something you won't forget:
-   ```env
-   PROXY_ENCRYPTION_KEY=ThisIsMyEncryptionKey!
+
+   **Windows (PowerShell)**:
+   ```bash
+   iwr -useb https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/install.ps1 | iex
    ```
+
+   This creates a `magpie/` folder with a `docker-compose.yml` and `.env`, then starts the stack.
+
+3. **Proxy encryption key (important)** – Magpie uses `PROXY_ENCRYPTION_KEY` to encrypt stored secrets. Keep it stable between restarts/updates.
 
 > [!WARNING]
 > `PROXY_ENCRYPTION_KEY` locks all stored secrets (proxy auth, passwords, and ip addresses).  
@@ -59,9 +69,16 @@ Magpie runs the boring parts of shared proxy operations: it discovers fresh HTTP
 > **Fix:** start the backend again using the **previous key** and everything works like before.  
 > **Only rotate on purpose:** if you need a new key, export your proxies first.
 
-4. **Bring everything up**
+4. **If you don't want to use the installer** 
+
+    Requires [Git](https://git-scm.com/downloads)
+
    ```bash
-   docker compose up -d --build
+   git clone https://github.com/Kuucheen/magpie.git
+   cd magpie
+   cp .env.example .env
+   # edit .env and set PROXY_ENCRYPTION_KEY
+   docker compose up -d
    ```
 5. **Dive in**
     - UI: http://localhost:5050
@@ -73,15 +90,26 @@ For geo lookups, create a [MaxMind GeoLite2 account](https://dev.maxmind.com/geo
 ### Updating
 Use the helper scripts to pull the latest code and rebuild just the frontend/backend containers.
 
-- **macOS/Linux**:
-  ```bash
-  ./scripts/update-frontend-backend.sh
-  ```
-- **Windows (Command Prompt)**:
-  ```bash
-  scripts\update-frontend-backend.bat
-  ```
-  Double-click the file or run it from the repo root.
+- **If you used the one-command installer**:
+  - **macOS/Linux**: 
+      ```bash
+      curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/update.sh | bash
+      ```
+  - **Windows (PowerShell)**: 
+      ```bash
+      iwr -useb https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/update.ps1 | iex
+      ```
+
+- **If you cloned the project**:
+  - **macOS/Linux**:
+    ```bash
+    ./scripts/update-frontend-backend.sh
+    ```
+  - **Windows (Command Prompt)**:
+    ```bash
+    scripts\update-frontend-backend.bat
+    ```
+    Double-click the file or run it from the repo root.
 
 ## Local Development
 - Services: `docker compose up -d postgres redis`

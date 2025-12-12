@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_OWNER="${MAGPIE_REPO_OWNER:-Kuucheen}"
+REPO_NAME="${MAGPIE_REPO_NAME:-magpie}"
+REPO_REF="${MAGPIE_REPO_REF:-main}"
+
+INSTALL_DIR="${MAGPIE_INSTALL_DIR:-magpie}"
+COMPOSE_URL="${MAGPIE_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF}/docker-compose.yml}"
+ENV_EXAMPLE_URL="${MAGPIE_ENV_EXAMPLE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF}/.env.example}"
+
+if [[ -z "${INSTALL_DIR}" || "${INSTALL_DIR}" == "/" ]]; then
+  echo "MAGPIE_INSTALL_DIR must not be empty or '/'." >&2
+  exit 1
+fi
+
+if [ ! -d "${INSTALL_DIR}" ]; then
+  echo "Install directory not found: ${INSTALL_DIR}" >&2
+  echo "Run the installer first or set MAGPIE_INSTALL_DIR." >&2
+  exit 1
+fi
+
+if docker compose version >/dev/null 2>&1; then
+  compose_cmd=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  compose_cmd=(docker-compose)
+else
+  echo "Docker Compose is required but was not found. Install Docker Desktop or docker-compose." >&2
+  exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is required but was not found in PATH." >&2
+  exit 1
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker daemon not reachable. Start Docker and rerun." >&2
+  exit 1
+fi
+
+download() {
+  local url="$1"
+  local dest="$2"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "${url}" -o "${dest}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "${dest}" "${url}"
+  else
+    echo "Need curl or wget to download files." >&2
+    exit 1
+  fi
+}
+
+cd "${INSTALL_DIR}"
+
+if [ -f .env ]; then
+  if command -v rg >/dev/null 2>&1; then
+    has_key="$(rg -q '^PROXY_ENCRYPTION_KEY=' .env && echo yes || echo no)"
+  else
+    has_key="$(grep -q '^PROXY_ENCRYPTION_KEY=' .env && echo yes || echo no)"
+  fi
+  if [ "${has_key}" != "yes" ]; then
+    echo "Missing PROXY_ENCRYPTION_KEY in ${INSTALL_DIR}/.env" >&2
+    exit 1
+  fi
+elif [ -z "${PROXY_ENCRYPTION_KEY:-}" ]; then
+  echo "Missing ${INSTALL_DIR}/.env (required for PROXY_ENCRYPTION_KEY)." >&2
+  echo "Restore it or export PROXY_ENCRYPTION_KEY and rerun." >&2
+  exit 1
+fi
+
+tmp_compose="docker-compose.yml.new.$$"
+
+echo "Downloading latest docker-compose.yml..."
+download "${COMPOSE_URL}" "${tmp_compose}"
+
+if [ -f docker-compose.yml ]; then
+  cp -f docker-compose.yml "docker-compose.yml.bak"
+fi
+mv -f "${tmp_compose}" docker-compose.yml
+
+echo "Refreshing .env.example (optional)..."
+download "${ENV_EXAMPLE_URL}" ".env.example" || true
+
+echo "Pulling images..."
+"${compose_cmd[@]}" -f docker-compose.yml pull
+
+echo "Applying update..."
+"${compose_cmd[@]}" -f docker-compose.yml up -d
+
+echo "Done."

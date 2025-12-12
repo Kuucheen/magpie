@@ -4,6 +4,15 @@ setlocal enabledelayedexpansion
 set "SCRIPT_DIR=%~dp0"
 pushd "%SCRIPT_DIR%\.."
 
+if not exist ".env" (
+  if "%PROXY_ENCRYPTION_KEY%"=="" (
+    echo Missing .env ^(required for PROXY_ENCRYPTION_KEY^).
+    echo Create it from .env.example ^(or set PROXY_ENCRYPTION_KEY^) and rerun.
+    popd
+    exit /b 1
+  )
+)
+
 where docker >nul 2>&1
 if errorlevel 1 (
   echo Docker is required but was not found. Install Docker Desktop.

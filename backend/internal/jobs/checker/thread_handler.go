@@ -34,9 +34,9 @@ type userCheck struct {
 }
 
 type requestAssignment struct {
-	judge    *domain.Judge
-	protocol string
-	checks   []userCheck
+	judge         *domain.Judge
+	proxyProtocol string
+	checks        []userCheck
 }
 
 func ThreadDispatcher() {
@@ -232,20 +232,20 @@ func buildRequestAssignments(proxy domain.Proxy) (map[string]*requestAssignment,
 		}
 
 		for protocol, protocolID := range user.GetProtocolMap() {
-			requestProtocol := determineRequestProtocol(protocol, protocolID, user.UseHttpsForSocks)
+			judgeScheme := determineJudgeScheme(protocol, protocolID, user.UseHttpsForSocks)
 
-			nextJudge, regex := judges.GetNextJudge(user.ID, requestProtocol)
+			nextJudge, regex := judges.GetNextJudge(user.ID, judgeScheme)
 			if nextJudge == nil || config.IsWebsiteBlocked(nextJudge.FullString) {
-				log.Debug("Skipping blocked or missing judge for request assignment", "user_id", user.ID, "protocol", requestProtocol)
+				log.Debug("Skipping blocked or missing judge for request assignment", "user_id", user.ID, "scheme", judgeScheme, "proxy_protocol", protocol)
 				continue
 			}
-			judgeKey := strconv.Itoa(int(nextJudge.ID)) + "_" + requestProtocol
+			judgeKey := strconv.Itoa(int(nextJudge.ID)) + "_" + protocol
 
 			assignment, found := judgeRequests[judgeKey]
 			if !found {
 				assignment = &requestAssignment{
-					judge:    nextJudge,
-					protocol: requestProtocol,
+					judge:         nextJudge,
+					proxyProtocol: protocol,
 				}
 				judgeRequests[judgeKey] = assignment
 			}
@@ -262,20 +262,19 @@ func buildRequestAssignments(proxy domain.Proxy) (map[string]*requestAssignment,
 	return judgeRequests, userSuccess, userHasChecks, maxTimeout, maxRetries
 }
 
-func determineRequestProtocol(protocol string, protocolID int, useHTTPSForSocks bool) string {
-	if protocolID > 2 {
-		if useHTTPSForSocks {
-			return "https"
-		}
-		return "http"
+func determineJudgeScheme(protocol string, protocolID int, useHTTPSForSocks bool) string {
+	if protocolID <= 2 {
+		return protocol
 	}
-
-	return protocol
+	if useHTTPSForSocks {
+		return "https"
+	}
+	return "http"
 }
 
 func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*requestAssignment, userSuccess map[uint]bool, maxTimeout uint16, maxRetries uint8) {
 	for _, item := range assignments {
-		html, err, responseTime, attempt := CheckProxyWithRetries(proxy, item.judge, item.protocol, maxTimeout, maxRetries)
+		html, err, responseTime, attempt := CheckProxyWithRetries(proxy, item.judge, item.proxyProtocol, maxTimeout, maxRetries)
 
 		for _, check := range item.checks {
 			statistic := domain.ProxyStatistic{

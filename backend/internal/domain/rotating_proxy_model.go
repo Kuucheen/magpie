@@ -14,6 +14,8 @@ type RotatingProxy struct {
 	Name                  string     `gorm:"not null;size:120;index:idx_rotating_user_name,priority:2"`
 	ProtocolID            int        `gorm:"not null;index"`
 	Protocol              Protocol   `gorm:"foreignKey:ProtocolID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
+	ListenProtocolID      int        `gorm:"index"`
+	ListenProtocol        Protocol   `gorm:"foreignKey:ListenProtocolID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
 	ListenPort            uint16     `gorm:"uniqueIndex"`
 	AuthRequired          bool       `gorm:"not null;default:false"`
 	AuthUsername          string     `gorm:"size:120;default:''"`
@@ -31,6 +33,10 @@ func (RotatingProxy) TableName() string {
 }
 
 func (rp *RotatingProxy) BeforeSave(_ *gorm.DB) error {
+	if rp.ListenProtocolID == 0 {
+		rp.ListenProtocolID = rp.ProtocolID
+	}
+
 	if rp.AuthRequired && rp.AuthPassword != "" {
 		encrypted, err := security.EncryptProxySecret(rp.AuthPassword)
 		if err != nil {

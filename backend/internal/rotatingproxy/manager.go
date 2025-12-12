@@ -114,7 +114,7 @@ func newProxyServer(rotator domain.RotatingProxy) *proxyServer {
 }
 
 func (ps *proxyServer) Start() error {
-	if isSocksProtocol(ps.rotator.Protocol.Name) {
+	if isSocksProtocol(listenProtocolName(ps.rotator)) {
 		return ps.startSocksServer()
 	}
 	return ps.startHTTPServer()
@@ -196,4 +196,11 @@ func isSocksProtocol(name string) bool {
 	default:
 		return false
 	}
+}
+
+func listenProtocolName(rotator domain.RotatingProxy) string {
+	if name := strings.TrimSpace(rotator.ListenProtocol.Name); name != "" {
+		return name
+	}
+	return strings.TrimSpace(rotator.Protocol.Name)
 }

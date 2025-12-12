@@ -6,7 +6,7 @@ services:
       - "5656:5656"
       - "20000-20100:20000-20100"
     environment:
-      - PROXY_ENCRYPTION_KEY=<CHANGE-THIS>
+      - PROXY_ENCRYPTION_KEY=${PROXY_ENCRYPTION_KEY:?Set PROXY_ENCRYPTION_KEY in .env}
 
       - redisUrl=redis://redis:6379
       - DB_HOST=postgres

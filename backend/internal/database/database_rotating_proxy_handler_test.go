@@ -59,6 +59,173 @@ func setupRotatingProxyTestDBWithDSN(t *testing.T, dsn string) *gorm.DB {
 	return db
 }
 
+func TestCreateRotatingProxy_AllowsDistinctListenProtocol(t *testing.T) {
+	db := setupRotatingProxyTestDB(t)
+
+	user := domain.User{
+		Email:          "combo@example.com",
+		Password:       "password123",
+		HTTPProtocol:   true,
+		SOCKS5Protocol: true,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	httpProto := domain.Protocol{Name: "http"}
+	socksProto := domain.Protocol{Name: "socks5"}
+	if err := db.Create(&httpProto).Error; err != nil {
+		t.Fatalf("create http protocol: %v", err)
+	}
+	if err := db.Create(&socksProto).Error; err != nil {
+		t.Fatalf("create socks5 protocol: %v", err)
+	}
+
+	judge := domain.Judge{FullString: "http://judge-combo.example.com"}
+	if err := db.Create(&judge).Error; err != nil {
+		t.Fatalf("create judge: %v", err)
+	}
+
+	proxy := domain.Proxy{
+		IP:            "10.20.0.1",
+		Port:          9050,
+		Country:       "US",
+		EstimatedType: "datacenter",
+	}
+	if err := db.Create(&proxy).Error; err != nil {
+		t.Fatalf("create proxy: %v", err)
+	}
+	if err := db.Create(&domain.UserProxy{
+		UserID:  user.ID,
+		ProxyID: proxy.ID,
+	}).Error; err != nil {
+		t.Fatalf("link proxy: %v", err)
+	}
+	stat := domain.ProxyStatistic{
+		Alive:        true,
+		Attempt:      1,
+		ResponseTime: 90,
+		ProtocolID:   socksProto.ID,
+		ProxyID:      proxy.ID,
+		JudgeID:      judge.ID,
+		CreatedAt:    time.Now(),
+	}
+	if err := db.Create(&stat).Error; err != nil {
+		t.Fatalf("create proxy stat: %v", err)
+	}
+
+	payload := dto.RotatingProxyCreateRequest{
+		Name:           "http-on-socks",
+		Protocol:       "socks5",
+		ListenProtocol: "http",
+		AuthRequired:   false,
+	}
+
+	created, err := CreateRotatingProxy(user.ID, payload)
+	if err != nil {
+		t.Fatalf("create rotating proxy: %v", err)
+	}
+	if created.Protocol != socksProto.Name {
+		t.Fatalf("proxy protocol = %q, want %q", created.Protocol, socksProto.Name)
+	}
+	if created.ListenProtocol != httpProto.Name {
+		t.Fatalf("listen protocol = %q, want %q", created.ListenProtocol, httpProto.Name)
+	}
+	if created.AliveProxyCount != 1 {
+		t.Fatalf("alive proxy count = %d, want 1", created.AliveProxyCount)
+	}
+	if created.ListenPort == 0 {
+		t.Fatalf("expected listen port to be assigned")
+	}
+
+	stored, err := GetRotatingProxyByID(created.ID)
+	if err != nil {
+		t.Fatalf("reload rotating proxy: %v", err)
+	}
+	if stored.ProtocolID != socksProto.ID {
+		t.Fatalf("stored protocol id = %d, want %d", stored.ProtocolID, socksProto.ID)
+	}
+	if stored.ListenProtocolID != httpProto.ID {
+		t.Fatalf("stored listen protocol id = %d, want %d", stored.ListenProtocolID, httpProto.ID)
+	}
+	if stored.ListenProtocol.Name != httpProto.Name {
+		t.Fatalf("stored listen protocol name = %q, want %q", stored.ListenProtocol.Name, httpProto.Name)
+	}
+}
+
+func TestCreateRotatingProxy_ListensOnProtocolWithoutUserFlag(t *testing.T) {
+	db := setupRotatingProxyTestDB(t)
+
+	user := domain.User{
+		Email:          "listen-any@example.com",
+		Password:       "password123",
+		HTTPProtocol:   true,
+		SOCKS5Protocol: false,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	httpProto := domain.Protocol{Name: "http"}
+	socksProto := domain.Protocol{Name: "socks5"}
+	if err := db.Create(&httpProto).Error; err != nil {
+		t.Fatalf("create http protocol: %v", err)
+	}
+	if err := db.Create(&socksProto).Error; err != nil {
+		t.Fatalf("create socks5 protocol: %v", err)
+	}
+
+	judge := domain.Judge{FullString: "http://judge-listen.example.com"}
+	if err := db.Create(&judge).Error; err != nil {
+		t.Fatalf("create judge: %v", err)
+	}
+
+	proxy := domain.Proxy{
+		IP:            "10.30.0.1",
+		Port:          8080,
+		Country:       "US",
+		EstimatedType: "residential",
+	}
+	if err := db.Create(&proxy).Error; err != nil {
+		t.Fatalf("create proxy: %v", err)
+	}
+	if err := db.Create(&domain.UserProxy{
+		UserID:  user.ID,
+		ProxyID: proxy.ID,
+	}).Error; err != nil {
+		t.Fatalf("link proxy: %v", err)
+	}
+	stat := domain.ProxyStatistic{
+		Alive:        true,
+		Attempt:      1,
+		ResponseTime: 120,
+		ProtocolID:   httpProto.ID,
+		ProxyID:      proxy.ID,
+		JudgeID:      judge.ID,
+		CreatedAt:    time.Now(),
+	}
+	if err := db.Create(&stat).Error; err != nil {
+		t.Fatalf("create proxy statistic: %v", err)
+	}
+
+	payload := dto.RotatingProxyCreateRequest{
+		Name:           "http-client-socks-listen",
+		Protocol:       "http",
+		ListenProtocol: "socks5",
+	}
+
+	created, err := CreateRotatingProxy(user.ID, payload)
+	if err != nil {
+		t.Fatalf("create rotating proxy: %v", err)
+	}
+	if created.ListenProtocol != socksProto.Name {
+		t.Fatalf("listen protocol = %q, want %q", created.ListenProtocol, socksProto.Name)
+	}
+	if created.Protocol != httpProto.Name {
+		t.Fatalf("protocol = %q, want %q", created.Protocol, httpProto.Name)
+	}
+}
+
 func TestGetNextRotatingProxy_RotatesAcrossAliveProxies(t *testing.T) {
 	db := setupRotatingProxyTestDB(t)
 

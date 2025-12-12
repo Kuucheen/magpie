@@ -193,23 +193,15 @@ func TestHandleConnect_ProxiesDataThroughUpstream(t *testing.T) {
 	t.Cleanup(func() { getNextRotatingProxyFunc = originalGetNext })
 
 	upstreamClient, upstreamServer := net.Pipe()
-	originalDial := dialUpstreamFunc
-	dialUpstreamFunc = func(next *dto.RotatingProxyNext) (net.Conn, error) {
+	originalConnect := connectThroughUpstreamFunc
+	connectThroughUpstreamFunc = func(target string, next *dto.RotatingProxyNext) (net.Conn, error) {
+		if target != "example.com:443" {
+			t.Fatalf("expected target host example.com:443, got %s", target)
+		}
 		return upstreamServer, nil
 	}
 	t.Cleanup(func() {
-		dialUpstreamFunc = originalDial
-	})
-
-	originalConnect := performUpstreamConnectFunc
-	performUpstreamConnectFunc = func(conn net.Conn, targetHost string, next *dto.RotatingProxyNext) error {
-		if targetHost != "example.com:443" {
-			t.Fatalf("expected target host example.com:443, got %s", targetHost)
-		}
-		return nil
-	}
-	t.Cleanup(func() {
-		performUpstreamConnectFunc = originalConnect
+		connectThroughUpstreamFunc = originalConnect
 	})
 
 	request := httptest.NewRequest(http.MethodConnect, "http://example.com:443", nil)

@@ -48,7 +48,7 @@ func newSocksProxyHandler(rotator domain.RotatingProxy) *socksProxyHandler {
 }
 
 func (h *socksProxyHandler) handle(conn net.Conn) {
-	switch strings.ToLower(strings.TrimSpace(h.rotator.Protocol.Name)) {
+	switch strings.ToLower(strings.TrimSpace(listenProtocolName(h.rotator))) {
 	case "socks4":
 		h.handleSocks4(conn)
 	default:
@@ -397,14 +397,8 @@ func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upConn, err := dialUpstreamFunc(next)
+	upConn, err := connectThroughUpstreamFunc(r.Host, next)
 	if err != nil {
-		writeHijackedResponse(buf, http.StatusBadGateway, "Failed to connect to upstream proxy")
-		return
-	}
-
-	if err := performUpstreamConnectFunc(upConn, r.Host, next); err != nil {
-		_ = upConn.Close()
 		writeHijackedResponse(buf, http.StatusBadGateway, "Upstream CONNECT failed")
 		return
 	}
@@ -445,23 +439,31 @@ func supportedUpstream(protocol string) bool {
 }
 
 func buildHTTPTransport(next *dto.RotatingProxyNext) *http.Transport {
-	proxyURL := &url.URL{
-		Scheme: "http",
-		Host:   fmt.Sprintf("%s:%d", next.IP, next.Port),
-	}
-	if next.HasAuth {
-		proxyURL.User = url.UserPassword(next.Username, next.Password)
-	}
-
 	transport := &http.Transport{
-		Proxy:             http.ProxyURL(proxyURL),
 		DisableKeepAlives: true,
 		MaxIdleConns:      0,
 		IdleConnTimeout:   0,
 	}
 
-	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return dialProxyWithFallback(ctx, network, addr, next)
+	switch strings.ToLower(strings.TrimSpace(next.Protocol)) {
+	case "http", "https":
+		proxyURL := &url.URL{
+			Scheme: "http",
+			Host:   fmt.Sprintf("%s:%d", next.IP, next.Port),
+		}
+		if next.HasAuth {
+			proxyURL.User = url.UserPassword(next.Username, next.Password)
+		}
+		transport.Proxy = http.ProxyURL(proxyURL)
+		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dialProxyWithFallback(ctx, network, addr, next)
+		}
+	case "socks4", "socks5":
+		transport.Proxy = nil
+		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			_ = ctx
+			return connectThroughUpstreamFunc(addr, next)
+		}
 	}
 
 	return transport

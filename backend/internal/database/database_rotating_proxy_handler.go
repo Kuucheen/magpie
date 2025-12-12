@@ -56,6 +56,10 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 	if protocolName == "" {
 		return nil, ErrRotatingProxyProtocolMissing
 	}
+	listenProtocolName := strings.ToLower(strings.TrimSpace(payload.ListenProtocol))
+	if listenProtocolName == "" {
+		listenProtocolName = protocolName
+	}
 
 	if payload.AuthRequired {
 		if strings.TrimSpace(payload.AuthUsername) == "" {
@@ -77,7 +81,7 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 			return err
 		}
 
-		protocol, err := fetchProtocolByName(tx, protocolName)
+		proxyProtocol, err := fetchProtocolByName(tx, protocolName)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrRotatingProxyProtocolDenied
@@ -88,12 +92,20 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 			return ErrRotatingProxyProtocolDenied
 		}
 
+		listenProtocol, err := fetchProtocolByName(tx, listenProtocolName)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrRotatingProxyProtocolDenied
+			}
+			return err
+		}
 		filters := sanitizeRotatorReputationLabels(payload.ReputationLabels)
 
 		entity := domain.RotatingProxy{
 			UserID:           userID,
 			Name:             name,
-			ProtocolID:       protocol.ID,
+			ProtocolID:       proxyProtocol.ID,
+			ListenProtocolID: listenProtocol.ID,
 			AuthRequired:     payload.AuthRequired,
 			AuthUsername:     strings.TrimSpace(payload.AuthUsername),
 			AuthPassword:     payload.AuthPassword,
@@ -113,7 +125,7 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 			return err
 		}
 
-		aliveProxies, err := aliveProxiesForProtocol(tx, userID, protocol.ID, filters)
+		aliveProxies, err := aliveProxiesForProtocol(tx, userID, proxyProtocol.ID, filters)
 		if err != nil {
 			return err
 		}
@@ -121,7 +133,8 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 		result = &dto.RotatingProxy{
 			ID:               entity.ID,
 			Name:             entity.Name,
-			Protocol:         protocol.Name,
+			Protocol:         proxyProtocol.Name,
+			ListenProtocol:   listenProtocol.Name,
 			AliveProxyCount:  len(aliveProxies),
 			ListenPort:       entity.ListenPort,
 			AuthRequired:     entity.AuthRequired,
@@ -151,6 +164,7 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 	var rows []domain.RotatingProxy
 	if err := DB.
 		Preload("Protocol").
+		Preload("ListenProtocol").
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Find(&rows).Error; err != nil {
@@ -166,7 +180,9 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 	result := make([]dto.RotatingProxy, 0, len(rows))
 
 	for _, row := range rows {
+		normalizeRotatingProxyProtocols(&row)
 		protocolName := row.Protocol.Name
+		listenProtocol := row.ListenProtocol.Name
 		labels := sanitizeRotatorReputationLabels(row.ReputationLabels.Clone())
 		proxies, err := getAliveProxiesCached(userID, row.ProtocolID, labels, protocolCache)
 		if err != nil {
@@ -185,6 +201,7 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 			ID:               row.ID,
 			Name:             row.Name,
 			Protocol:         protocolName,
+			ListenProtocol:   listenProtocol,
 			AliveProxyCount:  len(proxies),
 			ListenPort:       row.ListenPort,
 			AuthRequired:     row.AuthRequired,
@@ -499,9 +516,14 @@ func GetAllRotatingProxies() ([]domain.RotatingProxy, error) {
 	var proxies []domain.RotatingProxy
 	if err := DB.
 		Preload("Protocol").
+		Preload("ListenProtocol").
 		Order("created_at ASC").
 		Find(&proxies).Error; err != nil {
 		return nil, err
+	}
+
+	for idx := range proxies {
+		normalizeRotatingProxyProtocols(&proxies[idx])
 	}
 
 	return proxies, nil
@@ -515,6 +537,7 @@ func GetRotatingProxyByID(rotatorID uint64) (*domain.RotatingProxy, error) {
 	var proxy domain.RotatingProxy
 	if err := DB.
 		Preload("Protocol").
+		Preload("ListenProtocol").
 		Where("id = ?", rotatorID).
 		First(&proxy).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -523,5 +546,21 @@ func GetRotatingProxyByID(rotatorID uint64) (*domain.RotatingProxy, error) {
 		return nil, err
 	}
 
+	normalizeRotatingProxyProtocols(&proxy)
+
 	return &proxy, nil
+}
+
+func normalizeRotatingProxyProtocols(rotator *domain.RotatingProxy) {
+	if rotator == nil {
+		return
+	}
+
+	if rotator.ListenProtocolID == 0 {
+		rotator.ListenProtocolID = rotator.ProtocolID
+	}
+
+	if strings.TrimSpace(rotator.ListenProtocol.Name) == "" {
+		rotator.ListenProtocol = rotator.Protocol
+	}
 }

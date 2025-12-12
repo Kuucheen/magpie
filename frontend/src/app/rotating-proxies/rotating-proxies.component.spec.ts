@@ -25,6 +25,7 @@ const httpServiceMock = {
     id: 1,
     name: 'Test rotator',
     protocol: 'http',
+    listen_protocol: 'http',
     alive_proxy_count: 0,
     listen_port: 19000,
     auth_required: false,

@@ -14,11 +14,9 @@ import {environment} from '../../environments/environment';
 
 import {HttpService} from '../services/http.service';
 import {NotificationService} from '../services/notification-service.service';
-import {CreateRotatingProxy, RotatingProxy, RotatingProxyNext} from '../models/RotatingProxy';
+import {CreateRotatingProxy, RotatingProxy} from '../models/RotatingProxy';
 import {UserSettings} from '../models/UserSettings';
 import {LoadingComponent} from '../ui-elements/loading/loading.component';
-
-type RotatingProxyPreview = RotatingProxyNext & { name: string };
 
 @Component({
   selector: 'app-rotating-proxies',
@@ -39,16 +37,21 @@ type RotatingProxyPreview = RotatingProxyNext & { name: string };
   styleUrl: './rotating-proxies.component.scss'
 })
 export class RotatingProxiesComponent implements OnInit, OnDestroy {
+  private readonly protocolOptionList: { label: string; value: string }[] = [
+    {label: 'HTTP', value: 'http'},
+    {label: 'HTTPS', value: 'https'},
+    {label: 'SOCKS4', value: 'socks4'},
+    {label: 'SOCKS5', value: 'socks5'},
+  ];
   createForm: FormGroup;
   rotatingProxies = signal<RotatingProxy[]>([]);
   protocolOptions = signal<{ label: string; value: string }[]>([]);
+  listenProtocolOptions = signal<{ label: string; value: string }[]>([...this.protocolOptionList]);
   loading = signal(false);
   submitting = signal(false);
   rotateLoading = signal<Set<number>>(new Set());
-  preview = signal<RotatingProxyPreview | null>(null);
   noProtocolsAvailable = signal(false);
   authEnabled = signal(false);
-  previewRotator = signal<RotatingProxy | null>(null);
   selectedRotator = signal<RotatingProxy | null>(null);
   detailsVisible = signal(false);
   readonly reputationOptions = [
@@ -72,6 +75,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     this.createForm = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(120)]],
       protocol: ['', Validators.required],
+      listenProtocol: ['', Validators.required],
       authRequired: [false],
       authUsername: [{value: '', disabled: true}, [Validators.maxLength(120)]],
       authPassword: [{value: '', disabled: true}, [Validators.maxLength(120)]],
@@ -85,23 +89,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       .subscribe(value => {
         const enabled = !!value;
         this.authEnabled.set(enabled);
-        const usernameControl = this.createForm.get('authUsername');
-        const passwordControl = this.createForm.get('authPassword');
-        if (enabled) {
-          usernameControl?.enable({emitEvent: false});
-          usernameControl?.addValidators(Validators.required);
-          passwordControl?.enable({emitEvent: false});
-          passwordControl?.addValidators(Validators.required);
-        } else {
-          usernameControl?.reset('', {emitEvent: false});
-          usernameControl?.removeValidators(Validators.required);
-          usernameControl?.disable({emitEvent: false});
-          passwordControl?.reset('', {emitEvent: false});
-          passwordControl?.removeValidators(Validators.required);
-          passwordControl?.disable({emitEvent: false});
-        }
-        usernameControl?.updateValueAndValidity({emitEvent: false});
-        passwordControl?.updateValueAndValidity({emitEvent: false});
+        this.updateAuthControls(enabled, this.submitting());
       });
 
     this.loadInitialData();
@@ -150,17 +138,19 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           this.protocolOptions.set(options);
           const noneAvailable = options.length === 0;
           this.noProtocolsAvailable.set(noneAvailable);
-          if (noneAvailable) {
-            this.createForm.get('protocol')?.disable({emitEvent: false});
-            this.createForm.get('name')?.disable({emitEvent: false});
-          } else {
-            this.createForm.get('protocol')?.enable({emitEvent: false});
-            this.createForm.get('name')?.enable({emitEvent: false});
-            const currentProtocol = this.createForm.get('protocol')?.value;
-            if (!currentProtocol) {
-              this.createForm.patchValue({protocol: options[0].value}, {emitEvent: false});
-            }
+          const protocolControl = this.createForm.get('protocol');
+          const listenControl = this.createForm.get('listenProtocol');
+          const availableValues = options.map(opt => opt.value);
+          const currentProtocol = protocolControl?.value;
+          const currentListen = listenControl?.value;
+          if (!currentProtocol || !availableValues.includes(currentProtocol)) {
+            this.createForm.patchValue({protocol: options[0]?.value ?? ''}, {emitEvent: false});
           }
+          const listenOptions = this.listenProtocolOptions().map(opt => opt.value);
+          if (!currentListen || !listenOptions.includes(currentListen)) {
+            this.createForm.patchValue({listenProtocol: listenOptions[0] ?? ''}, {emitEvent: false});
+          }
+          this.updateFormDisabledStates();
           this.loading.set(false);
         },
         error: err => {
@@ -179,6 +169,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     const payload: CreateRotatingProxy = {
       name: (this.createForm.get('name')?.value ?? '').trim(),
       protocol: this.createForm.get('protocol')?.value,
+      listen_protocol: this.createForm.get('listenProtocol')?.value,
       auth_required: !!this.createForm.get('authRequired')?.value,
     };
 
@@ -200,6 +191,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     }
 
     this.submitting.set(true);
+    this.updateFormDisabledStates();
+    this.updateAuthControls(!!this.createForm.get('authRequired')?.value, true);
     this.http.createRotatingProxy(payload)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -215,6 +208,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
             this.selectedRotator.set(enriched);
           }
           this.submitting.set(false);
+          this.updateFormDisabledStates();
+          this.updateAuthControls(!!this.createForm.get('authRequired')?.value, false);
           this.createForm.patchValue({name: ''}, {emitEvent: false});
           this.createForm.get('authUsername')?.reset('', {emitEvent: false});
           this.createForm.get('authPassword')?.reset('', {emitEvent: false});
@@ -222,6 +217,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
         },
         error: err => {
           this.submitting.set(false);
+          this.updateFormDisabledStates();
+          this.updateAuthControls(!!this.createForm.get('authRequired')?.value, false);
           NotificationService.showError('Could not create rotating proxy: ' + this.getErrorMessage(err));
         }
       });
@@ -237,14 +234,6 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.rotatingProxies.update(list => list.filter(item => item.id !== proxy.id));
-          const preview = this.preview();
-          if (preview && preview.proxy_id === proxy.id) {
-            this.preview.set(null);
-          }
-          const previewRotator = this.previewRotator();
-          if (previewRotator && previewRotator.id === proxy.id) {
-            this.previewRotator.set(null);
-          }
           const currentSelected = this.selectedRotator();
           if (currentSelected && currentSelected.id === proxy.id) {
             this.selectedRotator.set(null);
@@ -299,12 +288,10 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           if (updatedRotator.listen_host) {
             this.rotatorHost.set(updatedRotator.listen_host);
           }
-          this.previewRotator.set(updatedRotator);
           const currentSelected = this.selectedRotator();
           if (currentSelected && currentSelected.id === updatedRotator.id) {
             this.selectedRotator.set(updatedRotator);
           }
-          this.preview.set({...res, name: proxy.name});
           NotificationService.showSuccess(`Serving ${address}`);
         },
         error: err => {
@@ -316,18 +303,6 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           NotificationService.showError('Could not rotate proxy: ' + this.getErrorMessage(err));
         }
       });
-  }
-
-  copyPreview(preview: RotatingProxyPreview | null): void {
-    if (!preview) {
-      return;
-    }
-
-    const address = preview.has_auth && preview.username && preview.password
-      ? `${preview.username}:${preview.password}@${preview.ip}:${preview.port}`
-      : `${preview.ip}:${preview.port}`;
-
-    this.copyValueToClipboard(address, 'Copied to clipboard.', 'No proxy available to copy yet.');
   }
 
   copyRotatorConnection(proxy: RotatingProxy | null): void {
@@ -383,7 +358,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       return '';
     }
 
-    const protocol = (proxy.protocol ?? '').toLowerCase() || 'http';
+    const protocol = (proxy.listen_protocol ?? proxy.protocol ?? '').toLowerCase() || 'http';
     const needsAuth = proxy.auth_required && !!proxy.auth_username && !!proxy.auth_password;
     const credentials = needsAuth ? `${proxy.auth_username}:${proxy.auth_password}@` : '';
     return `${protocol}://${credentials}${endpoint}`;
@@ -435,6 +410,58 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     return options;
   }
 
+  private updateFormDisabledStates(): void {
+    const submitting = this.submitting();
+    const noneAvailable = this.noProtocolsAvailable();
+
+    this.setDisabledState('name', submitting || noneAvailable);
+    this.setDisabledState('protocol', submitting || noneAvailable);
+    this.setDisabledState('listenProtocol', submitting || noneAvailable);
+    this.setDisabledState('reputationLabels', submitting);
+    this.setDisabledState('authRequired', submitting);
+  }
+
+  private updateAuthControls(requireAuth: boolean, submitting: boolean): void {
+    const usernameControl = this.createForm.get('authUsername');
+    const passwordControl = this.createForm.get('authPassword');
+    const disableFields = submitting || !requireAuth;
+
+    if (requireAuth) {
+      usernameControl?.addValidators(Validators.required);
+      passwordControl?.addValidators(Validators.required);
+    } else {
+      usernameControl?.removeValidators(Validators.required);
+      passwordControl?.removeValidators(Validators.required);
+    }
+
+    if (disableFields) {
+      if (!requireAuth) {
+        usernameControl?.reset('', {emitEvent: false});
+        passwordControl?.reset('', {emitEvent: false});
+      }
+      usernameControl?.disable({emitEvent: false});
+      passwordControl?.disable({emitEvent: false});
+    } else {
+      usernameControl?.enable({emitEvent: false});
+      passwordControl?.enable({emitEvent: false});
+    }
+
+    usernameControl?.updateValueAndValidity({emitEvent: false});
+    passwordControl?.updateValueAndValidity({emitEvent: false});
+  }
+
+  private setDisabledState(controlName: string, shouldDisable: boolean): void {
+    const control = this.createForm.get(controlName);
+    if (!control) {
+      return;
+    }
+    if (shouldDisable) {
+      control.disable({emitEvent: false});
+    } else {
+      control.enable({emitEvent: false});
+    }
+  }
+
   private getErrorMessage(err: any): string {
     return err?.error?.error ?? err?.error?.message ?? err?.message ?? 'Unknown error';
   }
@@ -445,6 +472,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
 
     return {
       ...proxy,
+      listen_protocol: proxy.listen_protocol ?? proxy.protocol ?? null,
       auth_username: proxy.auth_username ?? null,
       auth_password: proxy.auth_password ?? null,
       listen_host: listenHost || null,

@@ -117,7 +117,7 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
   gap: 0.4rem;
 
   &.full {
-    grid-column: span 2;
+    grid-column: span 3;
   }
 }
 
@@ -174,53 +174,6 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
 
 .form-footer {
   margin-top: 0.5rem;
-}
-
-.preview-card {
-  .preview-content {
-    display: grid;
-    gap: 0.9rem;
-  }
-
-  .preview-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-
-    .label {
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: $muted;
-    }
-
-    .value {
-      font-weight: 700;
-      color: #f8fafc;
-      font-size: 1rem;
-
-      &.muted {
-        color: $muted;
-      }
-    }
-  }
-
-  .preview-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1rem;
-  }
-
-  .empty-preview {
-    padding: 1rem 0.5rem;
-    text-align: center;
-
-    p {
-      margin: 0.15rem 0;
-    }
-  }
 }
 
 .table-shell {

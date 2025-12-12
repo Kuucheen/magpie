@@ -46,7 +46,6 @@ all via a web dashboard.
 
 1. **Install Prerequisites:**
     - [Docker Desktop](https://www.docker.com/) (or Docker Engine + Compose)
-    - `curl` (or `wget`) and `bash` for the one-liner installer
 
 2. **One-command install (recommended)**
    **macOS/Linux**:

@@ -30,22 +30,69 @@ if (-not (Test-Command "docker")) {
   throw "Docker is required but was not found in PATH. Install Docker Desktop."
 }
 
+function Invoke-NativeCommand {
+  param(
+    [Parameter(Mandatory)][string]$FilePath,
+    [Parameter()][string[]]$Arguments = @(),
+    [switch]$Quiet
+  )
+
+  $oldPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    if ($Quiet) {
+      & $FilePath @Arguments 1>$null 2>$null
+    } else {
+      & $FilePath @Arguments
+    }
+    return $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $oldPreference
+  }
+}
+
+function Invoke-NativeOrThrow {
+  param(
+    [Parameter(Mandatory)][string]$FilePath,
+    [Parameter()][string[]]$Arguments = @(),
+    [Parameter(Mandatory)][string]$What
+  )
+
+  $exitCode = Invoke-NativeCommand -FilePath $FilePath -Arguments $Arguments
+  if ($exitCode -ne 0) {
+    throw "$What failed (exit code $exitCode)."
+  }
+}
+
+function Get-DockerInfoText {
+  $oldPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $text = (& cmd /d /c "docker info 2>&1" | Out-String).Trim()
+    $exitCode = $LASTEXITCODE
+    return @{ ExitCode = $exitCode; Text = $text }
+  } finally {
+    $ErrorActionPreference = $oldPreference
+  }
+}
+
 function Get-ComposeCommand {
-  $null = (& docker compose version 2>&1)
-  if ($LASTEXITCODE -eq 0) {
-    return @("docker", "compose")
+  $exitCode = Invoke-NativeCommand -FilePath "docker" -Arguments @("compose", "version") -Quiet
+  if ($exitCode -eq 0) {
+    return @{ FilePath = "docker"; BaseArgs = @("compose") }
   }
   if (Test-Command "docker-compose") {
-    return @("docker-compose")
+    return @{ FilePath = "docker-compose"; BaseArgs = @() }
   }
   throw "Docker Compose is required but was not found. Install Docker Desktop or docker-compose."
 }
 
-$composeCmd = Get-ComposeCommand
+$compose = Get-ComposeCommand
+$composeFile = $compose.FilePath
+$composeBaseArgs = $compose.BaseArgs
 
-& docker info 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-  $details = (& docker info 2>&1 | Out-String).Trim()
+if ((Invoke-NativeCommand -FilePath "docker" -Arguments @("info") -Quiet) -ne 0) {
+  $details = (Get-DockerInfoText).Text
   $message = "Docker daemon not reachable from this PowerShell session."
   if (-not [string]::IsNullOrWhiteSpace($details)) {
     $message += "`n`nDocker output:`n$details"
@@ -65,7 +112,11 @@ if (Test-Path -LiteralPath $installDir) {
 New-Item -ItemType Directory -Path $installDir | Out-Null
 
 function Download-File([string]$url, [string]$dest) {
-  Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+  $params = @{ Uri = $url; OutFile = $dest }
+  if ((Get-Command Invoke-WebRequest).Parameters.ContainsKey("UseBasicParsing")) {
+    $params.UseBasicParsing = $true
+  }
+  Invoke-WebRequest @params
 }
 
 Write-Host "Downloading docker-compose.yml..."
@@ -123,12 +174,12 @@ try {
 [IO.File]::WriteAllText($envPath, $envContent, [Text.UTF8Encoding]::new($false))
 
 Write-Host "Pulling images..."
-& $composeCmd -f docker-compose.yml pull
+Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeBaseArgs + @("-f", "docker-compose.yml", "pull")) -What "docker compose pull"
 
 Write-Host "Starting Magpie..."
-& $composeCmd -f docker-compose.yml up -d
+Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeBaseArgs + @("-f", "docker-compose.yml", "up", "-d")) -What "docker compose up"
 
-$composeDisplay = ($composeCmd -join " ")
+$composeDisplay = ((@($composeFile) + $composeBaseArgs) -join " ")
 Write-Host ""
 Write-Host "Magpie is up."
 Write-Host "- UI:  http://localhost:5050"

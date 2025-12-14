@@ -20,22 +20,38 @@ if [ ! -d "${INSTALL_DIR}" ]; then
   exit 1
 fi
 
-if docker compose version >/dev/null 2>&1; then
-  compose_cmd=(docker compose)
-elif command -v docker-compose >/dev/null 2>&1; then
-  compose_cmd=(docker-compose)
-else
-  echo "Docker Compose is required but was not found. Install Docker Desktop or docker-compose." >&2
-  exit 1
-fi
-
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required but was not found in PATH." >&2
   exit 1
 fi
 
-if ! docker info >/dev/null 2>&1; then
-  err="$(docker info 2>&1 || true)"
+docker_cmd=(docker)
+docker_needs_sudo=0
+
+docker_err=""
+if ! "${docker_cmd[@]}" info >/dev/null 2>&1; then
+  docker_err="$("${docker_cmd[@]}" info 2>&1 || true)"
+  if printf '%s' "${docker_err}" | grep -qi "permission denied" && [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+    echo "Docker socket requires elevated permissions; trying sudo..." >&2
+    if sudo -n docker info >/dev/null 2>&1; then
+      docker_cmd=(sudo docker)
+      docker_needs_sudo=1
+      docker_err=""
+    else
+      echo "Sudo is required for Docker; you may be prompted for your password." >&2
+      if sudo docker info >/dev/null; then
+        docker_cmd=(sudo docker)
+        docker_needs_sudo=1
+        docker_err=""
+      else
+        docker_err="$(sudo docker info 2>&1 || true)"
+      fi
+    fi
+  fi
+fi
+
+if ! "${docker_cmd[@]}" info >/dev/null 2>&1; then
+  err="${docker_err:-$("${docker_cmd[@]}" info 2>&1 || true)}"
   echo "Docker daemon not reachable from this shell." >&2
   if [ -n "${err}" ]; then
     echo >&2
@@ -54,6 +70,19 @@ if ! docker info >/dev/null 2>&1; then
     echo "  - Ensure Docker Desktop/Engine is running" >&2
     echo "  - Check: docker context show && docker context ls" >&2
   fi
+  exit 1
+fi
+
+if "${docker_cmd[@]}" compose version >/dev/null 2>&1; then
+  compose_cmd=("${docker_cmd[@]}" compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  if [ "${docker_needs_sudo}" = "1" ]; then
+    compose_cmd=(sudo docker-compose)
+  else
+    compose_cmd=(docker-compose)
+  fi
+else
+  echo "Docker Compose is required but was not found. Install Docker Desktop or docker-compose." >&2
   exit 1
 fi
 

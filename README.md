@@ -52,6 +52,9 @@ all via a web dashboard.
    ```bash
    curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/install.sh | bash
    ```
+   If you see a Docker socket permission error on Linux, the installer will try to use `sudo` for Docker commands (you may be prompted).  
+   Alternative fix: `sudo usermod -aG docker "$USER"` (then log out/in, or run `newgrp docker`).  
+   Note: `sudo curl ... | bash` still runs `bash` as your user.
 
    **Windows (PowerShell)**:
    ```bash
@@ -94,6 +97,7 @@ Use the helper scripts to pull the latest code and rebuild just the frontend/bac
       ```bash
       curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/update.sh | bash
       ```
+      If you see a Docker socket permission error on Linux, the updater will try to use `sudo` for Docker commands (you may be prompted).
   - **Windows (PowerShell)**: 
       ```bash
       iwr -useb https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/update.ps1 | iex

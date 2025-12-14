@@ -31,7 +31,7 @@ if (-not (Test-Command "docker")) {
 }
 
 function Get-ComposeCommand {
-  & docker compose version *> $null
+  $null = (& docker compose version 2>&1)
   if ($LASTEXITCODE -eq 0) {
     return @("docker", "compose")
   }
@@ -43,7 +43,7 @@ function Get-ComposeCommand {
 
 $composeCmd = Get-ComposeCommand
 
-& docker info *> $null
+& docker info 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
   $details = (& docker info 2>&1 | Out-String).Trim()
   $message = "Docker daemon not reachable from this PowerShell session."

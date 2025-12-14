@@ -48,6 +48,7 @@ all via a web dashboard.
     - [Docker Desktop](https://www.docker.com/) (or Docker Engine + Compose)
 
 2. **One-command install (recommended)**
+
    **macOS/Linux**:
    ```bash
    curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/install.sh | bash

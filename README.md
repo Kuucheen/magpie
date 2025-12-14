@@ -54,7 +54,7 @@ all via a web dashboard.
    ```
    If you see a Docker socket permission error on Linux, the installer will try to use `sudo` for Docker commands (you may be prompted).  
    Alternative fix: `sudo usermod -aG docker "$USER"` (then log out/in, or run `newgrp docker`).  
-   Note: `sudo curl ... | bash` still runs `bash` as your user.
+   Note: `sudo curl ... | bash` still runs `bash` as your user. Try `curl ... | sudo bash` instead.
 
    **Windows (PowerShell)**:
    ```bash

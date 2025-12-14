@@ -31,23 +31,27 @@ if (-not (Test-Command "docker")) {
 }
 
 function Get-ComposeCommand {
-  try {
-    & docker compose version *> $null
+  & docker compose version *> $null
+  if ($LASTEXITCODE -eq 0) {
     return @("docker", "compose")
-  } catch {
-    if (Test-Command "docker-compose") {
-      return @("docker-compose")
-    }
-    throw "Docker Compose is required but was not found. Install Docker Desktop or docker-compose."
   }
+  if (Test-Command "docker-compose") {
+    return @("docker-compose")
+  }
+  throw "Docker Compose is required but was not found. Install Docker Desktop or docker-compose."
 }
 
 $composeCmd = Get-ComposeCommand
 
-try {
-  & docker info *> $null
-} catch {
-  throw "Docker daemon not reachable. Start Docker Desktop and rerun."
+& docker info *> $null
+if ($LASTEXITCODE -ne 0) {
+  $details = (& docker info 2>&1 | Out-String).Trim()
+  $message = "Docker daemon not reachable from this PowerShell session."
+  if (-not [string]::IsNullOrWhiteSpace($details)) {
+    $message += "`n`nDocker output:`n$details"
+  }
+  $message += "`n`nTips:`n- Ensure Docker Desktop shows 'Docker is running'`n- Try: docker context ls; docker context use default`n- If you're using WSL, ensure WSL integration is enabled"
+  throw $message
 }
 
 $force = $env:MAGPIE_FORCE -eq "1"

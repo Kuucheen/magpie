@@ -29,7 +29,23 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 if ! docker info >/dev/null 2>&1; then
-  echo "Docker daemon not reachable. Start Docker and rerun." >&2
+  err="$(docker info 2>&1 || true)"
+  echo "Docker daemon not reachable from this shell." >&2
+  if [ -n "${err}" ]; then
+    echo >&2
+    echo "Docker output:" >&2
+    echo "${err}" >&2
+  fi
+  echo >&2
+  if printf '%s' "${err}" | grep -qi "permission denied"; then
+    echo "Tip (Linux): your user may not have access to the Docker socket." >&2
+    echo "  - Try: sudo usermod -aG docker \"$USER\"  (then log out/in)" >&2
+    echo "  - Or rerun with sudo (not recommended long-term): curl ... | sudo bash" >&2
+  else
+    echo "Tip:" >&2
+    echo "  - Ensure Docker Desktop/Engine is running" >&2
+    echo "  - Check: docker context show && docker context ls" >&2
+  fi
   exit 1
 fi
 

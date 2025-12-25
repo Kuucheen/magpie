@@ -11,6 +11,7 @@ import { User } from '../../models/UserModel';
 import { UserService } from '../../services/authorization/user.service';
 import { AuthInterceptor } from '../../services/auth-interceptor.interceptor';
 import {NotificationService} from '../../services/notification-service.service';
+import {ThemeService} from '../../services/theme.service';
 
 @Component({
   selector: 'app-register',
@@ -32,7 +33,8 @@ export class RegisterComponent {
     private fb: FormBuilder,
     private http: HttpService,
     private router: Router,
-    private user: UserService
+    private user: UserService,
+    protected themeService: ThemeService
   ) {
     this.registerForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],

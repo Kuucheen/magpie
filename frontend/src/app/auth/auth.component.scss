@@ -23,15 +23,17 @@
 
 .auth-logo img {
   height: 80px;
-  margin-right: 1.5rem;
-  filter: drop-shadow(0 0 10px rgba(78, 208, 158, 0.5));
+  width: auto;
+  max-width: 200px;
+  margin-right: 0;
+  filter: drop-shadow(0 0 10px var(--theme-primary-shadow));
 }
 
 .auth-logo h5 {
   color: #fff;
   font-size: 1.5rem;
   letter-spacing: 3px;
-  text-shadow: 0 0 10px rgba(78, 208, 158, 0.5);
+  text-shadow: 0 0 10px var(--theme-primary-shadow);
 }
 
 @keyframes float {
@@ -46,7 +48,7 @@
   text-align: center;
   background: #1a1a1a;
   border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 255, 128, 0.2);
+  box-shadow: 0 4px 10px var(--theme-primary-shadow);
   color: #fff;
 }
 

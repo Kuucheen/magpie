@@ -1,7 +1,7 @@
 <div class="background-color flex items-center justify-center min-h-screen">
   <div class="auth-container flex flex-col items-center">
     <a class="auth-logo flex flex-col items-center mb-6" routerLink="">
-      <img src="../../../assets/logo/magpie-light.png" alt="Logo" class="w-20 mb-2" />
+      <img [src]="'assets/logo/magpie-light-' + themeService.theme() + '.svg'" alt="Magpie logo" class="mb-2" />
       <h5 class="text-lg font-semibold">M A G P I E</h5>
     </a>
 

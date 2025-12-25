@@ -12,6 +12,7 @@ import { HttpService } from '../../services/http.service';
 import { UserService } from '../../services/authorization/user.service';
 import { AuthInterceptor } from '../../services/auth-interceptor.interceptor';
 import {NotificationService} from '../../services/notification-service.service';
+import {ThemeService} from '../../services/theme.service';
 
 @Component({
   selector: 'app-login',
@@ -33,7 +34,8 @@ export class LoginComponent {
   rememberPass = model(false);
   shouldRemember = false;
 
-  constructor(private fb: FormBuilder, private http: HttpService, private router: Router) {
+  constructor(private fb: FormBuilder, private http: HttpService, private router: Router,
+              protected themeService: ThemeService) {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(6)]],

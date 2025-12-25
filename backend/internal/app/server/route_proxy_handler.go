@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/log"
 
@@ -27,6 +28,7 @@ func addProxies(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+	startedAt := time.Now()
 
 	textareaContent := r.FormValue("proxyTextarea") // "proxyTextarea" matches the key sent by the frontend
 	clipboardContent := r.FormValue("clipboardProxies")
@@ -55,7 +57,7 @@ func addProxies(w http.ResponseWriter, r *http.Request) {
 
 	log.Infof("File content received: %d bytes", len(mergedContent))
 
-	proxyList := support.ParseTextToProxies(mergedContent)
+	proxyList, parseStats := support.ParseTextToProxiesWithStats(mergedContent)
 	proxyList, blocked := blacklist.FilterProxies(proxyList)
 	if len(blocked) > 0 {
 		log.Info("Dropped blacklisted proxies from upload", "count", len(blocked))
@@ -72,7 +74,21 @@ func addProxies(w http.ResponseWriter, r *http.Request) {
 	proxyqueue.PublicProxyQueue.AddToQueue(proxyList)
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]int{"proxyCount": len(proxyList)})
+	processingMs := time.Since(startedAt).Milliseconds()
+	response := dto.AddProxiesResponse{
+		ProxyCount: len(proxyList),
+		Details: dto.AddProxiesDetails{
+			SubmittedCount:     parseStats.SubmittedCount,
+			ParsedCount:        parseStats.ParsedCount,
+			InvalidFormatCount: parseStats.InvalidFormatCount,
+			InvalidIPCount:     parseStats.InvalidIPCount,
+			InvalidIPv4Count:   parseStats.InvalidIPv4Count,
+			InvalidPortCount:   parseStats.InvalidPortCount,
+			BlacklistedCount:   len(blocked),
+			ProcessingMs:       processingMs,
+		},
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 func getProxyPage(w http.ResponseWriter, r *http.Request) {

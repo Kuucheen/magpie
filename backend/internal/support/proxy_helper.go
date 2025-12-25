@@ -11,17 +11,32 @@ import (
 )
 
 func ParseTextToProxies(text string) []domain.Proxy {
-	return parseTextToProxies(text, true)
+	proxies, _ := parseTextToProxiesWithStats(text, true)
+	return proxies
+}
+
+type ProxyParseStats struct {
+	SubmittedCount     int
+	ParsedCount        int
+	InvalidFormatCount int
+	InvalidIPCount     int
+	InvalidIPv4Count   int
+	InvalidPortCount   int
+}
+
+func ParseTextToProxiesWithStats(text string) ([]domain.Proxy, ProxyParseStats) {
+	return parseTextToProxiesWithStats(text, true)
 }
 
 // ParseTextToProxiesStrictAuth returns proxies where credentials are only read
 // from user:pass@host:port formatted entries. Useful when plain colon-delimited
 // proxy lists would otherwise be misinterpreted as auth.
 func ParseTextToProxiesStrictAuth(text string) []domain.Proxy {
-	return parseTextToProxies(text, false)
+	proxies, _ := parseTextToProxiesWithStats(text, false)
+	return proxies
 }
 
-func parseTextToProxies(text string, allowColonAuth bool) []domain.Proxy {
+func parseTextToProxiesWithStats(text string, allowColonAuth bool) ([]domain.Proxy, ProxyParseStats) {
 	if allowColonAuth {
 		text = clearProxyString(text)
 	} else {
@@ -30,12 +45,14 @@ func parseTextToProxies(text string, allowColonAuth bool) []domain.Proxy {
 
 	lines := strings.Split(text, "\n")
 	proxies := make([]domain.Proxy, 0, len(lines))
+	stats := ProxyParseStats{}
 
 	for _, raw := range lines {
 		line := strings.TrimSpace(raw)
 		if line == "" {
 			continue
 		}
+		stats.SubmittedCount++
 
 		var (
 			username string
@@ -56,6 +73,7 @@ func parseTextToProxies(text string, allowColonAuth bool) []domain.Proxy {
 
 		hostSplit := strings.Split(hostPart, ":")
 		if len(hostSplit) < 2 {
+			stats.InvalidFormatCount++
 			continue
 		}
 
@@ -63,13 +81,20 @@ func parseTextToProxies(text string, allowColonAuth bool) []domain.Proxy {
 		if len(ip) > 0 && ip[0] == '0' {
 			ip = ip[1:] // Fix proxy if it leads with 0
 		}
-		if net.ParseIP(ip) == nil {
+		parsedIP := net.ParseIP(ip)
+		if parsedIP == nil {
+			stats.InvalidIPCount++
+			continue
+		}
+		if parsedIP.To4() == nil {
+			stats.InvalidIPv4Count++
 			continue
 		}
 
 		portStr := strings.TrimSpace(hostSplit[1])
 		port, err := strconv.Atoi(portStr)
 		if err != nil || port < 1 || port > 65535 {
+			stats.InvalidPortCount++
 			continue
 		}
 
@@ -92,13 +117,15 @@ func parseTextToProxies(text string, allowColonAuth bool) []domain.Proxy {
 		}
 
 		if err := proxy.SetIP(ip); err != nil {
+			stats.InvalidIPv4Count++
 			continue
 		}
 
 		proxies = append(proxies, proxy)
+		stats.ParsedCount++
 	}
 
-	return proxies
+	return proxies, stats
 }
 
 func clearProxyString(proxies string) string {

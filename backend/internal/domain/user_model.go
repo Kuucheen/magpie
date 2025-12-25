@@ -19,6 +19,7 @@ type User struct {
 	Timeout                    uint16 `gorm:"not null;default:7500"`
 	Retries                    uint8  `gorm:"not null;default:2"`
 	UseHttpsForSocks           bool   `gorm:"not null;default:true"`
+	TransportProtocol          string `gorm:"not null;default:'tcp'"`
 	AutoRemoveFailingProxies   bool   `gorm:"not null;default:false"`
 	AutoRemoveFailureThreshold uint8  `gorm:"not null;default:3"`
 
@@ -39,6 +40,7 @@ func (u *User) ToUserSettings(simpleUserJudges []dto.SimpleUserJudge, scrapingSo
 		Timeout:                    u.Timeout,
 		Retries:                    u.Retries,
 		UseHttpsForSocks:           u.UseHttpsForSocks,
+		TransportProtocol:          u.TransportProtocol,
 		AutoRemoveFailingProxies:   u.AutoRemoveFailingProxies,
 		AutoRemoveFailureThreshold: u.AutoRemoveFailureThreshold,
 		SimpleUserJudges:           simpleUserJudges,

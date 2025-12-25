@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"magpie/internal/config"
@@ -13,16 +14,18 @@ import (
 )
 
 // ProxyCheckRequest makes a request to the provided siteUrl with the provided proxy
-func ProxyCheckRequest(proxyToCheck domain.Proxy, judge *domain.Judge, protocol string, timeout uint16) (string, error) {
+func ProxyCheckRequest(proxyToCheck domain.Proxy, judge *domain.Judge, protocol string, transportProtocol string, timeout uint16) (string, error) {
 	if judge != nil && config.IsWebsiteBlocked(judge.FullString) {
 		return "Blocked judge website", fmt.Errorf("judge website is blocked: %s", judge.FullString)
 	}
 
-	transport, err := support.CreateTransport(proxyToCheck, judge, protocol)
+	transport, closeFunc, err := support.CreateTransport(proxyToCheck, judge, protocol, transportProtocol)
 	if err != nil {
 		return "Failed to create transport", err
 	}
-	defer transport.CloseIdleConnections() // Release resources immediately
+	if closeFunc != nil {
+		defer closeFunc() // Release resources immediately
+	}
 
 	client := &http.Client{
 		Transport: transport,
@@ -34,6 +37,10 @@ func ProxyCheckRequest(proxyToCheck domain.Proxy, judge *domain.Judge, protocol 
 		return "Error creating request", err
 	}
 	req.Header.Set("Connection", "close")
+	if support.IsHTTP3Transport(transportProtocol) && proxyToCheck.HasAuth() && (protocol == "http" || protocol == "https") {
+		auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", proxyToCheck.Username, proxyToCheck.Password)))
+		req.Header.Set("Proxy-Authorization", "Basic "+auth)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {

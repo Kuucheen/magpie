@@ -15,7 +15,22 @@ import (
 	"time"
 )
 
-func CreateTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol string) (*http.Transport, error) {
+func CreateTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol string, transportProtocol string) (http.RoundTripper, func(), error) {
+	if transportProtocol == "" {
+		transportProtocol = TransportTCP
+	}
+
+	switch NormalizeTransportProtocol(transportProtocol) {
+	case TransportTCP:
+		return createTCPTransport(proxyToCheck, judge, protocol)
+	case TransportQUIC, TransportHTTP3:
+		return createHTTP3Transport(proxyToCheck, judge, protocol, transportProtocol)
+	default:
+		return nil, nil, fmt.Errorf("unsupported transport protocol %q", transportProtocol)
+	}
+}
+
+func createTCPTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol string) (http.RoundTripper, func(), error) {
 	// Base configuration with keep-alives disabled
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
@@ -61,7 +76,7 @@ func CreateTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol st
 			Timeout: time.Duration(config.GetConfig().Checker.Timeout) * time.Millisecond,
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return socksDialer.Dial(network, addr)
@@ -74,7 +89,7 @@ func CreateTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol st
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported proxy protocol %q", protocol)
+		return nil, nil, fmt.Errorf("unsupported proxy protocol %q", protocol)
 	}
 
 	// Configure TLS to use judge's hostname
@@ -83,7 +98,7 @@ func CreateTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol st
 		InsecureSkipVerify: false,
 	}
 
-	return transport, nil
+	return transport, transport.CloseIdleConnections, nil
 }
 
 func dialSOCKS4(ctx context.Context, proxyToCheck domain.Proxy, target string, timeout time.Duration) (net.Conn, error) {

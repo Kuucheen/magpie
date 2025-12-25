@@ -34,9 +34,10 @@ type userCheck struct {
 }
 
 type requestAssignment struct {
-	judge         *domain.Judge
-	proxyProtocol string
-	checks        []userCheck
+	judge             *domain.Judge
+	proxyProtocol     string
+	transportProtocol string
+	checks            []userCheck
 }
 
 func ThreadDispatcher() {
@@ -223,6 +224,7 @@ func buildRequestAssignments(proxy domain.Proxy) (map[string]*requestAssignment,
 
 	for _, user := range proxy.Users {
 		userSuccess[user.ID] = false
+		transportProtocol := support.ResolveCheckerTransportProtocol(user.TransportProtocol)
 
 		if user.Timeout > maxTimeout {
 			maxTimeout = user.Timeout
@@ -233,19 +235,23 @@ func buildRequestAssignments(proxy domain.Proxy) (map[string]*requestAssignment,
 
 		for protocol, protocolID := range user.GetProtocolMap() {
 			judgeScheme := determineJudgeScheme(protocol, protocolID, user.UseHttpsForSocks)
+			if support.IsHTTP3Transport(transportProtocol) {
+				judgeScheme = "https"
+			}
 
 			nextJudge, regex := judges.GetNextJudge(user.ID, judgeScheme)
 			if nextJudge == nil || config.IsWebsiteBlocked(nextJudge.FullString) {
 				log.Debug("Skipping blocked or missing judge for request assignment", "user_id", user.ID, "scheme", judgeScheme, "proxy_protocol", protocol)
 				continue
 			}
-			judgeKey := strconv.Itoa(int(nextJudge.ID)) + "_" + protocol
+			judgeKey := strconv.Itoa(int(nextJudge.ID)) + "_" + protocol + "_" + transportProtocol
 
 			assignment, found := judgeRequests[judgeKey]
 			if !found {
 				assignment = &requestAssignment{
-					judge:         nextJudge,
-					proxyProtocol: protocol,
+					judge:             nextJudge,
+					proxyProtocol:     protocol,
+					transportProtocol: transportProtocol,
 				}
 				judgeRequests[judgeKey] = assignment
 			}
@@ -274,7 +280,7 @@ func determineJudgeScheme(protocol string, protocolID int, useHTTPSForSocks bool
 
 func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*requestAssignment, userSuccess map[uint]bool, maxTimeout uint16, maxRetries uint8) {
 	for _, item := range assignments {
-		html, err, responseTime, attempt := CheckProxyWithRetries(proxy, item.judge, item.proxyProtocol, maxTimeout, maxRetries)
+		html, err, responseTime, attempt := CheckProxyWithRetries(proxy, item.judge, item.proxyProtocol, item.transportProtocol, maxTimeout, maxRetries)
 
 		for _, check := range item.checks {
 			statistic := domain.ProxyStatistic{
@@ -346,7 +352,7 @@ func filterRemovedUsers(proxy domain.Proxy, removed map[uint]struct{}) domain.Pr
 	return proxy
 }
 
-func CheckProxyWithRetries(proxy domain.Proxy, judge *domain.Judge, protocol string, timeout uint16, retries uint8) (string, error, int64, uint8) {
+func CheckProxyWithRetries(proxy domain.Proxy, judge *domain.Judge, protocol string, transportProtocol string, timeout uint16, retries uint8) (string, error, int64, uint8) {
 	var (
 		html         string
 		err          error
@@ -355,7 +361,7 @@ func CheckProxyWithRetries(proxy domain.Proxy, judge *domain.Judge, protocol str
 
 	for i := uint8(0); i < retries; i++ {
 		timeStart := time.Now()
-		html, err = ProxyCheckRequest(proxy, judge, protocol, timeout)
+		html, err = ProxyCheckRequest(proxy, judge, protocol, transportProtocol, timeout)
 		responseTime = time.Since(timeStart).Milliseconds()
 
 		if err == nil {

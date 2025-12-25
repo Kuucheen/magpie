@@ -11,6 +11,7 @@ import (
 	"magpie/internal/config"
 	"magpie/internal/domain"
 	"magpie/internal/security"
+	"magpie/internal/support"
 )
 
 func GetUserFromId(id uint) domain.User {
@@ -128,6 +129,7 @@ func UpdateUserSettings(userID uint, settings dto.UserSettings) error {
 	// Wrap everything in a single transaction so either all changes
 	// happen or none do.
 	return DB.Transaction(func(tx *gorm.DB) error {
+		transportProtocol := support.NormalizeTransportProtocol(settings.TransportProtocol)
 
 		/* ─── 1.  Update primitive columns on the User row ─────────────────────── */
 		updates := map[string]interface{}{
@@ -138,6 +140,7 @@ func UpdateUserSettings(userID uint, settings dto.UserSettings) error {
 			"Timeout":                    settings.Timeout,
 			"Retries":                    settings.Retries,
 			"UseHttpsForSocks":           settings.UseHttpsForSocks,
+			"TransportProtocol":          transportProtocol,
 			"AutoRemoveFailingProxies":   settings.AutoRemoveFailingProxies,
 			"AutoRemoveFailureThreshold": settings.AutoRemoveFailureThreshold,
 		}

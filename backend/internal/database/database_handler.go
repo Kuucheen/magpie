@@ -306,6 +306,22 @@ func ensureBlacklistSchema(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_blacklisted_ips_gist ON blacklisted_ips USING gist (ip inet_ops)`,
 		`ALTER TABLE IF EXISTS blacklisted_ranges ADD COLUMN IF NOT EXISTS cidr cidr`,
 		`ALTER TABLE IF EXISTS blacklisted_ranges ALTER COLUMN cidr DROP NOT NULL`,
+		`DO $$ BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'blacklisted_ranges' AND column_name = 'c_i_d_r'
+			) THEN
+				UPDATE blacklisted_ranges SET cidr = COALESCE(cidr, c_i_d_r::cidr);
+				ALTER TABLE blacklisted_ranges DROP COLUMN IF EXISTS c_i_d_r;
+			END IF;
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'blacklisted_ranges' AND column_name = 'c_id_r'
+			) THEN
+				UPDATE blacklisted_ranges SET cidr = COALESCE(cidr, c_id_r::cidr);
+				ALTER TABLE blacklisted_ranges DROP COLUMN IF EXISTS c_id_r;
+			END IF;
+		END $$;`,
 		`ALTER TABLE IF EXISTS blacklisted_ranges DROP COLUMN IF EXISTS start_ip`,
 		`ALTER TABLE IF EXISTS blacklisted_ranges DROP COLUMN IF EXISTS end_ip`,
 		`ALTER TABLE IF EXISTS blacklisted_ranges DROP COLUMN IF EXISTS first_seen_at`,

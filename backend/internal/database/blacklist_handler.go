@@ -9,6 +9,9 @@ import (
 	"net"
 	"net/netip"
 	"sort"
+	"strings"
+
+	"github.com/charmbracelet/log"
 
 	"github.com/jackc/pgx/v5"
 
@@ -57,27 +60,32 @@ func ListBlacklistedRanges(ctx context.Context) ([]domain.BlacklistedRange, erro
 	}
 
 	var rows []struct {
-		ID     uint64
-		CIDR   string
-		Source string
+		ID     uint64 `gorm:"column:id"`
+		CIDR   string `gorm:"column:cidr"`
+		Source string `gorm:"column:source"`
 	}
-	if err := db.Table("blacklisted_ranges").Select("id, cidr, source").Order("cidr ASC").Scan(&rows).Error; err != nil {
+	if err := db.Raw("SELECT id, cidr::text AS cidr, source FROM blacklisted_ranges ORDER BY cidr ASC").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-
 	ranges := make([]domain.BlacklistedRange, 0, len(rows))
+	invalidCount := 0
 	for _, row := range rows {
-		start, end, err := cidrBounds(row.CIDR)
+		cidr := strings.TrimSpace(row.CIDR)
+		start, end, err := cidrBounds(cidr)
 		if err != nil {
+			invalidCount++
 			continue
 		}
 		ranges = append(ranges, domain.BlacklistedRange{
 			ID:      row.ID,
-			CIDR:    row.CIDR,
+			CIDR:    cidr,
 			Source:  row.Source,
 			StartIP: start,
 			EndIP:   end,
 		})
+	}
+	if invalidCount > 0 {
+		log.Warn("Blacklist range parse failures", "count", invalidCount)
 	}
 
 	return ranges, nil
@@ -104,9 +112,11 @@ func ReplaceBlacklistData(ctx context.Context, ips []domain.BlacklistedIP, range
 		return 0, 0, nil
 	}
 
-	if dsn := getDSN(); dsn != "" {
-		if ipCount, rangeCount, err := replaceBlacklistWithCopy(ctx, dsn, cleanIPs, cleanRanges); err == nil {
-			return ipCount, rangeCount, nil
+	if len(cleanRanges) == 0 {
+		if dsn := getDSN(); dsn != "" {
+			if ipCount, rangeCount, err := replaceBlacklistWithCopy(ctx, dsn, cleanIPs, cleanRanges); err == nil {
+				return ipCount, rangeCount, nil
+			}
 		}
 	}
 
@@ -145,17 +155,26 @@ func replaceBlacklistWithCopy(ctx context.Context, dsn string, ips []domain.Blac
 		}
 	}
 
+	rangeInserted := 0
 	if len(ranges) > 0 {
-		rows := make([][]any, len(ranges))
+		rows := make([][]any, 0, len(ranges))
+		emptyCIDR := 0
 		for i := range ranges {
-			cidr := ranges[i].CIDR
+			cidr := strings.TrimSpace(ranges[i].CIDR)
 			if cidr == "" {
+				emptyCIDR++
 				continue
 			}
-			rows[i] = []any{cidr, ranges[i].Source}
+			rows = append(rows, []any{cidr, ranges[i].Source})
 		}
-		if _, err := tx.CopyFrom(ctx, pgx.Identifier{"blacklisted_ranges"}, []string{"cidr", "source"}, pgx.CopyFromRows(rows)); err != nil {
-			return 0, 0, err
+		if emptyCIDR > 0 {
+			log.Warn("Blacklist ranges missing CIDR", "count", emptyCIDR)
+		}
+		if len(rows) > 0 {
+			if _, err := tx.CopyFrom(ctx, pgx.Identifier{"blacklisted_ranges"}, []string{"cidr", "source"}, pgx.CopyFromRows(rows)); err != nil {
+				return 0, 0, err
+			}
+			rangeInserted = len(rows)
 		}
 	}
 
@@ -163,7 +182,7 @@ func replaceBlacklistWithCopy(ctx context.Context, dsn string, ips []domain.Blac
 		return 0, 0, err
 	}
 
-	return len(ips), len(ranges), nil
+	return len(ips), rangeInserted, nil
 }
 
 func replaceBlacklistWithBatches(ctx context.Context, ips []domain.BlacklistedIP, ranges []domain.BlacklistedRange) (int, int, error) {
@@ -191,7 +210,7 @@ func replaceBlacklistWithBatches(ctx context.Context, ips []domain.BlacklistedIP
 			filtered = append(filtered, r)
 		}
 		if len(filtered) > 0 {
-			if err := db.CreateInBatches(filtered, blacklistInsertBatchSize).Error; err != nil {
+			if err := insertBlacklistRanges(db, filtered, blacklistInsertBatchSize); err != nil {
 				return len(ips), 0, err
 			}
 			return len(ips), len(filtered), nil
@@ -199,6 +218,50 @@ func replaceBlacklistWithBatches(ctx context.Context, ips []domain.BlacklistedIP
 	}
 
 	return len(ips), 0, nil
+}
+
+func insertBlacklistRanges(db *gorm.DB, ranges []domain.BlacklistedRange, batchSize int) error {
+	if len(ranges) == 0 {
+		return nil
+	}
+	if batchSize <= 0 {
+		batchSize = blacklistInsertBatchSize
+	}
+
+	for i := 0; i < len(ranges); i += batchSize {
+		end := i + batchSize
+		if end > len(ranges) {
+			end = len(ranges)
+		}
+
+		batch := ranges[i:end]
+		placeholders := make([]string, 0, len(batch))
+		args := make([]any, 0, len(batch)*2)
+
+		for _, r := range batch {
+			cidr := strings.TrimSpace(r.CIDR)
+			if cidr == "" {
+				continue
+			}
+			placeholders = append(placeholders, "(?::cidr, ?)")
+			args = append(args, cidr, r.Source)
+		}
+
+		if len(placeholders) == 0 {
+			continue
+		}
+
+		stmt := fmt.Sprintf(
+			"INSERT INTO blacklisted_ranges (cidr, source) VALUES %s",
+			strings.Join(placeholders, ","),
+		)
+
+		if err := db.Exec(stmt, args...).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func dedupeIPs(ips []domain.BlacklistedIP) []domain.BlacklistedIP {
@@ -231,43 +294,28 @@ func dedupeRanges(ranges []domain.BlacklistedRange) []domain.BlacklistedRange {
 		return nil
 	}
 
-	seenCIDR := make(map[string]cidrSpan, len(ranges))
+	seenCIDR := make(map[string]string, len(ranges))
 	for _, r := range ranges {
-		cidr, start, end, err := normalizeCIDR(r.CIDR)
+		cidr, _, _, err := normalizeCIDR(r.CIDR)
 		if err != nil {
 			continue
 		}
 		if _, ok := seenCIDR[cidr]; ok {
 			continue
 		}
-		seenCIDR[cidr] = cidrSpan{start: start, end: end, source: r.Source}
+		seenCIDR[cidr] = r.Source
 	}
 
 	if len(seenCIDR) == 0 {
 		return nil
 	}
 
-	spans := make([]cidrSpan, 0, len(seenCIDR))
-	for _, s := range seenCIDR {
-		spans = append(spans, s)
-	}
-
-	merged := mergeSpans(spans)
-
-	result := make([]domain.BlacklistedRange, 0, len(merged))
-	for _, m := range merged {
-		for _, cidr := range rangeToCIDRs(m.start, m.end) {
-			cStart, cEnd, err := cidrBounds(cidr)
-			if err != nil {
-				continue
-			}
-			result = append(result, domain.BlacklistedRange{
-				CIDR:    cidr,
-				Source:  m.source,
-				StartIP: cStart,
-				EndIP:   cEnd,
-			})
-		}
+	result := make([]domain.BlacklistedRange, 0, len(seenCIDR))
+	for cidr, source := range seenCIDR {
+		result = append(result, domain.BlacklistedRange{
+			CIDR:   cidr,
+			Source: source,
+		})
 	}
 
 	return result

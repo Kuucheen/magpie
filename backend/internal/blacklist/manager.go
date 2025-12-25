@@ -138,16 +138,6 @@ func cloneSet(m map[string]struct{}) map[string]struct{} {
 	return cp
 }
 
-// IsIPBlacklisted checks the in-memory cache for the given IP.
-func IsIPBlacklisted(ip string) bool {
-	normalized := normalizeIPv4(ip)
-	if normalized == "" {
-		return false
-	}
-	_, found := cache.Load()[normalized]
-	return found
-}
-
 // FilterProxies separates allowed proxies from those using blacklisted IPs.
 func FilterProxies(proxies []domain.Proxy) (allowed []domain.Proxy, blocked []domain.Proxy) {
 	if len(proxies) == 0 {
@@ -281,6 +271,7 @@ func triggerRefresh(ctx context.Context, reason string, force bool) {
 		"sources", outcome.Sources,
 		"new_ips", outcome.NewIPs,
 		"cached_ips", outcome.TotalCachedIPs,
+		"cached_ranges", outcome.TotalRanges,
 		"relations_removed", outcome.RelationsRemoved,
 	)
 }
@@ -457,6 +448,8 @@ func fetchBlacklist(ctx context.Context, source string) ([]string, []domain.Blac
 	if err != nil {
 		return nil, nil, fmt.Errorf("build request: %w", err)
 	}
+	req.Header.Set("User-Agent", "magpie-blacklist-fetcher/1.0")
+	req.Header.Set("Accept", "text/plain, */*;q=0.9")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -476,6 +469,17 @@ func fetchBlacklist(ctx context.Context, source string) ([]string, []domain.Blac
 	}
 
 	ips, ranges := parseIPs(content)
+	if len(ips) == 0 && len(ranges) == 0 {
+		preview := string(bytes.TrimSpace(bytes.SplitN(content, []byte{'\n'}, 2)[0]))
+		if preview == "" {
+			preview = string(bytes.TrimSpace(content))
+		}
+		log.Warn("Blacklist source returned no entries",
+			"source", source,
+			"content_type", resp.Header.Get("Content-Type"),
+			"preview", preview,
+		)
+	}
 	return ips, ranges, nil
 }
 

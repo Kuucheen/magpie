@@ -5,7 +5,7 @@ type BlacklistedRange struct {
 	ID uint64 `gorm:"primaryKey;autoIncrement"`
 
 	// CIDR holds the normalized network string (e.g. 192.0.2.0/24).
-	CIDR   string `gorm:"type:cidr;uniqueIndex;not null"`
+	CIDR   string `gorm:"column:cidr;type:cidr;uniqueIndex"`
 	Source string `gorm:"size:512;not null;default:''"`
 
 	// Computed bounds used in-memory; not persisted.

@@ -6,6 +6,7 @@ export interface UserSettings {
   timeout:          number
   retries:          number
   UseHttpsForSocks: boolean
+  transport_protocol: string
   auto_remove_failing_proxies: boolean
   auto_remove_failure_threshold: number
 

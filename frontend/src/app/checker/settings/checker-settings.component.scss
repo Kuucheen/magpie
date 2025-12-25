@@ -123,7 +123,8 @@
   }
 
   :host ::ng-deep {
-    .p-inputtext.p-inputtext-sm {
+    .p-inputtext.p-inputtext-sm,
+    .p-select {
       background-color: rgba(26, 32, 44, 0.72);
       border: 1px solid rgba(148, 163, 184, 0.28);
       color: #e2e8f0;
@@ -138,6 +139,11 @@
         border-color: rgba(var(--theme-primary-500-rgb), 0.45) !important;
         box-shadow: 0 0 0 0.18rem rgba(var(--theme-primary-500-rgb), 0.18) !important;
       }
+    }
+
+    .p-select {
+      display: block;
+      min-height: 2.8rem;
     }
 
     .p-inputtext:disabled {

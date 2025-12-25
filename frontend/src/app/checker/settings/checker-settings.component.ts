@@ -3,6 +3,7 @@ import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from '@angular/
 import {CheckboxComponent} from '../../checkbox/checkbox.component';
 import {InputText} from 'primeng/inputtext';
 import {Button} from 'primeng/button';
+import {Select} from 'primeng/select';
 import {SettingsService} from '../../services/settings.service';
 import {NotificationService} from '../../services/notification-service.service';
 import {UserSettings} from '../../models/UserSettings';
@@ -12,12 +13,18 @@ import {filter, takeUntil} from 'rxjs/operators';
 @Component({
   selector: 'app-checker-settings',
   standalone: true,
-  imports: [ReactiveFormsModule, CheckboxComponent, InputText, Button],
+  imports: [ReactiveFormsModule, CheckboxComponent, InputText, Button, Select],
   templateUrl: './checker-settings.component.html',
   styleUrls: ['./checker-settings.component.scss']
 })
 export class CheckerSettingsComponent implements OnInit, OnDestroy {
   settingsForm: FormGroup;
+  transportProtocolOptions = [
+    { label: 'TCP', value: 'tcp' },
+    { label: 'UDP', value: 'udp' },
+    { label: 'QUIC', value: 'quic' },
+    { label: 'HTTP/3', value: 'http3' },
+  ];
   private destroy$ = new Subject<void>();
 
   constructor(private fb: FormBuilder, private settingsService: SettingsService) {
@@ -50,6 +57,7 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
       Timeout: [7500],
       Retries: [2],
       UseHttpsForSocks: [true],
+      TransportProtocol: ['tcp'],
       AutoRemoveFailingProxies: [false],
       AutoRemoveFailureThreshold: [3, [Validators.min(1), Validators.max(255)]],
     });
@@ -68,6 +76,7 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
       Timeout: settings.timeout,
       Retries: settings.retries,
       UseHttpsForSocks: settings.UseHttpsForSocks,
+      TransportProtocol: settings.transport_protocol ?? 'tcp',
       AutoRemoveFailingProxies: settings.auto_remove_failing_proxies,
       AutoRemoveFailureThreshold: settings.auto_remove_failure_threshold,
     });

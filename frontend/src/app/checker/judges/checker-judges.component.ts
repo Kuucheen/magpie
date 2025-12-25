@@ -69,6 +69,7 @@ export class CheckerJudgesComponent implements OnInit, OnDestroy {
       Timeout: current?.timeout ?? 7500,
       Retries: current?.retries ?? 2,
       UseHttpsForSocks: current?.UseHttpsForSocks ?? true,
+      TransportProtocol: current?.transport_protocol ?? 'tcp',
       judges: this.judgesForm.value
     };
 

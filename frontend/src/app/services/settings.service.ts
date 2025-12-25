@@ -126,6 +126,12 @@ export class SettingsService {
   }
 
   private transformUserSettings(formData: any): UserSettings {
+    const transportProtocol =
+      formData.TransportProtocol ??
+      formData.transport_protocol ??
+      this.userSettings?.transport_protocol ??
+      'tcp';
+
     return {
       http_protocol: formData.HTTPProtocol,
       https_protocol: formData.HTTPSProtocol,
@@ -134,6 +140,7 @@ export class SettingsService {
       timeout: formData.Timeout,
       retries: formData.Retries,
       UseHttpsForSocks: formData.UseHttpsForSocks,
+      transport_protocol: transportProtocol,
       auto_remove_failing_proxies: formData.AutoRemoveFailingProxies,
       auto_remove_failure_threshold: formData.AutoRemoveFailureThreshold,
       judges: formData.judges,

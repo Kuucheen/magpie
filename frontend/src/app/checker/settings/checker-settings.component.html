@@ -37,6 +37,32 @@
       <section class="section-card bg-neutral-950/40 border border-neutral-800 rounded-xl p-5">
         <div class="section-header flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
+            <h3 class="section-title">Transport Layer</h3>
+            <p class="section-hint">Select the network transport used during proxy validation.</p>
+          </div>
+        </div>
+        <div class="field-grid">
+          <div class="field-group">
+            <label class="field-label" for="transport-protocol">Transport protocol</label>
+            <p-select
+              inputId="transport-protocol"
+              [options]="transportProtocolOptions"
+              formControlName="TransportProtocol"
+              optionLabel="label"
+              optionValue="value"
+              class="w-full"
+              [appendTo]="'body'"
+              [scrollHeight]="'200px'"
+              placeholder="Select transport">
+            </p-select>
+            <p class="field-hint">HTTP/3 and QUIC require proxies that speak HTTP/3 and HTTPS judges.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card bg-neutral-950/40 border border-neutral-800 rounded-xl p-5">
+        <div class="section-header flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
             <h3 class="section-title">Performance Tuning</h3>
             <p class="section-hint">Fine-tune the retry and timeout thresholds to match your infrastructure.</p>
           </div>

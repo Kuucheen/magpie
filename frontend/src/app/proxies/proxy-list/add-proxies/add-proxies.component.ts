@@ -7,6 +7,7 @@ import {DialogModule} from 'primeng/dialog';
 import {TooltipComponent} from '../../../tooltip/tooltip.component';
 import {HttpService} from '../../../services/http.service';
 import {NotificationService} from '../../../services/notification-service.service';
+import {AddProxiesDetails} from '../../../models/AddProxiesResponse';
 
 @Component({
     selector: 'app-add-proxies',
@@ -45,6 +46,9 @@ export class AddProxiesComponent {
   readonly showPopup = signal(false);
   readonly popupStatus = signal<'processing' | 'success' | 'error'>('processing');
   readonly addedProxyCount = signal(0);
+  readonly detailsVisible = signal(false);
+  readonly uploadDetails = signal<AddProxiesDetails | null>(null);
+  readonly hasUploadDetails = computed(() => this.uploadDetails() !== null);
 
   readonly proxiesWithoutAuthCount = computed(() =>
     this.textAreaProxiesNoAuthCount() + this.fileProxiesNoAuthCount() + this.clipboardProxiesNoAuthCount()
@@ -163,6 +167,8 @@ export class AddProxiesComponent {
 
   submitProxies() {
     if (this.file() || this.proxyTextarea() || this.clipboardProxies()) {
+      this.uploadDetails.set(null);
+      this.detailsVisible.set(false);
       this.showPopup.set(true);
       this.popupStatus.set('processing');
 
@@ -185,6 +191,7 @@ export class AddProxiesComponent {
 
       this.service.uploadProxies(formData).subscribe({
         next: (response) => {
+          this.uploadDetails.set(response.details ?? null);
           this.addedProxyCount.set(response.proxyCount);
           this.popupStatus.set('success');
           this.dialogVisible.set(false);
@@ -205,6 +212,24 @@ export class AddProxiesComponent {
 
   onPopupClose() {
     this.showPopup.set(false);
+    this.uploadDetails.set(null);
+    this.detailsVisible.set(false);
+  }
+
+  openDetails() {
+    if (this.uploadDetails()) {
+      this.detailsVisible.set(true);
+    }
+  }
+
+  formatDuration(durationMs?: number | null): string {
+    if (durationMs === null || durationMs === undefined) {
+      return '-';
+    }
+    if (durationMs < 1000) {
+      return `${durationMs} ms`;
+    }
+    return `${(durationMs / 1000).toFixed(2)} s`;
   }
 
   private resetFormState(): void {

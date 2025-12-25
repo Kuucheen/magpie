@@ -79,8 +79,10 @@ app-star-background {
 .close-button {
   position: relative;
   z-index: 1202;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
   padding: 0.75rem 1.5rem;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   font-size: 1rem;
   cursor: pointer;
@@ -89,5 +91,28 @@ app-star-background {
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 2px 8px rgba(33, 243, 68, 0.4);
+  }
+}
+
+.action-buttons {
+  position: relative;
+  z-index: 1202;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.details-button {
+  background: rgba(14, 165, 233, 0.18);
+  color: #e0f2fe;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
   }
 }

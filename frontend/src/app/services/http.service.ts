@@ -16,6 +16,7 @@ import {ProxyStatisticResponseDetail} from '../models/ProxyStatisticResponseDeta
 import {RotatingProxy, CreateRotatingProxy, RotatingProxyNext} from '../models/RotatingProxy';
 import {map} from 'rxjs/operators';
 import {DeleteSettings} from '../models/DeleteSettings';
+import {AddProxiesResponse} from '../models/AddProxiesResponse';
 
 @Injectable({
   providedIn: 'root'
@@ -42,7 +43,7 @@ export class HttpService {
   }
 
   uploadProxies(formData: FormData) {
-    return this.http.post<{proxyCount: number}>(this.apiUrl + '/addProxies', formData);
+    return this.http.post<AddProxiesResponse>(this.apiUrl + '/addProxies', formData);
   }
 
   deleteProxies(settings: DeleteSettings) {

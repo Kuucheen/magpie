@@ -122,6 +122,66 @@
     [status]="popupStatus()"
     [count]="addedProxyCount()"
     [item]="'proxies'"
+    [showDetailsButton]="hasUploadDetails()"
+    [autoCloseOnSuccess]="!hasUploadDetails()"
     (closed)="onPopupClose()"
+    (detailsRequested)="openDetails()"
   ></app-procesing-popup>
 }
+
+<p-dialog
+  [visible]="detailsVisible()"
+  (visibleChange)="detailsVisible.set($event)"
+  [modal]="true"
+  [draggable]="true"
+  [resizable]="false"
+  [dismissableMask]="true"
+  [baseZIndex]="1300"
+  [breakpoints]="{ '960px': '90vw', '640px': '95vw' }"
+  [style]="{ width: '32rem' }"
+  [contentStyle]="{ padding: '0' }"
+>
+  <ng-template pTemplate="header">
+    <div class="flex items-center gap-2 text-lg font-semibold">
+      <span>Upload details</span>
+    </div>
+  </ng-template>
+
+  <div class="p-6 bg-neutral-900 text-gray-200">
+    @if (uploadDetails()) {
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <div class="text-gray-400">Total entries</div>
+          <div class="text-right font-semibold text-white">{{ uploadDetails()?.submittedCount }}</div>
+
+          <div class="text-gray-400">Parsed valid</div>
+          <div class="text-right font-semibold text-white">{{ uploadDetails()?.parsedCount }}</div>
+
+          <div class="text-gray-400">Added</div>
+          <div class="text-right font-semibold text-white">{{ addedProxyCount() }}</div>
+
+          <div class="text-gray-400">Blacklisted</div>
+          <div class="text-right font-semibold text-white">{{ uploadDetails()?.blacklistedCount }}</div>
+
+          <div class="text-gray-400">Invalid IPv4</div>
+          <div class="text-right font-semibold text-white">{{ uploadDetails()?.invalidIpv4Count }}</div>
+
+          <div class="text-gray-400">Invalid IP</div>
+          <div class="text-right font-semibold text-white">{{ uploadDetails()?.invalidIpCount }}</div>
+
+          <div class="text-gray-400">Invalid port</div>
+          <div class="text-right font-semibold text-white">{{ uploadDetails()?.invalidPortCount }}</div>
+
+          <div class="text-gray-400">Invalid format</div>
+          <div class="text-right font-semibold text-white">{{ uploadDetails()?.invalidFormatCount }}</div>
+
+          <div class="text-gray-400">Processing time</div>
+          <div class="text-right font-semibold text-white">{{ formatDuration(uploadDetails()?.processingMs) }}</div>
+        </div>
+        <div class="text-xs text-gray-500">Counts exclude blank lines and whitespace.</div>
+      </div>
+    } @else {
+      <div class="text-sm text-gray-400">No details available for this upload.</div>
+    }
+  </div>
+</p-dialog>

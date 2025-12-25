@@ -23,7 +23,10 @@ export class ProcesingPopupComponent implements OnInit, OnChanges, OnDestroy {
   @Input() status: 'processing' | 'success' | 'error' = 'processing';
   @Input() count: number = 0;
   @Input() item: string = "";
+  @Input() showDetailsButton = false;
+  @Input() autoCloseOnSuccess = true;
   @Output() closed = new EventEmitter<void>();
+  @Output() detailsRequested = new EventEmitter<void>();
 
   messages: string[] = [];
   currentMessageIndex = 0;
@@ -58,14 +61,22 @@ export class ProcesingPopupComponent implements OnInit, OnChanges, OnDestroy {
         } else {
           this.clearMessageRotation();
 
-          if (currentStatus === 'success') {
+          if (currentStatus === 'success' && this.autoCloseOnSuccess) {
             this.scheduleAutoClose();
           } else {
             this.clearAutoCloseTimeout();
           }
         }
-      } else if (currentStatus === 'success') {
+      } else if (currentStatus === 'success' && this.autoCloseOnSuccess) {
         this.scheduleAutoClose();
+      }
+    }
+
+    if (changes['autoCloseOnSuccess'] && this.status === 'success') {
+      if (this.autoCloseOnSuccess) {
+        this.scheduleAutoClose();
+      } else {
+        this.clearAutoCloseTimeout();
       }
     }
   }
@@ -103,6 +114,10 @@ export class ProcesingPopupComponent implements OnInit, OnChanges, OnDestroy {
   onClose() {
     this.clearAutoCloseTimeout();
     this.closed.emit();
+  }
+
+  onDetails() {
+    this.detailsRequested.emit();
   }
 
   private initializeMessages(): void {

@@ -22,6 +22,11 @@
     }
   </div>
   @if (status !== 'processing') {
-    <button class="close-button" (click)="onClose()">Close</button>
+    <div class="action-buttons">
+      @if (status === 'success' && showDetailsButton) {
+        <button class="details-button" (click)="onDetails()">Details</button>
+      }
+      <button class="close-button" (click)="onClose()">Close</button>
+    </div>
   }
 </div>

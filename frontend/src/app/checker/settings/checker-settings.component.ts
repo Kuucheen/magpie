@@ -21,7 +21,6 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
   settingsForm: FormGroup;
   transportProtocolOptions = [
     { label: 'TCP', value: 'tcp' },
-    { label: 'UDP', value: 'udp' },
     { label: 'QUIC', value: 'quic' },
     { label: 'HTTP/3', value: 'http3' },
   ];
@@ -68,6 +67,11 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const transportValues = this.transportProtocolOptions.map(option => option.value);
+    const selectedTransport = transportValues.includes(settings.transport_protocol)
+      ? settings.transport_protocol
+      : 'tcp';
+
     this.settingsForm.patchValue({
       HTTPProtocol: settings.http_protocol,
       HTTPSProtocol: settings.https_protocol,
@@ -76,7 +80,7 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
       Timeout: settings.timeout,
       Retries: settings.retries,
       UseHttpsForSocks: settings.UseHttpsForSocks,
-      TransportProtocol: settings.transport_protocol ?? 'tcp',
+      TransportProtocol: selectedTransport,
       AutoRemoveFailingProxies: settings.auto_remove_failing_proxies,
       AutoRemoveFailureThreshold: settings.auto_remove_failure_threshold,
     });

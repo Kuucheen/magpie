@@ -43,10 +43,16 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     {label: 'SOCKS4', value: 'socks4'},
     {label: 'SOCKS5', value: 'socks5'},
   ];
+  private readonly transportProtocolOptionList: { label: string; value: string }[] = [
+    {label: 'TCP', value: 'tcp'},
+    {label: 'QUIC', value: 'quic'},
+    {label: 'HTTP/3', value: 'http3'},
+  ];
   createForm: FormGroup;
   rotatingProxies = signal<RotatingProxy[]>([]);
   protocolOptions = signal<{ label: string; value: string }[]>([]);
   listenProtocolOptions = signal<{ label: string; value: string }[]>([...this.protocolOptionList]);
+  transportProtocolOptions = [...this.transportProtocolOptionList];
   loading = signal(false);
   submitting = signal(false);
   rotateLoading = signal<Set<number>>(new Set());
@@ -76,6 +82,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       name: ['', [Validators.required, Validators.maxLength(120)]],
       protocol: ['', Validators.required],
       listenProtocol: ['', Validators.required],
+      transportProtocol: ['tcp', Validators.required],
+      listenTransportProtocol: ['tcp', Validators.required],
       authRequired: [false],
       authUsername: [{value: '', disabled: true}, [Validators.maxLength(120)]],
       authPassword: [{value: '', disabled: true}, [Validators.maxLength(120)]],
@@ -140,6 +148,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           this.noProtocolsAvailable.set(noneAvailable);
           const protocolControl = this.createForm.get('protocol');
           const listenControl = this.createForm.get('listenProtocol');
+          const transportControl = this.createForm.get('transportProtocol');
+          const listenTransportControl = this.createForm.get('listenTransportProtocol');
           const availableValues = options.map(opt => opt.value);
           const currentProtocol = protocolControl?.value;
           const currentListen = listenControl?.value;
@@ -149,6 +159,15 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           const listenOptions = this.listenProtocolOptions().map(opt => opt.value);
           if (!currentListen || !listenOptions.includes(currentListen)) {
             this.createForm.patchValue({listenProtocol: listenOptions[0] ?? ''}, {emitEvent: false});
+          }
+          const transportValues = this.transportProtocolOptions.map(opt => opt.value);
+          const currentTransport = transportControl?.value;
+          const currentListenTransport = listenTransportControl?.value;
+          if (!currentTransport || !transportValues.includes(currentTransport)) {
+            this.createForm.patchValue({transportProtocol: transportValues[0] ?? 'tcp'}, {emitEvent: false});
+          }
+          if (!currentListenTransport || !transportValues.includes(currentListenTransport)) {
+            this.createForm.patchValue({listenTransportProtocol: transportValues[0] ?? 'tcp'}, {emitEvent: false});
           }
           this.updateFormDisabledStates();
           this.loading.set(false);
@@ -170,6 +189,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       name: (this.createForm.get('name')?.value ?? '').trim(),
       protocol: this.createForm.get('protocol')?.value,
       listen_protocol: this.createForm.get('listenProtocol')?.value,
+      transport_protocol: this.createForm.get('transportProtocol')?.value,
+      listen_transport_protocol: this.createForm.get('listenTransportProtocol')?.value,
       auth_required: !!this.createForm.get('authRequired')?.value,
     };
 
@@ -379,6 +400,19 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     }
   }
 
+  transportLabel(value: string): string {
+    switch ((value ?? '').toLowerCase()) {
+      case 'tcp':
+        return 'TCP';
+      case 'quic':
+        return 'QUIC';
+      case 'http3':
+        return 'HTTP/3';
+      default:
+        return value?.toUpperCase() ?? '';
+    }
+  }
+
   reputationFilterSummary(labels: string[] | null | undefined): string {
     const normalized = this.normalizeReputationSelection(labels);
     if (normalized.length === 0 || normalized.length === this.allReputationValues.length) {
@@ -417,6 +451,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     this.setDisabledState('name', submitting || noneAvailable);
     this.setDisabledState('protocol', submitting || noneAvailable);
     this.setDisabledState('listenProtocol', submitting || noneAvailable);
+    this.setDisabledState('transportProtocol', submitting || noneAvailable);
+    this.setDisabledState('listenTransportProtocol', submitting || noneAvailable);
     this.setDisabledState('reputationLabels', submitting);
     this.setDisabledState('authRequired', submitting);
   }
@@ -469,10 +505,14 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   private enrichRotator(proxy: RotatingProxy): RotatingProxy {
     const listenHost = this.resolveHostValue(proxy.listen_host);
     const listenAddress = listenHost ? `${listenHost}:${proxy.listen_port}` : `${proxy.listen_port}`;
+    const transportProtocol = (proxy.transport_protocol ?? 'tcp').toString().trim().toLowerCase() || 'tcp';
+    const listenTransportProtocol = (proxy.listen_transport_protocol ?? transportProtocol).toString().trim().toLowerCase() || transportProtocol;
 
     return {
       ...proxy,
       listen_protocol: proxy.listen_protocol ?? proxy.protocol ?? null,
+      transport_protocol: transportProtocol,
+      listen_transport_protocol: listenTransportProtocol,
       auth_username: proxy.auth_username ?? null,
       auth_password: proxy.auth_password ?? null,
       listen_host: listenHost || null,

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject } from 'rxjs';
-import { distinctUntilChanged, filter, map } from 'rxjs/operators';
+import { filter, map } from 'rxjs/operators';
 import { GlobalSettings } from '../models/GlobalSettings';
 import { HttpService } from './http.service';
 import {UserSettings} from '../models/UserSettings';
@@ -24,8 +24,13 @@ export class SettingsService {
     this.loadSettings();
 
     this.userService.role$
-      .pipe(distinctUntilChanged())
       .subscribe(role => {
+        if (UserService.isLoggedIn()) {
+          this.loadUserSettings();
+        } else {
+          this.clearUserSettings();
+        }
+
         if (role === 'admin') {
           this.fetchGlobalSettings();
           return;
@@ -38,13 +43,7 @@ export class SettingsService {
   }
 
   loadSettings(): void {
-    this.http.getUserSettings().subscribe({
-      next: res => {
-        this.userSettings = res;
-        this.userSettingsSubject.next(this.userSettings);
-      },
-      error: err => NotificationService.showError("Error while getting user settings" + err.error.message)
-      })
+    this.loadUserSettings();
 
     if (UserService.isAdmin()) {
       this.fetchGlobalSettings();
@@ -146,6 +145,31 @@ export class SettingsService {
       judges: formData.judges,
       scraping_sources: [] // Not needed here
     };
+  }
+
+  private loadUserSettings(): void {
+    if (!UserService.isLoggedIn()) {
+      return;
+    }
+
+    this.http.getUserSettings().subscribe({
+      next: res => {
+        this.userSettings = res;
+        this.userSettingsSubject.next(this.userSettings);
+      },
+      error: err => {
+        if (err.status === 401 || err.status === 403) {
+          this.clearUserSettings();
+          return;
+        }
+        NotificationService.showError("Error while getting user settings" + err.error?.message);
+      }
+    });
+  }
+
+  private clearUserSettings(): void {
+    this.userSettings = undefined;
+    this.userSettingsSubject.next(this.userSettings);
   }
 
   saveGlobalSettings(formData: any): Observable<any> {

@@ -332,7 +332,11 @@ func (h *proxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	targetURL := r.URL
 	if !targetURL.IsAbs() {
 		scheme := "http"
-		if strings.HasPrefix(strings.ToLower(r.Proto), "https") {
+		if r.URL != nil && r.URL.Scheme != "" {
+			scheme = r.URL.Scheme
+		} else if r.TLS != nil {
+			scheme = "https"
+		} else if strings.HasPrefix(strings.ToLower(r.Proto), "https") {
 			scheme = "https"
 		}
 		targetURL = &url.URL{

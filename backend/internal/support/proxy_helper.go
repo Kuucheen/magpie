@@ -77,10 +77,7 @@ func parseTextToProxiesWithStats(text string, allowColonAuth bool) ([]domain.Pro
 			continue
 		}
 
-		ip := strings.TrimSpace(hostSplit[0])
-		if len(ip) > 0 && ip[0] == '0' {
-			ip = ip[1:] // Fix proxy if it leads with 0
-		}
+		ip := normalizeIPv4(strings.TrimSpace(hostSplit[0]))
 		parsedIP := net.ParseIP(ip)
 		if parsedIP == nil {
 			stats.InvalidIPCount++
@@ -142,12 +139,32 @@ func cleanProxyString(proxies string, replaceAuthDelimiter bool) string {
 	}
 	proxies = strings.ReplaceAll(proxies, "\r", "")
 
-	// Makes leading 0 proxies valid
-	proxies = strings.ReplaceAll(proxies, ".0", ".")
 	proxies = strings.ReplaceAll(proxies, "..", ".0.")
 	proxies = strings.ReplaceAll(proxies, ".:", ".0:")
 
 	return proxies
+}
+
+func normalizeIPv4(value string) string {
+	parts := strings.Split(value, ".")
+	if len(parts) != 4 {
+		return value
+	}
+
+	normalized := make([]string, 0, 4)
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return value
+		}
+		num, err := strconv.Atoi(part)
+		if err != nil || num < 0 || num > 255 {
+			return value
+		}
+		normalized = append(normalized, strconv.Itoa(num))
+	}
+
+	return strings.Join(normalized, ".")
 }
 
 // FindIP identifies the first IP address (IPv4 or IPv6) in a given string.

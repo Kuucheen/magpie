@@ -4,14 +4,12 @@ import "strings"
 
 const (
 	TransportTCP   = "tcp"
-	TransportUDP   = "udp"
 	TransportQUIC  = "quic"
 	TransportHTTP3 = "http3"
 )
 
 var transportProtocolSet = map[string]struct{}{
 	TransportTCP:   {},
-	TransportUDP:   {},
 	TransportQUIC:  {},
 	TransportHTTP3: {},
 }

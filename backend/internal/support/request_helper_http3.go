@@ -51,7 +51,13 @@ func createHTTP3Transport(proxyToCheck domain.Proxy, judge *domain.Judge, protoc
 	}
 
 	timeout := time.Duration(config.GetConfig().Checker.Timeout) * time.Millisecond
-	enableDatagrams := NormalizeTransportProtocol(transportProtocol) == TransportQUIC
+	enableDatagrams := false
+	switch NormalizeTransportProtocol(transportProtocol) {
+	case TransportQUIC:
+		enableDatagrams = true
+	default:
+		enableDatagrams = false
+	}
 
 	quicCfg := &quic.Config{
 		HandshakeIdleTimeout: timeout,

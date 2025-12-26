@@ -60,6 +60,11 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 	if listenProtocolName == "" {
 		listenProtocolName = protocolName
 	}
+	transportProtocol := support.NormalizeTransportProtocol(payload.TransportProtocol)
+	listenTransportProtocol := support.NormalizeTransportProtocol(payload.ListenTransportProtocol)
+	if strings.TrimSpace(payload.ListenTransportProtocol) == "" {
+		listenTransportProtocol = transportProtocol
+	}
 
 	if payload.AuthRequired {
 		if strings.TrimSpace(payload.AuthUsername) == "" {
@@ -102,14 +107,16 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 		filters := sanitizeRotatorReputationLabels(payload.ReputationLabels)
 
 		entity := domain.RotatingProxy{
-			UserID:           userID,
-			Name:             name,
-			ProtocolID:       proxyProtocol.ID,
-			ListenProtocolID: listenProtocol.ID,
-			AuthRequired:     payload.AuthRequired,
-			AuthUsername:     strings.TrimSpace(payload.AuthUsername),
-			AuthPassword:     payload.AuthPassword,
-			ReputationLabels: domain.StringList(filters),
+			UserID:                  userID,
+			Name:                    name,
+			ProtocolID:              proxyProtocol.ID,
+			ListenProtocolID:        listenProtocol.ID,
+			TransportProtocol:       transportProtocol,
+			ListenTransportProtocol: listenTransportProtocol,
+			AuthRequired:            payload.AuthRequired,
+			AuthUsername:            strings.TrimSpace(payload.AuthUsername),
+			AuthPassword:            payload.AuthPassword,
+			ReputationLabels:        domain.StringList(filters),
 		}
 
 		listenPort, err := allocateListenPort(tx)
@@ -131,17 +138,19 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 		}
 
 		result = &dto.RotatingProxy{
-			ID:               entity.ID,
-			Name:             entity.Name,
-			Protocol:         proxyProtocol.Name,
-			ListenProtocol:   listenProtocol.Name,
-			AliveProxyCount:  len(aliveProxies),
-			ListenPort:       entity.ListenPort,
-			AuthRequired:     entity.AuthRequired,
-			AuthUsername:     entity.AuthUsername,
-			AuthPassword:     strings.TrimSpace(payload.AuthPassword),
-			ReputationLabels: filters,
-			CreatedAt:        entity.CreatedAt,
+			ID:                      entity.ID,
+			Name:                    entity.Name,
+			Protocol:                proxyProtocol.Name,
+			ListenProtocol:          listenProtocol.Name,
+			TransportProtocol:       transportProtocol,
+			ListenTransportProtocol: listenTransportProtocol,
+			AliveProxyCount:         len(aliveProxies),
+			ListenPort:              entity.ListenPort,
+			AuthRequired:            entity.AuthRequired,
+			AuthUsername:            entity.AuthUsername,
+			AuthPassword:            strings.TrimSpace(payload.AuthPassword),
+			ReputationLabels:        filters,
+			CreatedAt:               entity.CreatedAt,
 		}
 
 		entity.AuthPassword = ""
@@ -183,6 +192,11 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 		normalizeRotatingProxyProtocols(&row)
 		protocolName := row.Protocol.Name
 		listenProtocol := row.ListenProtocol.Name
+		transportProtocol := support.NormalizeTransportProtocol(row.TransportProtocol)
+		listenTransportProtocol := support.NormalizeTransportProtocol(row.ListenTransportProtocol)
+		if strings.TrimSpace(row.ListenTransportProtocol) == "" {
+			listenTransportProtocol = transportProtocol
+		}
 		labels := sanitizeRotatorReputationLabels(row.ReputationLabels.Clone())
 		proxies, err := getAliveProxiesCached(userID, row.ProtocolID, labels, protocolCache)
 		if err != nil {
@@ -198,19 +212,21 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 		}
 
 		result = append(result, dto.RotatingProxy{
-			ID:               row.ID,
-			Name:             row.Name,
-			Protocol:         protocolName,
-			ListenProtocol:   listenProtocol,
-			AliveProxyCount:  len(proxies),
-			ListenPort:       row.ListenPort,
-			AuthRequired:     row.AuthRequired,
-			AuthUsername:     row.AuthUsername,
-			AuthPassword:     row.AuthPassword,
-			LastRotationAt:   row.LastRotationAt,
-			LastServedProxy:  lastProxy,
-			ReputationLabels: labels,
-			CreatedAt:        row.CreatedAt,
+			ID:                      row.ID,
+			Name:                    row.Name,
+			Protocol:                protocolName,
+			ListenProtocol:          listenProtocol,
+			TransportProtocol:       transportProtocol,
+			ListenTransportProtocol: listenTransportProtocol,
+			AliveProxyCount:         len(proxies),
+			ListenPort:              row.ListenPort,
+			AuthRequired:            row.AuthRequired,
+			AuthUsername:            row.AuthUsername,
+			AuthPassword:            row.AuthPassword,
+			LastRotationAt:          row.LastRotationAt,
+			LastServedProxy:         lastProxy,
+			ReputationLabels:        labels,
+			CreatedAt:               row.CreatedAt,
 		})
 	}
 
@@ -563,4 +579,12 @@ func normalizeRotatingProxyProtocols(rotator *domain.RotatingProxy) {
 	if strings.TrimSpace(rotator.ListenProtocol.Name) == "" {
 		rotator.ListenProtocol = rotator.Protocol
 	}
+
+	transportProtocol := support.NormalizeTransportProtocol(rotator.TransportProtocol)
+	listenTransportProtocol := support.NormalizeTransportProtocol(rotator.ListenTransportProtocol)
+	if strings.TrimSpace(rotator.ListenTransportProtocol) == "" {
+		listenTransportProtocol = transportProtocol
+	}
+	rotator.TransportProtocol = transportProtocol
+	rotator.ListenTransportProtocol = listenTransportProtocol
 }

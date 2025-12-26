@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 
 	"magpie/internal/database"
 	"magpie/internal/domain"
@@ -103,10 +105,11 @@ func (m *Manager) StopAll() {
 }
 
 type proxyServer struct {
-	rotator    domain.RotatingProxy
-	listener   net.Listener
-	httpServer *http.Server
-	closeOnce  sync.Once
+	rotator     domain.RotatingProxy
+	listener    net.Listener
+	httpServer  *http.Server
+	http3Server *http3.Server
+	closeOnce   sync.Once
 }
 
 func newProxyServer(rotator domain.RotatingProxy) *proxyServer {
@@ -114,10 +117,19 @@ func newProxyServer(rotator domain.RotatingProxy) *proxyServer {
 }
 
 func (ps *proxyServer) Start() error {
-	if isSocksProtocol(listenProtocolName(ps.rotator)) {
-		return ps.startSocksServer()
+	transport := listenTransportProtocolName(ps.rotator)
+	switch transport {
+	case support.TransportQUIC, support.TransportHTTP3:
+		if isSocksProtocol(listenProtocolName(ps.rotator)) {
+			return fmt.Errorf("socks rotators require tcp transport")
+		}
+		return ps.startHTTP3Server(transport)
+	default:
+		if isSocksProtocol(listenProtocolName(ps.rotator)) {
+			return ps.startSocksServer()
+		}
+		return ps.startHTTPServer()
 	}
-	return ps.startHTTPServer()
 }
 
 func (ps *proxyServer) startHTTPServer() error {
@@ -174,6 +186,44 @@ func (ps *proxyServer) startSocksServer() error {
 	return nil
 }
 
+func (ps *proxyServer) startHTTP3Server(transport string) error {
+	address := fmt.Sprintf(":%d", ps.rotator.ListenPort)
+	tlsConfig, err := rotatorTLSConfig()
+	if err != nil {
+		return err
+	}
+
+	enableDatagrams := transport == support.TransportQUIC
+	handler := &proxyHandler{rotator: ps.rotator}
+	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			http.Error(w, "CONNECT is not supported for HTTP/3 rotators", http.StatusMethodNotAllowed)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	})
+
+	server := &http3.Server{
+		Addr:            address,
+		Handler:         httpHandler,
+		TLSConfig:       tlsConfig,
+		QUICConfig:      &quic.Config{EnableDatagrams: enableDatagrams},
+		EnableDatagrams: enableDatagrams,
+		IdleTimeout:     30 * time.Second,
+		MaxHeaderBytes:  http.DefaultMaxHeaderBytes,
+	}
+
+	ps.http3Server = server
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("rotating proxy server: http3 serve error", "rotator_id", ps.rotator.ID, "error", err)
+		}
+	}()
+
+	return nil
+}
+
 func (ps *proxyServer) Stop() {
 	ps.closeOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -181,6 +231,11 @@ func (ps *proxyServer) Stop() {
 		if ps.httpServer != nil {
 			if err := ps.httpServer.Shutdown(ctx); err != nil {
 				log.Error("rotating proxy server shutdown", "rotator_id", ps.rotator.ID, "error", err)
+			}
+		}
+		if ps.http3Server != nil {
+			if err := ps.http3Server.Close(); err != nil {
+				log.Error("rotating proxy server http3 close", "rotator_id", ps.rotator.ID, "error", err)
 			}
 		}
 		if ps.listener != nil {
@@ -203,4 +258,14 @@ func listenProtocolName(rotator domain.RotatingProxy) string {
 		return name
 	}
 	return strings.TrimSpace(rotator.Protocol.Name)
+}
+
+func listenTransportProtocolName(rotator domain.RotatingProxy) string {
+	if name := strings.TrimSpace(rotator.ListenTransportProtocol); name != "" {
+		return support.NormalizeTransportProtocol(name)
+	}
+	if name := strings.TrimSpace(rotator.TransportProtocol); name != "" {
+		return support.NormalizeTransportProtocol(name)
+	}
+	return support.TransportTCP
 }

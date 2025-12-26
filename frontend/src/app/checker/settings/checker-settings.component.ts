@@ -9,11 +9,12 @@ import {NotificationService} from '../../services/notification-service.service';
 import {UserSettings} from '../../models/UserSettings';
 import {Subject} from 'rxjs';
 import {filter, takeUntil} from 'rxjs/operators';
+import {TooltipComponent} from '../../tooltip/tooltip.component';
 
 @Component({
   selector: 'app-checker-settings',
   standalone: true,
-  imports: [ReactiveFormsModule, CheckboxComponent, InputText, Button, Select],
+  imports: [ReactiveFormsModule, CheckboxComponent, InputText, Button, Select, TooltipComponent],
   templateUrl: './checker-settings.component.html',
   styleUrls: ['./checker-settings.component.scss']
 })
@@ -24,6 +25,8 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
     { label: 'QUIC', value: 'quic' },
     { label: 'HTTP/3', value: 'http3' },
   ];
+  readonly transportProtocolTooltip =
+    'TCP uses standard HTTP over TCP. QUIC and HTTP/3 both use HTTP/3 over QUIC; QUIC enables HTTP/3 datagrams (unreliable messages), HTTP/3 uses streams only.';
   private destroy$ = new Subject<void>();
 
   constructor(private fb: FormBuilder, private settingsService: SettingsService) {

@@ -5,6 +5,7 @@ services:
     ports:
       - "5656:5656"
       - "20000-20100:20000-20100"
+      - "20000-20100:20000-20100/udp"
     environment:
       - PROXY_ENCRYPTION_KEY=${PROXY_ENCRYPTION_KEY:?Set PROXY_ENCRYPTION_KEY in .env}
 

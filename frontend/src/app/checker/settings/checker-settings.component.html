@@ -43,7 +43,10 @@
         </div>
         <div class="field-grid">
           <div class="field-group">
-            <label class="field-label" for="transport-protocol">Transport protocol</label>
+            <label class="field-label" for="transport-protocol">
+              Transport protocol
+              <app-tooltip [text]="transportProtocolTooltip"></app-tooltip>
+            </label>
             <p-select
               inputId="transport-protocol"
               [options]="transportProtocolOptions"

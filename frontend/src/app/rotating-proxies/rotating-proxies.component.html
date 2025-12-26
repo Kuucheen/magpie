@@ -70,7 +70,10 @@
               </div>
 
               <div class="field-group">
-                <label class="field-label" for="listenTransportProtocol">Rotator Transport</label>
+                <label class="field-label" for="listenTransportProtocol">
+                  Rotator Transport
+                  <app-tooltip [text]="transportProtocolTooltip"></app-tooltip>
+                </label>
                 <p-select inputId="listenTransportProtocol"
                           class="w-full"
                           [options]="transportProtocolOptions"
@@ -106,7 +109,10 @@
               </div>
 
               <div class="field-group">
-                <label class="field-label" for="transportProtocol">Proxy Transport</label>
+                <label class="field-label" for="transportProtocol">
+                  Proxy Transport
+                  <app-tooltip [text]="transportProtocolTooltip"></app-tooltip>
+                </label>
                 <p-select inputId="transportProtocol"
                           class="w-full"
                           [options]="transportProtocolOptions"

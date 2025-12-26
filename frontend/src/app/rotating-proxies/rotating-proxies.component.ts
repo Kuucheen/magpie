@@ -17,6 +17,7 @@ import {NotificationService} from '../services/notification-service.service';
 import {CreateRotatingProxy, RotatingProxy} from '../models/RotatingProxy';
 import {UserSettings} from '../models/UserSettings';
 import {LoadingComponent} from '../ui-elements/loading/loading.component';
+import {TooltipComponent} from '../tooltip/tooltip.component';
 
 @Component({
   selector: 'app-rotating-proxies',
@@ -32,6 +33,7 @@ import {LoadingComponent} from '../ui-elements/loading/loading.component';
     DatePipe,
     DialogModule,
     LoadingComponent,
+    TooltipComponent,
   ],
   templateUrl: './rotating-proxies.component.html',
   styleUrl: './rotating-proxies.component.scss'
@@ -48,6 +50,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     {label: 'QUIC', value: 'quic'},
     {label: 'HTTP/3', value: 'http3'},
   ];
+  readonly transportProtocolTooltip =
+    'TCP uses standard HTTP over TCP. QUIC and HTTP/3 both use HTTP/3 over QUIC; QUIC enables HTTP/3 datagrams (unreliable messages), HTTP/3 uses streams only.';
   createForm: FormGroup;
   rotatingProxies = signal<RotatingProxy[]>([]);
   protocolOptions = signal<{ label: string; value: string }[]>([]);

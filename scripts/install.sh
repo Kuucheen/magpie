@@ -4,10 +4,15 @@ set -euo pipefail
 REPO_OWNER="${MAGPIE_REPO_OWNER:-Kuucheen}"
 REPO_NAME="${MAGPIE_REPO_NAME:-magpie}"
 REPO_REF="${MAGPIE_REPO_REF:-master}"
+if [[ "${REPO_REF}" == refs/* ]]; then
+  REPO_REF_PATH="${REPO_REF}"
+else
+  REPO_REF_PATH="refs/heads/${REPO_REF}"
+fi
 
 INSTALL_DIR="${MAGPIE_INSTALL_DIR:-magpie}"
-COMPOSE_URL="${MAGPIE_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/refs/heads/${REPO_REF}/docker-compose.yml}"
-ENV_EXAMPLE_URL="${MAGPIE_ENV_EXAMPLE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/refs/heads/${REPO_REF}/.env.example}"
+COMPOSE_URL="${MAGPIE_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF_PATH}/docker-compose.yml}"
+ENV_EXAMPLE_URL="${MAGPIE_ENV_EXAMPLE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF_PATH}/.env.example}"
 
 if [[ -z "${INSTALL_DIR}" || "${INSTALL_DIR}" == "/" ]]; then
   echo "MAGPIE_INSTALL_DIR must not be empty or '/'." >&2
@@ -94,9 +99,15 @@ download() {
   local dest="$2"
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "${url}" -o "${dest}"
+    if ! curl -fsSL "${url}" -o "${dest}"; then
+      echo "Download failed: ${url}" >&2
+      return 1
+    fi
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "${dest}" "${url}"
+    if ! wget -qO "${dest}" "${url}"; then
+      echo "Download failed: ${url}" >&2
+      return 1
+    fi
   else
     echo "Need curl or wget to download files." >&2
     exit 1

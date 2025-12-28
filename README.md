@@ -57,7 +57,7 @@ all via a web dashboard.
 
    **macOS/Linux**:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/refs/heads/master/scripts/install.sh | bash
    ```
    If you see a Docker socket permission error on Linux, the installer will try to use `sudo` for Docker commands (you may be prompted).  
    Alternative fix: `sudo usermod -aG docker "$USER"` (then log out/in, or run `newgrp docker`).  
@@ -65,7 +65,7 @@ all via a web dashboard.
 
    **Windows (PowerShell)**:
    ```bash
-   iwr -useb https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/install.ps1 | iex
+   iwr -useb https://raw.githubusercontent.com/Kuucheen/magpie/refs/heads/master/scripts/install.ps1 | iex
    ```
 
    This creates a `magpie/` folder with a `docker-compose.yml` and `.env`, then starts the stack.
@@ -102,12 +102,12 @@ Use the helper scripts to pull the latest code and rebuild just the frontend/bac
 - **If you used the one-command installer**:
   - **macOS/Linux**: 
       ```bash
-      curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/update.sh | bash
+      curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/refs/heads/master/scripts/update.sh | bash
       ```
       If you see a Docker socket permission error on Linux, the updater will try to use `sudo` for Docker commands (you may be prompted).
   - **Windows (PowerShell)**: 
       ```bash
-      iwr -useb https://raw.githubusercontent.com/Kuucheen/magpie/main/scripts/update.ps1 | iex
+      iwr -useb https://raw.githubusercontent.com/Kuucheen/magpie/refs/heads/master/scripts/update.ps1 | iex
       ```
 
 - **If you cloned the project**:

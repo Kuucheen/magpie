@@ -57,6 +57,24 @@
               [appendTo]="'body'"
               [scrollHeight]="'200px'"
               placeholder="Select transport">
+              <ng-template pTemplate="selectedItem" let-option>
+                @if (option) {
+                  <span class="transport-option">
+                    <span>{{ option.label ?? option }}</span>
+                    @if ((option.value ?? option) === 'tcp') {
+                      <p-chip class="transport-chip">Default</p-chip>
+                    }
+                  </span>
+                }
+              </ng-template>
+              <ng-template pTemplate="item" let-option>
+                <div class="transport-option">
+                  <span>{{ option.label ?? option }}</span>
+                  @if ((option.value ?? option) === 'tcp') {
+                    <p-chip class="transport-chip">Default</p-chip>
+                  }
+                </div>
+              </ng-template>
             </p-select>
             <p class="field-hint">HTTP/3 and QUIC require proxies that speak HTTP/3 and HTTPS judges.</p>
           </div>

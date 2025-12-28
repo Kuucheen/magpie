@@ -146,6 +146,7 @@
       min-height: 2.8rem;
     }
 
+
     .p-inputtext:disabled {
       background-color: rgba(26, 32, 44, 0.45) !important;
       border-color: rgba(148, 163, 184, 0.2) !important;
@@ -177,4 +178,25 @@
       }
     }
   }
+
+}
+
+:host ::ng-deep .transport-option,
+::ng-deep .p-select-overlay .transport-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:host ::ng-deep .transport-chip,
+::ng-deep .p-select-overlay .transport-chip {
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(148, 163, 184, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.12);
 }

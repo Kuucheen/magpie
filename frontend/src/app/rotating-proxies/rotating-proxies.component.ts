@@ -9,6 +9,7 @@ import {InputTextModule} from 'primeng/inputtext';
 import {SelectModule} from 'primeng/select';
 import {DialogModule} from 'primeng/dialog';
 import {MultiSelectModule} from 'primeng/multiselect';
+import {Chip} from 'primeng/chip';
 
 import {environment} from '../../environments/environment';
 
@@ -30,6 +31,7 @@ import {TooltipComponent} from '../tooltip/tooltip.component';
     InputTextModule,
     SelectModule,
     MultiSelectModule,
+    Chip,
     DatePipe,
     DialogModule,
     LoadingComponent,

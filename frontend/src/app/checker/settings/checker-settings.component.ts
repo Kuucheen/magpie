@@ -4,6 +4,8 @@ import {CheckboxComponent} from '../../checkbox/checkbox.component';
 import {InputText} from 'primeng/inputtext';
 import {Button} from 'primeng/button';
 import {Select} from 'primeng/select';
+import {Chip} from 'primeng/chip';
+import {PrimeTemplate} from 'primeng/api';
 import {SettingsService} from '../../services/settings.service';
 import {NotificationService} from '../../services/notification-service.service';
 import {UserSettings} from '../../models/UserSettings';
@@ -14,7 +16,7 @@ import {TooltipComponent} from '../../tooltip/tooltip.component';
 @Component({
   selector: 'app-checker-settings',
   standalone: true,
-  imports: [ReactiveFormsModule, CheckboxComponent, InputText, Button, Select, TooltipComponent],
+  imports: [ReactiveFormsModule, CheckboxComponent, InputText, Button, Select, Chip, PrimeTemplate, TooltipComponent],
   templateUrl: './checker-settings.component.html',
   styleUrls: ['./checker-settings.component.scss']
 })

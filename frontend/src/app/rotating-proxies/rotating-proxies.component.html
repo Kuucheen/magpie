@@ -81,6 +81,24 @@
                           optionValue="value"
                           placeholder="Select a transport"
                           formControlName="listenTransportProtocol">
+                  <ng-template pTemplate="selectedItem" let-option>
+                    @if (option) {
+                      <div class="transport-option">
+                        <span>{{ option.label }}</span>
+                        @if (option.value === 'tcp') {
+                          <p-chip class="transport-chip">Default</p-chip>
+                        }
+                      </div>
+                    }
+                  </ng-template>
+                  <ng-template pTemplate="item" let-option>
+                    <div class="transport-option">
+                      <span>{{ option.label }}</span>
+                      @if (option.value === 'tcp') {
+                        <p-chip class="transport-chip">Default</p-chip>
+                      }
+                    </div>
+                  </ng-template>
                 </p-select>
                 <p class="field-hint">
                   Choose the transport layer clients will use to reach this rotator.
@@ -120,6 +138,24 @@
                           optionValue="value"
                           placeholder="Select a transport"
                           formControlName="transportProtocol">
+                  <ng-template pTemplate="selectedItem" let-option>
+                    @if (option) {
+                      <div class="transport-option">
+                        <span>{{ option.label }}</span>
+                        @if (option.value === 'tcp') {
+                          <p-chip class="transport-chip">Default</p-chip>
+                        }
+                      </div>
+                    }
+                  </ng-template>
+                  <ng-template pTemplate="item" let-option>
+                    <div class="transport-option">
+                      <span>{{ option.label }}</span>
+                      @if (option.value === 'tcp') {
+                        <p-chip class="transport-chip">Default</p-chip>
+                      }
+                    </div>
+                  </ng-template>
                 </p-select>
                 <p class="field-hint">
                   Select the transport layer used to connect to upstream proxies.
@@ -225,12 +261,20 @@
                   </div>
                 </td>
                 <td>
-                  <span class="protocol-tag">{{ protocolLabel(proxy.listen_protocol ?? proxy.protocol) }}</span>
-                  <div class="muted text-xs mt-1">{{ transportLabel(proxy.listen_transport_protocol ?? proxy.transport_protocol ?? '') }}</div>
+                  <div class="chip-stack">
+                    <p-chip class="protocol-chip">{{ protocolLabel(proxy.listen_protocol ?? proxy.protocol) }}</p-chip>
+                    @if (proxy.listen_transport_protocol ?? proxy.transport_protocol) {
+                      <p-chip class="transport-chip">{{ transportLabel(proxy.listen_transport_protocol ?? proxy.transport_protocol ?? '') }}</p-chip>
+                    }
+                  </div>
                 </td>
                 <td>
-                  <span class="protocol-tag">{{ protocolLabel(proxy.protocol) }}</span>
-                  <div class="muted text-xs mt-1">{{ transportLabel(proxy.transport_protocol ?? '') }}</div>
+                  <div class="chip-stack">
+                    <p-chip class="protocol-chip">{{ protocolLabel(proxy.protocol) }}</p-chip>
+                    @if (proxy.transport_protocol) {
+                      <p-chip class="transport-chip">{{ transportLabel(proxy.transport_protocol ?? '') }}</p-chip>
+                    }
+                  </div>
                 </td>
                 <td>
                   <div class="rotator-cell">
@@ -325,19 +369,43 @@
         </div>
         <div class="detail-row">
           <span class="label">Rotator Protocol</span>
-          <span class="value">{{ protocolLabel(selectedRotator()?.listen_protocol ?? selectedRotator()?.protocol ?? '') }}</span>
+          <span class="value">
+            @if (selectedRotator()?.listen_protocol ?? selectedRotator()?.protocol) {
+              <p-chip class="protocol-chip">{{ protocolLabel(selectedRotator()?.listen_protocol ?? selectedRotator()?.protocol ?? '') }}</p-chip>
+            } @else {
+              <span class="muted">Unavailable</span>
+            }
+          </span>
         </div>
         <div class="detail-row">
           <span class="label">Rotator Transport</span>
-          <span class="value">{{ transportLabel(selectedRotator()?.listen_transport_protocol ?? selectedRotator()?.transport_protocol ?? '') }}</span>
+          <span class="value">
+            @if (selectedRotator()?.listen_transport_protocol ?? selectedRotator()?.transport_protocol) {
+              <p-chip class="transport-chip">{{ transportLabel(selectedRotator()?.listen_transport_protocol ?? selectedRotator()?.transport_protocol ?? '') }}</p-chip>
+            } @else {
+              <span class="muted">Unavailable</span>
+            }
+          </span>
         </div>
         <div class="detail-row">
           <span class="label">Serves</span>
-          <span class="value">{{ protocolLabel(selectedRotator()?.protocol ?? '') }}</span>
+          <span class="value">
+            @if (selectedRotator()?.protocol) {
+              <p-chip class="protocol-chip">{{ protocolLabel(selectedRotator()?.protocol ?? '') }}</p-chip>
+            } @else {
+              <span class="muted">Unavailable</span>
+            }
+          </span>
         </div>
         <div class="detail-row">
           <span class="label">Proxy Transport</span>
-          <span class="value">{{ transportLabel(selectedRotator()?.transport_protocol ?? '') }}</span>
+          <span class="value">
+            @if (selectedRotator()?.transport_protocol) {
+              <p-chip class="transport-chip">{{ transportLabel(selectedRotator()?.transport_protocol ?? '') }}</p-chip>
+            } @else {
+              <span class="muted">Unavailable</span>
+            }
+          </span>
         </div>
         <div class="detail-row">
           <span class="label">Reputation Filter</span>

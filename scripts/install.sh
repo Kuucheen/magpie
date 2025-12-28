@@ -127,24 +127,42 @@ cd "${INSTALL_DIR}"
 if [ -n "${PROXY_ENCRYPTION_KEY:-}" ]; then
   key="${PROXY_ENCRYPTION_KEY}"
 else
-  if [ -r /dev/tty ]; then
-    printf "Enter PROXY_ENCRYPTION_KEY (will be saved to .env):" > /dev/tty
-    IFS= read -r -s key < /dev/tty || true
-    printf "\n" > /dev/tty
-    if [ -z "${key}" ]; then
-      echo "PROXY_ENCRYPTION_KEY cannot be empty." >&2
-      exit 1
-    fi
-    printf "Confirm PROXY_ENCRYPTION_KEY:" > /dev/tty
-    IFS= read -r -s key2 < /dev/tty || true
-    printf "\n" > /dev/tty
-    if [ "${key}" != "${key2}" ]; then
-      echo "Keys did not match." >&2
-      exit 1
-    fi
+  key=""
+  key2=""
+  fd=0
+  opened_fd=0
+  if [ -t 0 ]; then
+    fd=0
+  elif exec 3</dev/tty; then
+    fd=3
+    opened_fd=3
   else
     echo "PROXY_ENCRYPTION_KEY must be set when running non-interactively." >&2
     exit 1
+  fi
+
+  printf "Enter PROXY_ENCRYPTION_KEY (will be saved to .env):" >&2
+  if ! IFS= read -r -s -u "${fd}" key; then
+    echo "Failed to read PROXY_ENCRYPTION_KEY from terminal." >&2
+    exit 1
+  fi
+  printf "\n" >&2
+  if [ -z "${key}" ]; then
+    echo "PROXY_ENCRYPTION_KEY cannot be empty." >&2
+    exit 1
+  fi
+  printf "Confirm PROXY_ENCRYPTION_KEY:" >&2
+  if ! IFS= read -r -s -u "${fd}" key2; then
+    echo "Failed to read PROXY_ENCRYPTION_KEY confirmation from terminal." >&2
+    exit 1
+  fi
+  printf "\n" >&2
+  if [ "${key}" != "${key2}" ]; then
+    echo "Keys did not match." >&2
+    exit 1
+  fi
+  if [ "${opened_fd}" -eq 3 ]; then
+    exec 3<&-
   fi
 fi
 

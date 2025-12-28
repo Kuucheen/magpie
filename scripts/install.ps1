@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $repoOwner = if ($env:MAGPIE_REPO_OWNER) { $env:MAGPIE_REPO_OWNER } else { "Kuucheen" }
 $repoName  = if ($env:MAGPIE_REPO_NAME)  { $env:MAGPIE_REPO_NAME }  else { "magpie" }
-$repoRef   = if ($env:MAGPIE_REPO_REF)   { $env:MAGPIE_REPO_REF }   else { "main" }
+$repoRef   = if ($env:MAGPIE_REPO_REF)   { $env:MAGPIE_REPO_REF }   else { "master" }
 
 $installDir = if ($env:MAGPIE_INSTALL_DIR) { $env:MAGPIE_INSTALL_DIR } else { "magpie" }
 
@@ -13,13 +13,13 @@ if ([string]::IsNullOrWhiteSpace($installDir) -or $installDir -eq "\") {
 $composeUrl = if ($env:MAGPIE_COMPOSE_URL) {
   $env:MAGPIE_COMPOSE_URL
 } else {
-  "https://raw.githubusercontent.com/$repoOwner/$repoName/$repoRef/docker-compose.yml"
+  "https://raw.githubusercontent.com/$repoOwner/$repoName/refs/heads/$repoRef/docker-compose.yml"
 }
 
 $envExampleUrl = if ($env:MAGPIE_ENV_EXAMPLE_URL) {
   $env:MAGPIE_ENV_EXAMPLE_URL
 } else {
-  "https://raw.githubusercontent.com/$repoOwner/$repoName/$repoRef/.env.example"
+  "https://raw.githubusercontent.com/$repoOwner/$repoName/refs/heads/$repoRef/.env.example"
 }
 
 function Test-Command([string]$name) {

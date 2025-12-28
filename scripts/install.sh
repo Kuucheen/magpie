@@ -3,11 +3,11 @@ set -euo pipefail
 
 REPO_OWNER="${MAGPIE_REPO_OWNER:-Kuucheen}"
 REPO_NAME="${MAGPIE_REPO_NAME:-magpie}"
-REPO_REF="${MAGPIE_REPO_REF:-main}"
+REPO_REF="${MAGPIE_REPO_REF:-master}"
 
 INSTALL_DIR="${MAGPIE_INSTALL_DIR:-magpie}"
-COMPOSE_URL="${MAGPIE_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF}/docker-compose.yml}"
-ENV_EXAMPLE_URL="${MAGPIE_ENV_EXAMPLE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF}/.env.example}"
+COMPOSE_URL="${MAGPIE_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/refs/heads/${REPO_REF}/docker-compose.yml}"
+ENV_EXAMPLE_URL="${MAGPIE_ENV_EXAMPLE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/refs/heads/${REPO_REF}/.env.example}"
 
 if [[ -z "${INSTALL_DIR}" || "${INSTALL_DIR}" == "/" ]]; then
   echo "MAGPIE_INSTALL_DIR must not be empty or '/'." >&2

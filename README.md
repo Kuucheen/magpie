@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="frontend/src/assets/logo/magpie-light-green.svg" alt="Magpie logo" height="150">
-  <h1>MAGPIE</h1>
+  <img src="frontend/src/assets/logo/magpie-logo-thumbnail.png" alt="Magpie logo">
   <p><strong>Multi-user AIO Proxy Manager</strong></p>
 </div>
 

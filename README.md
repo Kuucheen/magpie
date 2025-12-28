@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/src/assets/logo/magpie-light.png" alt="Magpie logo" height="150">
+  <img src="frontend/src/assets/logo/magpie-light-green.svg" alt="Magpie logo" height="150">
   <h1>MAGPIE</h1>
   <p><strong>Multi-user AIO Proxy Manager</strong></p>
 </div>
@@ -45,6 +45,8 @@ all via a web dashboard.
 - Reputation & filters
 - Rotating proxy endpoints
 - Dashboard + API
+- Application protocols support (HTTP, HTTPS, SOCKS4, SOCKS5)
+- Transport protocols support (TCP, QUIC/HTTP3)
 
 ## Quick Start
 

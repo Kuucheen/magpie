@@ -383,6 +383,10 @@ func doRefresh(ctx context.Context, reason string, force bool) (*RefreshOutcome,
 		orphans = append(orphans, rangeOrphans...)
 	}
 
+	if err := broadcastRefreshUpdate(ctx, reason); err != nil {
+		log.Warn("Blacklist refresh: failed to publish update", "reason", reason, "error", err)
+	}
+
 	return &RefreshOutcome{
 		Sources:          len(sources),
 		TotalFromSources: totalFromSources,

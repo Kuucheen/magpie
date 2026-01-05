@@ -42,6 +42,12 @@ func Setup() {
 		log.Warn("Blacklist initialisation failed", "error", err)
 	}
 
+	if redisClient, err := support.GetRedisClient(); err != nil {
+		log.Warn("Blacklist synchronization disabled", "error", err)
+	} else {
+		blacklist.EnableRedisSynchronization(context.Background(), redisClient)
+	}
+
 	judgeSetup()
 
 	cleanedRelations, orphanedProxies, cleanupErr := database.CleanupAutoRemovalViolations(context.Background())

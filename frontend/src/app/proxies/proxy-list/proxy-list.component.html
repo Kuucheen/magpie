@@ -1,152 +1,190 @@
-@if (!hasLoaded()) {
-  <app-loading class="flex items-center justify-center mt-20"></app-loading>
-} @else {
-  <div class="proxy-container p-8 min-h-screen text-gray-300">
-    <!-- Top Actions -->
-    <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex flex-wrap items-center gap-4">
-        <app-export-proxies
-          [allProxies]="dataSource()"
-          [selectedProxies]="selectedProxies()"
-        ></app-export-proxies>
+<div class="proxy-container p-8 min-h-screen text-gray-300">
+  <!-- Top Actions -->
+  <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center gap-4">
+      <app-export-proxies
+        [allProxies]="dataSource()"
+        [selectedProxies]="selectedProxies()"
+      ></app-export-proxies>
 
-        <app-delete-proxies
-          [allProxies]="dataSource()"
-          [selectedProxies]="selectedProxies()"
-          (proxiesDeleted)="onProxiesDeleted()"
-        ></app-delete-proxies>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-4">
-        <p-button
-          label="Refresh"
-          icon="pi pi-refresh"
-          styleClass="p-button-outlined"
-          [disabled]="isLoading()"
-          (onClick)="refreshList()"
-        ></p-button>
-
-        <input
-          type="search"
-          class="proxy-search-input"
-          placeholder="Search proxies"
-          [ngModel]="searchTerm()"
-          (ngModelChange)="onSearchTermChange($event)"
-          aria-label="Search proxies"
-        />
-
-        <app-add-proxies
-          (showAddProxiesMessage)="showAddProxiesMessage.emit($event)"
-          (proxiesAdded)="onProxiesAdded()"
-        ></app-add-proxies>
-      </div>
+      <app-delete-proxies
+        [allProxies]="dataSource()"
+        [selectedProxies]="selectedProxies()"
+        (proxiesDeleted)="onProxiesDeleted()"
+      ></app-delete-proxies>
     </div>
 
-    <p-table
-      [value]="dataSource()"
-      [paginator]="true"
-      [rows]="pageSize()"
-      [first]="(page() - 1) * pageSize()"
-      [totalRecords]="totalItems()"
-      [lazy]="true"
-      (onLazyLoad)="onLazyLoad($event)"
-      [rowsPerPageOptions]="rowsPerPageOptions"
-      [selection]="selectedProxies()"
-      (selectionChange)="onSelectionChange($event)"
-      dataKey="id"
-      class="p-datatable-gridlines p-datatable-sm"
-      [sortField]="sortField()"
-      [sortOrder]="sortOrder() ?? 0"
-      (onSort)="onSort($event)"
-      [loading]="isLoading()"
-    >
-      <ng-template pTemplate="header">
-        <tr>
-          <th style="width: 3rem">
-            <p-checkbox
-              [binary]="true"
-              (onChange)="masterToggle()"
-              [ngModel]="isAllSelected()"
-            ></p-checkbox>
-          </th>
-          <th pSortableColumn="alive">
-            Status <p-sortIcon field="alive"></p-sortIcon>
-          </th>
-          <th pSortableColumn="ip">
-            IP Address <p-sortIcon field="ip"></p-sortIcon>
-          </th>
-          <th pSortableColumn="port">
-            Port <p-sortIcon field="port"></p-sortIcon>
-          </th>
-          <th pSortableColumn="response_time" pTooltip="Response Time" tooltipPosition="top">
-            Time <p-sortIcon field="response_time"></p-sortIcon>
-          </th>
-          <th pSortableColumn="estimated_type" pTooltip="Estimated Type" tooltipPosition="top">
-            Type <p-sortIcon field="estimated_type"></p-sortIcon>
-          </th>
-          <th pSortableColumn="country" >
-            Country <p-sortIcon field="country"></p-sortIcon>
-          </th>
-          <th pSortableColumn="reputation">
-            Reputation <p-sortIcon field="reputation"></p-sortIcon>
-          </th>
-          <th pSortableColumn="latest_check">
-            Last Check <p-sortIcon field="latest_check"></p-sortIcon>
-          </th>
-          <th>
-            Actions
-          </th>
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="body" let-proxy>
-        <tr (click)="toggleSelection(proxy)" [pSelectableRow]="proxy">
-          <td>
-            <p-checkbox
-              [binary]="true"
-              (onChange)="toggleSelection(proxy)"
-              [ngModel]="selection.isSelected(proxy)"
-            ></p-checkbox>
-          </td>
-          <td>
-            <div
-              class="status-dot"
-              [ngClass]="proxy.alive ? 'alive' : 'dead'">
-            </div>
-          </td>
+    <div class="flex flex-wrap items-center gap-4">
+      <p-button
+        label="Refresh"
+        icon="pi pi-refresh"
+        styleClass="p-button-outlined"
+        [disabled]="isLoading()"
+        (onClick)="refreshList()"
+      ></p-button>
 
-          <td>{{ proxy.ip }}</td>
-          <td>{{ proxy.port }}</td>
-          <td>{{ proxy.response_time }} ms</td>
-          <td>{{ proxy.estimated_type }}</td>
-          <td>{{ proxy.country }}</td>
-          <td class="reputation-cell">
-            @if (hasReputation(proxy)) {
-              <span [ngClass]="reputationBadgeClass(proxy)">
-                <span>{{ reputationLabel(proxy) }}</span>
-                <span class="reputation-badge__score">{{ reputationScore(proxy) }}</span>
-              </span>
-            } @else {
-              —
-            }
-          </td>
-          <td class="w-[170px]">
-            {{ proxy.latest_check | date : 'short' }}
-          </td>
-          <td>
-            <p-button
-              label="Details"
-              icon="pi pi-external-link"
-              styleClass="p-button-text p-button-sm"
-              (onClick)="onViewProxy($event, proxy)"
-            ></p-button>
-          </td>
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="emptyMessage">
-        <tr>
-          <td [attr.colspan]="displayedColumns.length + 1">No proxies found.</td>
-        </tr>
-      </ng-template>
-    </p-table>
+      <input
+        type="search"
+        class="proxy-search-input"
+        placeholder="Search proxies"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="onSearchTermChange($event)"
+        aria-label="Search proxies"
+      />
+
+      <app-add-proxies
+        (showAddProxiesMessage)="showAddProxiesMessage.emit($event)"
+        (proxiesAdded)="onProxiesAdded()"
+      ></app-add-proxies>
+    </div>
   </div>
-}
+
+  <p-table
+    [value]="dataSource()"
+    [paginator]="true"
+    [rows]="pageSize()"
+    [first]="(page() - 1) * pageSize()"
+    [totalRecords]="totalItems()"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [rowsPerPageOptions]="rowsPerPageOptions"
+    [selection]="selectedProxies()"
+    (selectionChange)="onSelectionChange($event)"
+    dataKey="id"
+    class="p-datatable-gridlines p-datatable-sm"
+    [sortField]="sortField()"
+    [sortOrder]="sortOrder() ?? 0"
+    (onSort)="onSort($event)"
+    [loading]="isLoading()"
+    [showLoader]="hasLoaded()"
+  >
+    <ng-template pTemplate="header">
+      <tr>
+        <th style="width: 3rem">
+          <p-checkbox
+            [binary]="true"
+            (onChange)="masterToggle()"
+            [ngModel]="isAllSelected()"
+          ></p-checkbox>
+        </th>
+        <th pSortableColumn="alive">
+          Status <p-sortIcon field="alive"></p-sortIcon>
+        </th>
+        <th pSortableColumn="ip">
+          IP Address <p-sortIcon field="ip"></p-sortIcon>
+        </th>
+        <th pSortableColumn="port">
+          Port <p-sortIcon field="port"></p-sortIcon>
+        </th>
+        <th pSortableColumn="response_time" pTooltip="Response Time" tooltipPosition="top">
+          Time <p-sortIcon field="response_time"></p-sortIcon>
+        </th>
+        <th pSortableColumn="estimated_type" pTooltip="Estimated Type" tooltipPosition="top">
+          Type <p-sortIcon field="estimated_type"></p-sortIcon>
+        </th>
+        <th pSortableColumn="country" >
+          Country <p-sortIcon field="country"></p-sortIcon>
+        </th>
+        <th pSortableColumn="reputation">
+          Reputation <p-sortIcon field="reputation"></p-sortIcon>
+        </th>
+        <th pSortableColumn="latest_check">
+          Last Check <p-sortIcon field="latest_check"></p-sortIcon>
+        </th>
+        <th>
+          Actions
+        </th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="loadingbody">
+      @if (!hasLoaded()) {
+        @for (_ of skeletonRows; track $index) {
+          <tr class="proxy-skeleton-row">
+            <td>
+              <p-skeleton width="1.25rem" height="1.25rem" shape="circle"></p-skeleton>
+            </td>
+            <td>
+              <p-skeleton width="0.9rem" height="0.9rem" shape="circle"></p-skeleton>
+            </td>
+            <td>
+              <p-skeleton width="7rem" height="0.75rem"></p-skeleton>
+            </td>
+            <td>
+              <p-skeleton width="3rem" height="0.75rem"></p-skeleton>
+            </td>
+            <td>
+              <p-skeleton width="4rem" height="0.75rem"></p-skeleton>
+            </td>
+            <td>
+              <p-skeleton width="5rem" height="0.75rem"></p-skeleton>
+            </td>
+            <td>
+              <p-skeleton width="6rem" height="0.75rem"></p-skeleton>
+            </td>
+            <td>
+              <div class="skeleton-badge">
+                <p-skeleton width="3.5rem" height="0.75rem"></p-skeleton>
+                <p-skeleton width="1.5rem" height="0.75rem"></p-skeleton>
+              </div>
+            </td>
+            <td>
+              <p-skeleton width="6rem" height="0.75rem"></p-skeleton>
+            </td>
+            <td>
+              <p-skeleton width="4.5rem" height="1.5rem"></p-skeleton>
+            </td>
+          </tr>
+        }
+      }
+    </ng-template>
+    <ng-template pTemplate="body" let-proxy>
+      <tr (click)="toggleSelection(proxy)" [pSelectableRow]="proxy">
+        <td>
+          <p-checkbox
+            [binary]="true"
+            (onChange)="toggleSelection(proxy)"
+            [ngModel]="selection.isSelected(proxy)"
+          ></p-checkbox>
+        </td>
+        <td>
+          <div
+            class="status-dot"
+            [ngClass]="proxy.alive ? 'alive' : 'dead'">
+          </div>
+        </td>
+
+        <td>{{ proxy.ip }}</td>
+        <td>{{ proxy.port }}</td>
+        <td>{{ proxy.response_time }} ms</td>
+        <td>{{ proxy.estimated_type }}</td>
+        <td>{{ proxy.country }}</td>
+        <td class="reputation-cell">
+          @if (hasReputation(proxy)) {
+            <span [ngClass]="reputationBadgeClass(proxy)">
+              <span>{{ reputationLabel(proxy) }}</span>
+              <span class="reputation-badge__score">{{ reputationScore(proxy) }}</span>
+            </span>
+          } @else {
+            —
+          }
+        </td>
+        <td class="w-[170px]">
+          {{ proxy.latest_check | date : 'short' }}
+        </td>
+        <td>
+          <p-button
+            label="Details"
+            icon="pi pi-external-link"
+            styleClass="p-button-text p-button-sm"
+            (onClick)="onViewProxy($event, proxy)"
+          ></p-button>
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="emptyMessage">
+      <tr>
+        <td [attr.colspan]="displayedColumns.length + 1">No proxies found.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

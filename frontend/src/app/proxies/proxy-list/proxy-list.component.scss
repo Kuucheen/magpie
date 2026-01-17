@@ -198,6 +198,16 @@ $border-color: rgba(255, 255, 255, 0.1);
   white-space: nowrap;
 }
 
+.proxy-skeleton-row td {
+  padding: 0.75rem 1rem;
+}
+
+.skeleton-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .reputation-badge {
   display: inline-flex;
   align-items: center;

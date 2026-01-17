@@ -3,12 +3,12 @@ import {FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {HttpService} from '../../services/http.service';
 import {ProxyInfo} from '../../models/ProxyInfo';
 import {DatePipe, NgClass} from '@angular/common';
-import {LoadingComponent} from '../../ui-elements/loading/loading.component';
 import {SelectionModel} from '@angular/cdk/collections';
 import {TableLazyLoadEvent} from 'primeng/table'; // Keep this for onLazyLoad
 import {ButtonModule} from 'primeng/button';
 import {TableModule} from 'primeng/table';
 import {CheckboxModule} from 'primeng/checkbox';
+import {SkeletonModule} from 'primeng/skeleton';
 import {NotificationService} from '../../services/notification-service.service';
 import {Subscription} from 'rxjs';
 import {ExportProxiesComponent} from './export-proxies/export-proxies.component';
@@ -25,10 +25,10 @@ import {Tooltip} from 'primeng/tooltip';
     ReactiveFormsModule,
     FormsModule,
     DatePipe,
-    LoadingComponent,
     ButtonModule,
     TableModule,
     CheckboxModule,
+    SkeletonModule,
     AddProxiesComponent,
     ExportProxiesComponent,
     DeleteProxiesComponent,
@@ -47,6 +47,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   page = signal(1);
   pageSize = signal(40);
   readonly rowsPerPageOptions = [20, 40, 60, 100];
+  readonly skeletonRows = Array.from({ length: 8 });
   displayedColumns: string[] = ['select', 'alive', 'ip', 'port', 'response_time', 'estimated_type', 'country', 'reputation', 'latest_check', 'actions'];
   totalItems = signal(0);
   hasLoaded = signal(false);

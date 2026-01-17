@@ -46,12 +46,18 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   selectedProxies = signal<ProxyInfo[]>([]);
   page = signal(1);
   pageSize = signal(40);
+  readonly rowsPerPageOptions = [20, 40, 60, 100];
   displayedColumns: string[] = ['select', 'alive', 'ip', 'port', 'response_time', 'estimated_type', 'country', 'reputation', 'latest_check', 'actions'];
   totalItems = signal(0);
   hasLoaded = signal(false);
   isLoading = signal(false);
   searchTerm = signal('');
   private searchDebounceHandle?: ReturnType<typeof setTimeout>;
+  private readonly pageSizeStorageKey = 'magpie-proxy-list-page-size';
+  private readonly pageStorageKey = 'magpie-proxy-list-page';
+  private readonly scrollStorageKey = 'magpie-proxy-list-scroll-y';
+  private readonly restoreStateStorageKey = 'magpie-proxy-list-restore-state';
+  private pendingScrollY: number | null = null;
 
   sortField = signal<string | null>(null);
   sortOrder = signal<number | null>(null); // 1 for ascending, -1 for descending
@@ -65,6 +71,23 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    const storedPageSize = this.getStoredPageSize();
+    if (storedPageSize !== null) {
+      this.pageSize.set(storedPageSize);
+    }
+    const shouldRestoreState = this.consumeRestoreState();
+    if (shouldRestoreState) {
+      const storedPage = this.getStoredPage();
+      if (storedPage !== null) {
+        this.page.set(storedPage);
+      }
+      this.pendingScrollY = this.getStoredScrollY();
+      this.clearStoredPageAndScroll();
+    } else {
+      this.page.set(1);
+      this.pendingScrollY = null;
+      this.clearStoredPageAndScroll();
+    }
     this.getAndSetProxyList();
   }
 
@@ -98,6 +121,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
         this.isLoading.set(false);
         this.hasLoaded.set(true);
         this.showAddProxiesMessage.emit(this.totalItems() === 0 && this.hasLoaded());
+        this.restoreScrollPosition();
       },
       error: err => {
         NotificationService.showError('Could not get proxy page: ' + err.error.message);
@@ -132,6 +156,10 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pageSize.set(newPageSize);
     this.sortField.set(normalizedSortField);
     this.sortOrder.set(normalizedSortOrder);
+
+    if (pageSizeChanged) {
+      this.persistPageSize(newPageSize);
+    }
 
     if (!sortChanged && (pageChanged || pageSizeChanged)) {
       this.getAndSetProxyList(event);
@@ -302,6 +330,9 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     } else {
       (event as Event)?.stopPropagation?.();
     }
+    this.markRestoreState();
+    this.persistPage(this.page());
+    this.persistScrollPosition();
     this.router.navigate(['/proxies', proxy.id]).catch(() => {});
   }
 
@@ -364,5 +395,197 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     return null;
+  }
+
+  private getStoredPageSize(): number | null {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return null;
+      }
+      const raw = storage.getItem(this.pageSizeStorageKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return null;
+      }
+      if (!this.rowsPerPageOptions.includes(parsed)) {
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistPageSize(size: number): void {
+    if (!Number.isFinite(size) || size <= 0) {
+      return;
+    }
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return;
+      }
+      storage.setItem(this.pageSizeStorageKey, size.toString());
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private getStoredPage(): number | null {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return null;
+      }
+      const raw = storage.getItem(this.pageStorageKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed < 1) {
+        return null;
+      }
+      return Math.floor(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  private persistPage(page: number): void {
+    if (!Number.isFinite(page) || page < 1) {
+      return;
+    }
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return;
+      }
+      storage.setItem(this.pageStorageKey, Math.floor(page).toString());
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private clearStoredPageAndScroll(): void {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return;
+      }
+      storage.removeItem(this.pageStorageKey);
+      storage.removeItem(this.scrollStorageKey);
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private markRestoreState(): void {
+    try {
+      const storage = this.getSessionStorage();
+      if (!storage) {
+        return;
+      }
+      storage.setItem(this.restoreStateStorageKey, '1');
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private consumeRestoreState(): boolean {
+    try {
+      const storage = this.getSessionStorage();
+      if (!storage) {
+        return false;
+      }
+      const raw = storage.getItem(this.restoreStateStorageKey);
+      if (raw !== '1') {
+        return false;
+      }
+      storage.removeItem(this.restoreStateStorageKey);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private getStoredScrollY(): number | null {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return null;
+      }
+      const raw = storage.getItem(this.scrollStorageKey);
+      if (raw === null) {
+        return null;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistScrollPosition(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const container = this.getScrollContainer();
+    const scrollY = container ? container.scrollTop : (window.scrollY ?? window.pageYOffset ?? 0);
+    if (!Number.isFinite(scrollY) || scrollY < 0) {
+      return;
+    }
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return;
+      }
+      storage.setItem(this.scrollStorageKey, Math.floor(scrollY).toString());
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private restoreScrollPosition(): void {
+    if (this.pendingScrollY === null || typeof window === 'undefined') {
+      return;
+    }
+    const target = this.pendingScrollY;
+    this.pendingScrollY = null;
+    const container = this.getScrollContainer();
+    setTimeout(() => {
+      if (container) {
+        container.scrollTop = target;
+      } else {
+        window.scrollTo({ top: target, left: 0, behavior: 'auto' });
+      }
+    }, 0);
+  }
+
+  private getScrollContainer(): HTMLElement | null {
+    if (typeof document === 'undefined') {
+      return null;
+    }
+    return document.querySelector('main');
+  }
+
+  private getSessionStorage(): Storage | null {
+    if (typeof window === 'undefined' || !window?.sessionStorage) {
+      return null;
+    }
+    return window.sessionStorage;
+  }
+
+  private getStorage(): Storage | null {
+    if (typeof window === 'undefined' || !window?.localStorage) {
+      return null;
+    }
+    return window.localStorage;
   }
 }

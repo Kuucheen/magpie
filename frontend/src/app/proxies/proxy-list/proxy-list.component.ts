@@ -17,7 +17,6 @@ import {Router} from '@angular/router';
 import {DeleteProxiesComponent} from './delete-proxies/delete-proxies.component';
 import {ProxyReputation} from '../../models/ProxyReputation';
 import {Tooltip} from 'primeng/tooltip';
-import {CheckboxComponent} from '../../checkbox/checkbox.component';
 import {InputNumberModule} from 'primeng/inputnumber';
 import {Select} from 'primeng/select';
 import {MultiSelectModule} from 'primeng/multiselect';
@@ -65,7 +64,6 @@ type FilterOption = {
     TableModule,
     CheckboxModule,
     SkeletonModule,
-    CheckboxComponent,
     InputNumberModule,
     Select,
     MultiSelectModule,
@@ -139,6 +137,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly pageStorageKey = 'magpie-proxy-list-page';
   private readonly scrollStorageKey = 'magpie-proxy-list-scroll-y';
   private readonly restoreStateStorageKey = 'magpie-proxy-list-restore-state';
+  private readonly filterStorageKey = 'magpie-proxy-list-filters';
   private pendingScrollY: number | null = null;
 
   sortField = signal<string | null>(null);
@@ -183,6 +182,10 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       this.page.set(1);
       this.pendingScrollY = null;
       this.clearStoredPageAndScroll();
+    }
+    const storedFilters = this.getStoredFilters();
+    if (storedFilters) {
+      this.appliedFilters.set(storedFilters);
     }
     this.getAndSetProxyList();
   }
@@ -318,7 +321,9 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   applyFilters(): void {
-    this.appliedFilters.set(this.buildFiltersFromForm());
+    const nextFilters = this.buildFiltersFromForm();
+    this.appliedFilters.set(nextFilters);
+    this.persistFilters(nextFilters);
     this.page.set(1);
     this.getAndSetProxyList();
     this.filterPanelOpen.set(false);
@@ -336,6 +341,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       anonymityLevels: [],
       reputationLabels: [],
     });
+    this.clearStoredFilters();
     this.page.set(1);
     this.getAndSetProxyList();
   }
@@ -917,5 +923,79 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       return null;
     }
     return window.localStorage;
+  }
+
+  private getStoredFilters(): ProxyListAppliedFilters | null {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return null;
+      }
+      const raw = storage.getItem(this.filterStorageKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      return this.normalizeStoredFilters(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  private persistFilters(filters: ProxyListAppliedFilters): void {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return;
+      }
+      storage.setItem(this.filterStorageKey, JSON.stringify(filters));
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private clearStoredFilters(): void {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return;
+      }
+      storage.removeItem(this.filterStorageKey);
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private normalizeStoredFilters(value: Record<string, unknown> | null): ProxyListAppliedFilters | null {
+    if (!value) {
+      return null;
+    }
+
+    const statusValue = `${value['status'] ?? ''}`;
+    const status: ProxyListAppliedFilters['status'] = statusValue === 'alive' || statusValue === 'dead' ? statusValue : 'all';
+    const protocolsRaw = Array.isArray(value['protocols']) ? value['protocols'] : [];
+    const protocols = this.normalizeSelection(protocolsRaw.map(item => `${item}`));
+    const allowedProtocols = new Set(['http', 'https', 'socks4', 'socks5']);
+    const filteredProtocols = protocols.filter(protocol => allowedProtocols.has(protocol));
+
+    const reputationRaw = Array.isArray(value['reputationLabels']) ? value['reputationLabels'] : [];
+    const reputationLabels = this.normalizeSelection(reputationRaw.map(item => `${item}`));
+    const allowedReputation = new Set(['good', 'neutral', 'poor', 'unknown']);
+    const filteredReputation = reputationLabels.filter(label => allowedReputation.has(label));
+
+    const countriesRaw = Array.isArray(value['countries']) ? value['countries'] : [];
+    const typesRaw = Array.isArray(value['types']) ? value['types'] : [];
+    const anonymityRaw = Array.isArray(value['anonymityLevels']) ? value['anonymityLevels'] : [];
+
+    return {
+      status,
+      protocols: filteredProtocols,
+      maxTimeout: this.normalizeNumber(value['maxTimeout'] as number | string | null | undefined),
+      maxRetries: this.normalizeNumber(value['maxRetries'] as number | string | null | undefined),
+      countries: this.normalizeSelection(countriesRaw.map(item => `${item}`)),
+      types: this.normalizeSelection(typesRaw.map(item => `${item}`)),
+      anonymityLevels: this.normalizeSelection(anonymityRaw.map(item => `${item}`)),
+      reputationLabels: filteredReputation,
+    };
   }
 }

@@ -251,3 +251,84 @@ $border-color: rgba(255, 255, 255, 0.1);
     font-size: 0.8rem;
   }
 }
+
+.filter-panel {
+  border: 1px solid $border-color;
+  border-radius: 0.85rem;
+  background: rgba(23, 23, 23, 0.9);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.filter-panel__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.filter-panel__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.filter-panel__subtitle {
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.9);
+  margin-top: 0.2rem;
+}
+
+.filter-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.filter-section {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid $border-color;
+}
+
+.filter-section__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 0.75rem;
+}
+
+.filter-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.9);
+  margin-bottom: 0.4rem;
+}
+
+.filter-hint {
+  font-size: 0.75rem;
+  color: rgba(148, 163, 184, 0.85);
+  margin-top: 0.75rem;
+}
+
+:host ::ng-deep .filter-toggle {
+  position: relative;
+}
+
+:host ::ng-deep .filter-toggle.filter-toggle--active {
+  border-color: $accent-color;
+  color: $accent-color;
+  box-shadow: 0 0 0 1px rgba($accent-color, 0.35);
+}
+
+:host ::ng-deep .filter-toggle.filter-toggle--active .p-button-icon {
+  color: $accent-color;
+}

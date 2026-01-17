@@ -18,6 +18,8 @@ import {RotatingProxy, CreateRotatingProxy, RotatingProxyNext} from '../models/R
 import {map} from 'rxjs/operators';
 import {DeleteSettings} from '../models/DeleteSettings';
 import {AddProxiesResponse} from '../models/AddProxiesResponse';
+import {ProxyListFilters} from '../models/ProxyListFilters';
+import {ProxyFilterOptions} from '../models/ProxyFilterOptions';
 
 @Injectable({
   providedIn: 'root'
@@ -58,7 +60,7 @@ export class HttpService {
   }
 
 
-  getProxyPage(pageNumber: number, options?: { rows?: number; search?: string }) {
+  getProxyPage(pageNumber: number, options?: { rows?: number; search?: string; filters?: ProxyListFilters }) {
     let params = new HttpParams();
 
     if (options?.rows && options.rows > 0) {
@@ -69,7 +71,57 @@ export class HttpService {
       params = params.set('search', options.search.trim());
     }
 
+    if (options?.filters) {
+      const filters = options.filters;
+
+      if (filters.status) {
+        params = params.set('status', filters.status);
+      }
+
+      if (filters.protocols?.length) {
+        filters.protocols.forEach(protocol => {
+          params = params.append('protocol', protocol);
+        });
+      }
+
+      if (filters.countries?.length) {
+        filters.countries.forEach(country => {
+          params = params.append('country', country);
+        });
+      }
+
+      if (filters.types?.length) {
+        filters.types.forEach(type => {
+          params = params.append('type', type);
+        });
+      }
+
+      if (filters.anonymityLevels?.length) {
+        filters.anonymityLevels.forEach(level => {
+          params = params.append('anonymity', level);
+        });
+      }
+
+      if (filters.reputationLabels?.length) {
+        filters.reputationLabels.forEach(label => {
+          params = params.append('reputation', label);
+        });
+      }
+
+      if (filters.maxTimeout && filters.maxTimeout > 0) {
+        params = params.set('maxTimeout', filters.maxTimeout.toString());
+      }
+
+      if (filters.maxRetries && filters.maxRetries > 0) {
+        params = params.set('maxRetries', filters.maxRetries.toString());
+      }
+    }
+
     return this.http.get<ProxyPage>(`${this.apiUrl}/getProxyPage/${pageNumber}`, { params });
+  }
+
+  getProxyFilterOptions() {
+    return this.http.get<ProxyFilterOptions>(`${this.apiUrl}/proxyFilters`);
   }
 
   getProxyCount() {

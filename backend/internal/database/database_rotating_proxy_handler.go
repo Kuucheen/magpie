@@ -352,20 +352,12 @@ func getProxyAddressCached(userID uint, proxyID uint64, cache map[uint64]string)
 func aliveProxiesForProtocol(tx *gorm.DB, userID uint, protocolID int, labels []string) ([]domain.Proxy, error) {
 	filterLabels := sanitizeRotatorReputationLabels(labels)
 
-	subQuery := tx.
-		Model(&domain.ProxyStatistic{}).
-		Select("proxy_id, MAX(created_at) AS created_at").
-		Where("protocol_id = ?", protocolID).
-		Group("proxy_id")
-
 	var proxies []domain.Proxy
 	query := tx.
 		Model(&domain.Proxy{}).
 		Select("proxies.*").
 		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userID).
-		Joins("JOIN (?) latest_stats ON latest_stats.proxy_id = proxies.id", subQuery).
-		Joins("JOIN proxy_statistics ps ON ps.proxy_id = proxies.id AND ps.created_at = latest_stats.created_at AND ps.protocol_id = ?", protocolID).
-		Where("ps.alive = ?", true)
+		Joins("JOIN proxy_latest_statistics pls ON pls.proxy_id = proxies.id AND pls.protocol_id = ? AND pls.alive = ?", protocolID, true)
 
 	query = applyReputationFilter(query, filterLabels)
 

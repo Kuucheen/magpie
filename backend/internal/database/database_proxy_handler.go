@@ -455,7 +455,7 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 
 	subQuery := DB.Model(&domain.ProxyStatistic{}).
 		Select("DISTINCT ON (proxy_id) *").
-		Order("proxy_id, created_at DESC")
+		Order("proxy_id, created_at DESC, id DESC")
 
 	query := DB.Model(&domain.Proxy{}).
 		Select(
@@ -466,11 +466,12 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 				"COALESCE(ps.response_time, 0) AS response_time, "+
 				"COALESCE(NULLIF(proxies.country, ''), 'N/A') AS country, "+
 				"COALESCE(al.name, 'N/A') AS anonymity_level, "+
-				"COALESCE(ps.alive, false) AS alive, "+
-				"COALESCE(ps.created_at, '0001-01-01 00:00:00'::timestamp) AS latest_check",
+				"COALESCE(pos.overall_alive, false) AS alive, "+
+				"COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS latest_check",
 		).
 		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
 		Joins("LEFT JOIN (?) AS ps ON ps.proxy_id = proxies.id", subQuery).
+		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
 		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
 		Order("alive DESC, latest_check DESC")
 
@@ -1207,11 +1208,8 @@ func GetProxiesForExport(userID uint, settings dto.ExportSettings) ([]domain.Pro
 
 	if settings.ProxyStatus == "alive" || settings.ProxyStatus == "dead" {
 		isAlive := settings.ProxyStatus == "alive"
-		// Use subquery to check latest proxy_statistics.alive status
-		baseQuery = baseQuery.Where(
-			"(SELECT ps.alive FROM proxy_statistics ps WHERE ps.proxy_id = proxies.id ORDER BY ps.created_at DESC, ps.id DESC LIMIT 1) = ?",
-			isAlive,
-		)
+		baseQuery = baseQuery.Joins("JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
+			Where("pos.overall_alive = ?", isAlive)
 	}
 
 	if len(settings.Proxies) > 0 {

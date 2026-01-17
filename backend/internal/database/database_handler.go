@@ -7,11 +7,12 @@ import (
 	"magpie/internal/domain"
 	"magpie/internal/support"
 
+	"sync/atomic"
+
 	"github.com/charmbracelet/log"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"sync/atomic"
 )
 
 var (
@@ -154,6 +155,8 @@ func defaultMigrations() []any {
 		domain.ProxyHistory{},
 		domain.ProxySnapshot{},
 		domain.ProxyStatistic{},
+		domain.ProxyLatestStatistic{},
+		domain.ProxyOverallStatus{},
 		domain.AnonymityLevel{},
 		domain.Judge{},
 		domain.UserJudge{},
@@ -161,46 +164,6 @@ func defaultMigrations() []any {
 		domain.UserScrapeSite{},
 		domain.ProxyScrapeSite{},
 		domain.Protocol{},
-	}
-}
-
-func WithExistingDB(db *gorm.DB) Option {
-	return func(cfg *Config) {
-		cfg.ExistingDB = db
-	}
-}
-
-func WithDialector(d gorm.Dialector) Option {
-	return func(cfg *Config) {
-		cfg.Dialector = d
-	}
-}
-
-func WithLogger(l logger.Interface) Option {
-	return func(cfg *Config) {
-		cfg.Logger = l
-	}
-}
-
-func WithAutoMigrate(enabled bool) Option {
-	return func(cfg *Config) {
-		cfg.AutoMigrate = enabled
-	}
-}
-
-func WithMigrations(models ...any) Option {
-	return func(cfg *Config) {
-		if len(models) == 0 {
-			cfg.Migrations = nil
-			return
-		}
-		cfg.Migrations = append([]any(nil), models...)
-	}
-}
-
-func WithSeedDefaults(enabled bool) Option {
-	return func(cfg *Config) {
-		cfg.SeedDefaults = enabled
 	}
 }
 

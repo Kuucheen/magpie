@@ -44,6 +44,8 @@ func setupRotatingProxyTestDBWithDSN(t *testing.T, dsn string) *gorm.DB {
 		&domain.ProxyReputation{},
 		&domain.RotatingProxy{},
 		&domain.ProxyStatistic{},
+		&domain.ProxyLatestStatistic{},
+		&domain.ProxyOverallStatus{},
 		&domain.Protocol{},
 		&domain.Judge{},
 	); err != nil {
@@ -112,6 +114,9 @@ func TestCreateRotatingProxy_AllowsDistinctListenProtocol(t *testing.T) {
 	}
 	if err := db.Create(&stat).Error; err != nil {
 		t.Fatalf("create proxy stat: %v", err)
+	}
+	if err := updateProxyStatusCaches(db, []domain.ProxyStatistic{stat}); err != nil {
+		t.Fatalf("update proxy status cache: %v", err)
 	}
 
 	payload := dto.RotatingProxyCreateRequest{
@@ -207,6 +212,9 @@ func TestCreateRotatingProxy_ListensOnProtocolWithoutUserFlag(t *testing.T) {
 	if err := db.Create(&stat).Error; err != nil {
 		t.Fatalf("create proxy statistic: %v", err)
 	}
+	if err := updateProxyStatusCaches(db, []domain.ProxyStatistic{stat}); err != nil {
+		t.Fatalf("update proxy status cache: %v", err)
+	}
 
 	payload := dto.RotatingProxyCreateRequest{
 		Name:           "http-client-socks-listen",
@@ -289,6 +297,9 @@ func TestGetNextRotatingProxy_RotatesAcrossAliveProxies(t *testing.T) {
 		}
 		if err := db.Create(&stat).Error; err != nil {
 			t.Fatalf("create proxy statistic %d: %v", idx, err)
+		}
+		if err := updateProxyStatusCaches(db, []domain.ProxyStatistic{stat}); err != nil {
+			t.Fatalf("update proxy status cache %d: %v", idx, err)
 		}
 	}
 
@@ -459,6 +470,9 @@ func TestGetNextRotatingProxy_ReputationFilterApplied(t *testing.T) {
 		if err := db.Create(&stat).Error; err != nil {
 			t.Fatalf("create statistic %d: %v", idx, err)
 		}
+		if err := updateProxyStatusCaches(db, []domain.ProxyStatistic{stat}); err != nil {
+			t.Fatalf("update proxy status cache %d: %v", idx, err)
+		}
 	}
 
 	reputations := []domain.ProxyReputation{
@@ -565,6 +579,9 @@ func TestGetNextRotatingProxy_ConcurrentStress(t *testing.T) {
 		}
 		if err := db.Create(&stat).Error; err != nil {
 			t.Fatalf("create proxy statistic %d: %v", i, err)
+		}
+		if err := updateProxyStatusCaches(db, []domain.ProxyStatistic{stat}); err != nil {
+			t.Fatalf("update proxy status cache %d: %v", i, err)
 		}
 	}
 

@@ -107,10 +107,6 @@ func GetProxySnapshotEntries(userID uint, metric string, limit int) []dto.ProxyS
 }
 
 func aliveProxyCountByUser(tx *gorm.DB, userIDs []uint) (map[uint]int64, error) {
-	latestStats := tx.Model(&domain.ProxyStatistic{}).
-		Select("proxy_id, MAX(created_at) AS created_at").
-		Group("proxy_id")
-
 	var rows []struct {
 		UserID     uint
 		AliveCount int64
@@ -118,10 +114,9 @@ func aliveProxyCountByUser(tx *gorm.DB, userIDs []uint) (map[uint]int64, error) 
 
 	if err := tx.Table("user_proxies AS up").
 		Select("up.user_id AS user_id, COUNT(DISTINCT up.proxy_id) AS alive_count").
-		Joins("JOIN (?) AS latest_stats ON latest_stats.proxy_id = up.proxy_id", latestStats).
-		Joins("JOIN proxy_statistics ps ON ps.proxy_id = up.proxy_id AND ps.created_at = latest_stats.created_at").
+		Joins("JOIN proxy_overall_statuses pos ON pos.proxy_id = up.proxy_id").
 		Where("up.user_id IN ?", userIDs).
-		Where("ps.alive = ?", true).
+		Where("pos.overall_alive = ?", true).
 		Group("up.user_id").
 		Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("proxy snapshot: aggregate alive counts: %w", err)

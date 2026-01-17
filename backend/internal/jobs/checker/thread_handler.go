@@ -291,6 +291,7 @@ func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*request
 				ProtocolID:   check.protocolID,
 				JudgeID:      item.judge.ID,
 				ResponseBody: truncateResponseBody(html),
+				CreatedAt:    time.Now().UTC(),
 			}
 
 			if err == nil && CheckForValidResponse(html, check.regex) {

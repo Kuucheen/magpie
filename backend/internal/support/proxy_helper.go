@@ -205,9 +205,10 @@ func FormatProxies(proxies []domain.Proxy, outputFormat string) string {
 
 		if latestStat := latestStatistic(proxy.Statistics); latestStat != nil {
 			protocolName = getProtocolName(latestStat)
-			aliveValue = strconv.FormatBool(latestStat.Alive)
 			timeValue = strconv.Itoa(int(latestStat.ResponseTime))
 		}
+
+		aliveValue = strconv.FormatBool(overallAliveFromStatistics(proxy.Statistics))
 
 		reputationLabel, reputationScore := resolveReputationForExport(proxy.Reputations, protocolName)
 
@@ -260,6 +261,41 @@ func latestStatistic(stats []domain.ProxyStatistic) *domain.ProxyStatistic {
 		}
 	}
 	return latest
+}
+
+func overallAliveFromStatistics(stats []domain.ProxyStatistic) bool {
+	if len(stats) == 0 {
+		return false
+	}
+
+	const maxProtocols = 4
+	seen := make(map[string]struct{}, maxProtocols)
+
+	for _, stat := range stats {
+		key := protocolKeyForStat(stat)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if stat.Alive {
+			return true
+		}
+		if len(seen) >= maxProtocols {
+			return false
+		}
+	}
+
+	return false
+}
+
+func protocolKeyForStat(stat domain.ProxyStatistic) string {
+	if stat.ProtocolID > 0 {
+		return fmt.Sprintf("id:%d", stat.ProtocolID)
+	}
+	if stat.Protocol.Name != "" {
+		return strings.ToLower(strings.TrimSpace(stat.Protocol.Name))
+	}
+	return "unknown"
 }
 
 func formatReputationScore(score float32) string {

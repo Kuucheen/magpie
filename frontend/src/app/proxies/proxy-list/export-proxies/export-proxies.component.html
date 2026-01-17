@@ -133,39 +133,37 @@
       </section>
 
       <section class="export-card rounded-xl p-5 space-y-5 theme-card">
-        <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-4 md:items-start">
-          <div class="space-y-4">
-            <div>
-              <label for="proxyStatus" class="block mb-2 text-sm font-medium text-gray-300">Proxy Status</label>
-              <p-select
-                id="proxyStatus"
-                formControlName="proxyStatus"
-                [options]="proxyStatusOptions"
-                optionLabel="label"
-                optionValue="value"
-                class="w-full"
-                panelStyleClass="bg-gray-800 text-white"
-                [appendTo]="'body'"
-                [scrollHeight]="'200px'"
-              ></p-select>
-            </div>
-            <div>
-              <label for="proxyReputation" class="block mb-2 text-sm font-medium text-gray-300">Proxy Reputation</label>
-              <p-multiSelect
-                id="proxyReputation"
-                formControlName="proxyReputations"
-                [options]="proxyReputationOptions"
-                optionLabel="label"
-                optionValue="value"
-                display="chip"
-                [showClear]="true"
-                class="w-full"
-                [appendTo]="'body'"
-                [scrollHeight]="'200px'"
-                [filter]="true"
-                placeholder="Select reputation labels"
-              ></p-multiSelect>
-            </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="proxyStatus" class="block mb-2 text-sm font-medium text-gray-300">Proxy Status</label>
+            <p-select
+              id="proxyStatus"
+              formControlName="proxyStatus"
+              [options]="proxyStatusOptions"
+              optionLabel="label"
+              optionValue="value"
+              class="w-full"
+              panelStyleClass="bg-gray-800 text-white"
+              [appendTo]="'body'"
+              [scrollHeight]="'200px'"
+            ></p-select>
+          </div>
+          <div>
+            <label for="proxyReputation" class="block mb-2 text-sm font-medium text-gray-300">Proxy Reputation</label>
+            <p-multiSelect
+              id="proxyReputation"
+              formControlName="proxyReputations"
+              [options]="proxyReputationOptions"
+              optionLabel="label"
+              optionValue="value"
+              display="chip"
+              [showClear]="true"
+              class="w-full"
+              [appendTo]="'body'"
+              [scrollHeight]="'200px'"
+              [filter]="true"
+              placeholder="Select reputation labels"
+            ></p-multiSelect>
           </div>
         </div>
 

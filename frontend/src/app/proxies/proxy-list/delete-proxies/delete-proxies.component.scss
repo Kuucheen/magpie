@@ -1,5 +1,7 @@
 $danger-color: #f87171;
 $panel-border: rgba(148, 163, 184, 0.22);
+$control-bg: rgba(255, 255, 255, 0.04);
+$control-border: rgba(148, 163, 184, 0.25);
 
 .theme-card {
   border: 1px solid $panel-border;
@@ -51,27 +53,19 @@ $panel-border: rgba(148, 163, 184, 0.22);
   text-align: center;
 }
 
-:host ::ng-deep .delete-dialog .delete-number-control {
+::ng-deep .delete-dialog .delete-number-control {
   width: min(9.5rem, 100%);
   margin: 0 auto;
 }
 
-:host ::ng-deep .delete-dialog .delete-number-input {
-  min-height: 2rem;
-  padding: 0.25rem 0.55rem;
-  font-size: 0.8rem;
+::ng-deep .delete-dialog .delete-number-input {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.82rem;
   text-align: center;
 }
 
-:host ::ng-deep .delete-dialog .delete-number-control .p-inputnumber-button {
-  width: 2rem;
-}
-
-:host ::ng-deep .delete-dialog .delete-number-control .p-inputnumber-button-icon {
-  font-size: 0.7rem;
-}
-
-:host ::ng-deep .delete-dialog .p-dialog {
+::ng-deep .delete-dialog .p-dialog {
   border-radius: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: linear-gradient(180deg, rgba(24, 24, 24, 0.96) 0%, rgba(14, 14, 14, 0.96) 100%);
@@ -79,21 +73,21 @@ $panel-border: rgba(148, 163, 184, 0.22);
   overflow: hidden;
 }
 
-:host ::ng-deep .delete-dialog .p-dialog-header {
+::ng-deep .delete-dialog .p-dialog-header {
   padding: 1.25rem 1.5rem;
   background: rgba(18, 18, 18, 0.92);
   border-bottom: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-:host ::ng-deep .delete-dialog .p-dialog-header-icon {
+::ng-deep .delete-dialog .p-dialog-header-icon {
   color: rgba(226, 232, 240, 0.7);
 }
 
-:host ::ng-deep .delete-dialog .p-dialog-header-icon:hover {
+::ng-deep .delete-dialog .p-dialog-header-icon:hover {
   color: #f8fafc;
 }
 
-:host ::ng-deep .delete-dialog .p-dialog-content {
+::ng-deep .delete-dialog .p-dialog-content {
   background: transparent;
 }
 
@@ -105,52 +99,56 @@ $panel-border: rgba(148, 163, 184, 0.22);
   border-radius: 0 0 1rem 1rem;
 }
 
-:host ::ng-deep .delete-dialog .delete-input {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+::ng-deep .delete-dialog .delete-input {
+  background: $control-bg;
+  border: 1px solid $control-border;
   color: #e2e8f0;
 }
 
-:host ::ng-deep .delete-dialog .p-inputtext,
-:host ::ng-deep .delete-dialog .p-select,
-:host ::ng-deep .delete-dialog .p-multiselect,
-:host ::ng-deep .delete-dialog .p-inputnumber {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+::ng-deep .delete-dialog .p-inputtext,
+::ng-deep .delete-dialog .p-select,
+::ng-deep .delete-dialog .p-multiselect,
+::ng-deep .delete-dialog .p-inputnumber {
+  background: $control-bg;
+  border: 1px solid $control-border;
   color: #e2e8f0;
-  border-radius: 0.65rem;
-  min-height: 2.5rem;
+  border-radius: 0.5rem;
+  min-height: 2.25rem;
 }
 
-:host ::ng-deep .delete-dialog .p-inputtext:focus,
-:host ::ng-deep .delete-dialog .p-select.p-focus,
-:host ::ng-deep .delete-dialog .p-multiselect.p-focus,
-:host ::ng-deep .delete-dialog .p-inputnumber:focus-within {
+::ng-deep .delete-dialog .p-inputtext:focus,
+::ng-deep .delete-dialog .p-select.p-focus,
+::ng-deep .delete-dialog .p-multiselect.p-focus,
+::ng-deep .delete-dialog .p-inputnumber:focus-within {
   border-color: $danger-color;
   box-shadow: 0 0 0 2px rgba($danger-color, 0.18);
 }
 
-:host ::ng-deep .delete-dialog .p-select-label,
-:host ::ng-deep .delete-dialog .p-multiselect-label,
-:host ::ng-deep .delete-dialog .p-inputtext {
-  padding: 0.4rem 0.7rem;
-  font-size: 0.85rem;
+::ng-deep .delete-dialog .p-select-label,
+::ng-deep .delete-dialog .p-multiselect-label,
+::ng-deep .delete-dialog .p-inputtext {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.82rem;
 }
 
-:host ::ng-deep .delete-dialog .p-inputnumber {
-  border-radius: 0.65rem;
+::ng-deep .delete-dialog .p-inputnumber {
+  border-radius: 0.5rem;
   overflow: hidden;
 }
 
-:host ::ng-deep .delete-dialog .p-inputnumber-button {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(148, 163, 184, 0.25);
+::ng-deep .delete-dialog .p-inputnumber .p-inputtext {
+  min-height: 2.25rem;
 }
 
-:host ::ng-deep .delete-dialog .p-multiselect-token {
+::ng-deep .delete-dialog .p-inputnumber-button {
+  background: $control-bg;
+  border-color: $control-border;
+}
+
+::ng-deep .delete-dialog .p-multiselect-token {
   border-radius: 999px;
   padding: 0.1rem 0.45rem;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 600;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(148, 163, 184, 0.16);

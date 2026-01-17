@@ -19,16 +19,17 @@
   [breakpoints]="{ '960px': '90vw', '640px': '95vw' }"
   [style]="{ width: '50rem' }"
   [contentStyle]="{ padding: '0' }"
+  styleClass="delete-dialog"
   (onHide)="onDialogHide()"
 >
   <ng-template pTemplate="header">
-    <div class="flex items-center gap-2 text-lg font-semibold text-red-200">
+    <div class="delete-dialog__title flex items-center gap-2 text-lg font-semibold text-red-200">
       <span>Delete Proxies</span>
       <app-tooltip [text]="'Delete proxies in bulk with optional filters and status selections. This action cannot be undone.'"></app-tooltip>
     </div>
   </ng-template>
 
-  <div class="bg-neutral-900 text-gray-200 p-6 space-y-6">
+  <div class="delete-dialog__body text-gray-200 p-6 space-y-6">
     <section class="bg-red-950/40 border border-red-800/60 rounded-xl p-4 text-sm leading-relaxed text-red-200 flex items-start gap-3">
       <i class="pi pi-exclamation-triangle text-base mt-0.5"></i>
       <p>
@@ -41,7 +42,7 @@
       <div class="flex flex-col sm:flex-row gap-4">
         <label
           for="deleteAll"
-          class="flex-1 bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
+          class="delete-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
           [class.theme-card--active]="deleteOption === 'all'"
         >
           <p-radioButton
@@ -60,7 +61,7 @@
 
         <label
           for="deleteSelected"
-          class="flex-1 bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
+          class="delete-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
           [class.opacity-60]="!canDeleteSelected()"
           [class.cursor-not-allowed]="!canDeleteSelected()"
           [class.theme-card--active]="deleteOption === 'selected'"
@@ -82,7 +83,7 @@
     </section>
 
     <form [formGroup]="deleteForm" class="space-y-6">
-      <section class="bg-neutral-800 border border-neutral-700 rounded-xl p-5 space-y-5 theme-card">
+      <section class="delete-card rounded-xl p-5 space-y-5 theme-card">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h4 class="text-base font-semibold text-white">Filter Before Deleting</h4>
@@ -109,7 +110,7 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div class="delete-number-field">
                 <label for="deleteRetries" class="block mb-2 text-sm font-medium text-gray-300">Max Retries</label>
                 <p-inputNumber
                   id="deleteRetries"
@@ -117,10 +118,11 @@
                   mode="decimal"
                   [showButtons]="true"
                   [min]="0"
-                  inputStyleClass="w-full bg-gray-700 text-white border-gray-600 theme-focus"
+                  styleClass="delete-number-control"
+                  inputStyleClass="w-full delete-input delete-number-input theme-focus"
                 ></p-inputNumber>
               </div>
-              <div>
+              <div class="delete-number-field">
                 <label for="deleteTimeout" class="block mb-2 text-sm font-medium text-gray-300">Max Timeout (ms)</label>
                 <p-inputNumber
                   id="deleteTimeout"
@@ -128,7 +130,8 @@
                   mode="decimal"
                   [showButtons]="true"
                   [min]="0"
-                  inputStyleClass="w-full bg-gray-700 text-white border-gray-600 theme-focus"
+                  styleClass="delete-number-control"
+                  inputStyleClass="w-full delete-input delete-number-input theme-focus"
                 ></p-inputNumber>
               </div>
             </div>
@@ -140,7 +143,7 @@
         }
       </section>
 
-      <section class="bg-neutral-800 border border-neutral-700 rounded-xl p-5 space-y-5 theme-card">
+      <section class="delete-card rounded-xl p-5 space-y-5 theme-card">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label for="deleteProxyStatus" class="block mb-2 text-sm font-medium text-gray-300">Proxy Status</label>
@@ -179,7 +182,7 @@
   </div>
 
   <ng-template pTemplate="footer">
-    <div class="w-full flex justify-end gap-3 px-6 pb-4">
+    <div class="w-full flex items-center justify-end gap-3 px-6">
       <p-button
         type="button"
         label="Cancel"

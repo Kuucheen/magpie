@@ -97,9 +97,12 @@ $panel-border: rgba(148, 163, 184, 0.22);
   background: transparent;
 }
 
-:host ::ng-deep .export-dialog .p-dialog-footer {
+::ng-deep .export-dialog .p-dialog-footer {
   background: rgba(14, 14, 14, 0.92);
   border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 0.75rem 0;
+  align-items: center;
+  border-radius: 0 0 1rem 1rem;
 }
 
 :host ::ng-deep .export-dialog .export-input {

@@ -12,6 +12,7 @@ import (
 	"magpie/internal/database"
 	"magpie/internal/domain"
 	"magpie/internal/jobs/checker/judges"
+	proxyqueue "magpie/internal/jobs/queue/proxy"
 	sitequeue "magpie/internal/jobs/queue/sites"
 	jobruntime "magpie/internal/jobs/runtime"
 	"magpie/internal/support"
@@ -343,6 +344,59 @@ func changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode("Password changed successfully")
+}
+
+func deleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, userErr := auth.GetUserIDFromRequest(r)
+	if userErr != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	user := database.GetUserFromId(userID)
+	if user.ID == 0 {
+		writeError(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	var payload dto.DeleteAccount
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(payload.Password) == "" {
+		writeError(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+
+	if !support.CheckPasswordHash(payload.Password, user.Password) {
+		writeError(w, "Invalid password", http.StatusUnauthorized)
+		return
+	}
+
+	orphanedProxies, orphanedScrapeSites, err := database.DeleteUserAccount(context.Background(), userID)
+	if err != nil {
+		log.Error("failed to delete user account", "error", err)
+		writeError(w, "Failed to delete account", http.StatusInternalServerError)
+		return
+	}
+
+	judges.SetUserJudges(userID, nil)
+
+	if len(orphanedProxies) > 0 {
+		if err := proxyqueue.PublicProxyQueue.RemoveFromQueue(orphanedProxies); err != nil {
+			log.Error("failed to remove orphaned proxies from queue", "error", err)
+		}
+	}
+
+	if len(orphanedScrapeSites) > 0 {
+		if err := sitequeue.PublicScrapeSiteQueue.RemoveFromQueue(orphanedScrapeSites); err != nil {
+			log.Error("failed to remove orphaned scrape sites from queue", "error", err)
+		}
+	}
+
+	json.NewEncoder(w).Encode("Account deleted successfully")
 }
 
 func refreshUserJudgeCache(updates map[uint][]database.UserJudgeAssignment) {

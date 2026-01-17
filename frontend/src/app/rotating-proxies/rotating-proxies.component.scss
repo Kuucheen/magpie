@@ -184,6 +184,39 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
   background: rgba(15, 23, 42, 0.35);
 }
 
+.rotator-skeleton-row td {
+  padding: 1rem;
+}
+
+.rotator-skeleton-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rotator-skeleton-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-start;
+}
+
+.rotator-skeleton-access {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rotator-skeleton-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+:host ::ng-deep .rotating-panel .p-skeleton {
+  background-color: #2a2a2a;
+}
+
 .name-cell {
   .name {
     font-weight: 700;

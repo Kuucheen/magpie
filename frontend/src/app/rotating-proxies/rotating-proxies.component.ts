@@ -17,8 +17,8 @@ import {HttpService} from '../services/http.service';
 import {NotificationService} from '../services/notification-service.service';
 import {CreateRotatingProxy, RotatingProxy} from '../models/RotatingProxy';
 import {UserSettings} from '../models/UserSettings';
-import {LoadingComponent} from '../ui-elements/loading/loading.component';
 import {TooltipComponent} from '../tooltip/tooltip.component';
+import {SkeletonModule} from 'primeng/skeleton';
 
 @Component({
   selector: 'app-rotating-proxies',
@@ -34,8 +34,8 @@ import {TooltipComponent} from '../tooltip/tooltip.component';
     Chip,
     DatePipe,
     DialogModule,
-    LoadingComponent,
     TooltipComponent,
+    SkeletonModule,
   ],
   templateUrl: './rotating-proxies.component.html',
   styleUrl: './rotating-proxies.component.scss'
@@ -60,6 +60,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   listenProtocolOptions = signal<{ label: string; value: string }[]>([...this.protocolOptionList]);
   transportProtocolOptions = [...this.transportProtocolOptionList];
   loading = signal(false);
+  hasLoaded = signal(false);
   submitting = signal(false);
   rotateLoading = signal<Set<number>>(new Set());
   noProtocolsAvailable = signal(false);
@@ -77,6 +78,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     neutral: 'Neutral',
     poor: 'Bad',
   };
+  readonly skeletonRows = Array.from({ length: 5 });
 
   private readonly loopbackHost = '127.0.0.1';
   private readonly defaultRotatorHost = this.resolveDefaultHost();
@@ -174,15 +176,17 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           }
           if (!currentListenTransport || !transportValues.includes(currentListenTransport)) {
             this.createForm.patchValue({listenTransportProtocol: transportValues[0] ?? 'tcp'}, {emitEvent: false});
-          }
-          this.updateFormDisabledStates();
-          this.loading.set(false);
-        },
-        error: err => {
-          this.loading.set(false);
-          NotificationService.showError('Failed to load rotating proxies: ' + this.getErrorMessage(err));
         }
-      });
+        this.updateFormDisabledStates();
+        this.loading.set(false);
+        this.hasLoaded.set(true);
+      },
+      error: err => {
+        this.loading.set(false);
+        this.hasLoaded.set(true);
+        NotificationService.showError('Failed to load rotating proxies: ' + this.getErrorMessage(err));
+      }
+    });
   }
 
   createRotator(): void {

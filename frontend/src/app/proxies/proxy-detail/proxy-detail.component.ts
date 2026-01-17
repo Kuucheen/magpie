@@ -324,6 +324,79 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
     return null;
   }
 
+
+  get overallAlive(): boolean | null {
+    const stats = this.statistics();
+    if (stats.length > 0) {
+      const latestByProtocol = new Map<string, ProxyStatistic>();
+      for (const stat of stats) {
+        const key = this.normalizeProtocolKey(stat.protocol);
+        const existing = latestByProtocol.get(key);
+        if (!existing || this.isNewerStatistic(stat, existing)) {
+          latestByProtocol.set(key, stat);
+        }
+      }
+
+      if (latestByProtocol.size > 0) {
+        for (const stat of latestByProtocol.values()) {
+          if (stat.alive) {
+            return true;
+          }
+        }
+        return false;
+      }
+    }
+
+    const fallback = this.detail()?.latest_statistic;
+    if (fallback) {
+      return fallback.alive;
+    }
+
+    return null;
+  }
+
+  get overallAliveStatus(): 'alive' | 'dead' | 'unknown' {
+    const overall = this.overallAlive;
+    if (overall === null) {
+      return 'unknown';
+    }
+    return overall ? 'alive' : 'dead';
+  }
+
+  get overallAliveLabel(): string {
+    const status = this.overallAliveStatus;
+    if (status === 'alive') {
+      return 'Alive';
+    }
+    if (status === 'dead') {
+      return 'Dead';
+    }
+    return 'Unknown';
+  }
+
+  private isNewerStatistic(candidate: ProxyStatistic, current: ProxyStatistic): boolean {
+    const candidateTime = this.statTimestamp(candidate);
+    const currentTime = this.statTimestamp(current);
+    if (candidateTime !== currentTime) {
+      return candidateTime > currentTime;
+    }
+    return (candidate.id ?? 0) > (current.id ?? 0);
+  }
+
+  private statTimestamp(stat: ProxyStatistic): number {
+    const raw = stat.created_at?.toString().trim();
+    if (!raw) {
+      return 0;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  private normalizeProtocolKey(protocol: string): string {
+    const trimmed = (protocol || '').trim().toLowerCase();
+    return trimmed || 'unknown';
+  }
+
   get reputationOverall(): ProxyReputation | null {
     const overall = this.detail()?.reputation?.overall;
     if (!overall) {

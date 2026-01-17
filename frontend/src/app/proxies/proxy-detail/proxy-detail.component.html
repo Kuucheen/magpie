@@ -51,19 +51,19 @@
         <span
           class="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold uppercase tracking-wide flex-shrink-0 ml-auto status-pill"
           [ngClass]="{
-            'status-pill--dead': latestStatistic && !latestStatistic.alive,
-            'status-pill--unknown': !latestStatistic
+            'status-pill--dead': overallAliveStatus === 'dead',
+            'status-pill--unknown': overallAliveStatus === 'unknown'
           }"
         >
           <span
             class="status-dot"
             [ngClass]="{
-              alive: latestStatistic?.alive,
-              dead: latestStatistic && !latestStatistic.alive,
-              unknown: !latestStatistic
+              alive: overallAliveStatus === 'alive',
+              dead: overallAliveStatus === 'dead',
+              unknown: overallAliveStatus === 'unknown'
             }"
           ></span>
-          {{ latestStatistic ? (latestStatistic.alive ? 'Alive' : 'Dead') : 'Unknown' }}
+          {{ overallAliveLabel }}
         </span>
         <div class="text-sm muted-text flex flex-col sm:flex-row sm:items-center sm:gap-2 basis-full">
           <span class="shrink-0">Proxy ID {{ proxyId() || '—' }}</span>

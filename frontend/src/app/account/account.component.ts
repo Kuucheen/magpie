@@ -9,6 +9,9 @@ import {NotificationService} from '../services/notification-service.service';
 
 import {ThemeService, ThemeName} from '../services/theme.service';
 import {Password} from 'primeng/password';
+import {DeleteAccount} from '../models/DeleteAccount';
+import {UserService} from '../services/authorization/user.service';
+import {DialogModule} from 'primeng/dialog';
 
 @Component({
     selector: 'app-account',
@@ -16,16 +19,20 @@ import {Password} from 'primeng/password';
     ReactiveFormsModule,
     Button,
     Password,
+    DialogModule,
   ],
     templateUrl: './account.component.html',
     styleUrls: ['./account.component.scss']
 })
 export class AccountComponent {
   passwordForm: FormGroup;
+  deleteAccountForm: FormGroup;
+  deleteDialogVisible = false;
   readonly themes: ThemeName[];
   readonly currentTheme: Signal<ThemeName>;
   private readonly purpleActivationTarget = 10;
   private purpleActivationCount = 0;
+  deletingAccount = false;
   private readonly themeLabels: Record<ThemeName, string> = {
     green: 'Green',
     blue: 'Blue',
@@ -42,7 +49,8 @@ export class AccountComponent {
 
   constructor(private fb: FormBuilder,
               private http: HttpService,
-              private themeService: ThemeService) {
+              private themeService: ThemeService,
+              private userService: UserService) {
     this.passwordForm = this.fb.group(
       {
         oldPassword: ['', [Validators.required]],
@@ -51,6 +59,10 @@ export class AccountComponent {
       },
       { validators: this.passwordsMatchValidator }
     );
+
+    this.deleteAccountForm = this.fb.group({
+      password: ['', [Validators.required]],
+    });
 
     this.themes = this.themeService.themes;
     this.currentTheme = this.themeService.theme;
@@ -95,6 +107,41 @@ export class AccountComponent {
     } else {
       this.passwordForm.markAllAsTouched();
     }
+  }
+
+  onDeleteAccount(): void {
+    if (this.deleteAccountForm.valid) {
+      const payload: DeleteAccount = this.deleteAccountForm.value;
+      this.deletingAccount = true;
+
+      this.http.deleteAccount(payload).subscribe({
+        next: res => {
+          NotificationService.showSuccess(res);
+          this.userService.logoutAndRedirect();
+        },
+        error: err => {
+          this.deletingAccount = false;
+          const detail = err?.error?.message ?? err?.error?.error ?? 'Please try again.';
+          NotificationService.showError("There has been an error while deleting the account! " + detail);
+        }
+      });
+    } else {
+      this.deleteAccountForm.markAllAsTouched();
+    }
+  }
+
+  openDeleteDialog(): void {
+    this.deleteDialogVisible = true;
+  }
+
+  closeDeleteDialog(): void {
+    this.deleteDialogVisible = false;
+  }
+
+  onDeleteDialogHide(): void {
+    this.deleteDialogVisible = false;
+    this.deletingAccount = false;
+    this.deleteAccountForm.reset({ password: '' });
   }
 
   private handlePurpleSecret(): void {

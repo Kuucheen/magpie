@@ -87,4 +87,69 @@
     </form>
   </section>
 
+  <section class="danger-card">
+    <div class="danger-card__head">
+      <h3 class="mt-0">Delete Account</h3>
+      <p class="muted">This action permanently deletes your account and data.</p>
+    </div>
+    <p class="danger-note">This action cannot be undone.</p>
+
+    <div class="actions">
+      <p-button type="button"
+                label="Delete account"
+                (onClick)="openDeleteDialog()"
+                styleClass="btn-danger p-button-danger">
+      </p-button>
+    </div>
+  </section>
+
+  <p-dialog
+    [visible]="deleteDialogVisible"
+    (visibleChange)="deleteDialogVisible = $event"
+    [modal]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [dismissableMask]="true"
+    [breakpoints]="{ '960px': '90vw', '640px': '95vw' }"
+    [style]="{ width: '32rem' }"
+    [appendTo]="'body'"
+    styleClass="danger-dialog"
+    (onHide)="onDeleteDialogHide()"
+  >
+    <ng-template pTemplate="header">
+      <div class="danger-dialog__title">Confirm account deletion</div>
+    </ng-template>
+
+    <form [formGroup]="deleteAccountForm" (ngSubmit)="onDeleteAccount()" class="form-grid danger-dialog__body">
+      <div class="field">
+        <label for="deletePassword">Enter your password</label>
+        <p-password inputId="deletePassword"
+                    formControlName="password"
+                    [feedback]="false"
+                    [toggleMask]="true"
+                    styleClass="text-input danger-focus">
+        </p-password>
+
+        @if (deleteAccountForm.get('password')?.hasError('required') && deleteAccountForm.get('password')?.touched) {
+          <small class="field-error">Password is required</small>
+        }
+      </div>
+
+      <p class="danger-note">This action permanently deletes your account and data.</p>
+
+      <div class="dialog-actions">
+        <p-button type="button"
+                  label="Cancel"
+                  styleClass="p-button-text"
+                  (onClick)="closeDeleteDialog()">
+        </p-button>
+        <p-button type="submit"
+                  label="Delete account"
+                  [disabled]="deleteAccountForm.invalid || deletingAccount"
+                  styleClass="btn-danger p-button-danger">
+        </p-button>
+      </div>
+    </form>
+  </p-dialog>
+
 </div>

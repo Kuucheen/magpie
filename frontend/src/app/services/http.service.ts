@@ -10,6 +10,7 @@ import {ExportSettings} from '../models/ExportSettings';
 import {ScrapeSourceInfo} from '../models/ScrapeSourceInfo';
 import {DashboardInfo} from '../models/DashboardInfo';
 import {ChangePassword} from '../models/ChangePassword';
+import {DeleteAccount} from '../models/DeleteAccount';
 import {ProxyDetail} from '../models/ProxyDetail';
 import {ProxyStatistic} from '../models/ProxyStatistic';
 import {ProxyStatisticResponseDetail} from '../models/ProxyStatisticResponseDetail';
@@ -40,6 +41,10 @@ export class HttpService {
 
   changePassword(changePassword: ChangePassword) {
     return this.http.post<string>(this.apiUrl + '/changePassword', changePassword)
+  }
+
+  deleteAccount(payload: DeleteAccount) {
+    return this.http.post<string>(this.apiUrl + '/deleteAccount', payload)
   }
 
   uploadProxies(formData: FormData) {

@@ -1,208 +1,250 @@
 <div class="proxy-container p-8 min-h-screen text-gray-300">
   <!-- Top Actions -->
-  <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
-    <div class="flex flex-wrap items-center gap-4">
-      <app-export-proxies
-        [allProxies]="dataSource()"
-        [selectedProxies]="selectedProxies()"
-      ></app-export-proxies>
+  <div class="actions-wrapper">
+    <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-4">
+        <app-export-proxies
+          [allProxies]="dataSource()"
+          [selectedProxies]="selectedProxies()"
+        ></app-export-proxies>
 
-      <app-delete-proxies
-        [allProxies]="dataSource()"
-        [selectedProxies]="selectedProxies()"
-        (proxiesDeleted)="onProxiesDeleted()"
-      ></app-delete-proxies>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-4">
-      <p-button
-        label="Refresh"
-        icon="pi pi-refresh"
-        styleClass="p-button-outlined"
-        [disabled]="isLoading()"
-        (onClick)="refreshList()"
-      ></p-button>
-
-      <p-button
-        [label]="filterButtonLabel()"
-        icon="pi pi-filter"
-        [styleClass]="filterToggleClass()"
-        (onClick)="toggleFilterPanel()"
-      ></p-button>
-
-      <input
-        type="search"
-        class="proxy-search-input"
-        placeholder="Search proxies"
-        [ngModel]="searchTerm()"
-        (ngModelChange)="onSearchTermChange($event)"
-        aria-label="Search proxies"
-      />
-
-      <app-add-proxies
-        (showAddProxiesMessage)="showAddProxiesMessage.emit($event)"
-        (proxiesAdded)="onProxiesAdded()"
-      ></app-add-proxies>
-    </div>
-  </div>
-
-  @if (filterPanelOpen()) {
-    <div class="filter-panel">
-      <div class="filter-panel__header">
-        <div>
-          <div class="filter-panel__title">Filters</div>
-          <div class="filter-panel__subtitle">Narrow the list by status, protocol health, or metadata.</div>
-        </div>
-        <div class="filter-panel__actions">
-          <p-button
-            label="Clear"
-            styleClass="p-button-text p-button-sm"
-            (onClick)="clearFilters()"
-          ></p-button>
-          <p-button
-            label="Apply"
-            styleClass="p-button-success p-button-sm"
-            (onClick)="applyFilters()"
-          ></p-button>
-        </div>
+        <app-delete-proxies
+          [allProxies]="dataSource()"
+          [selectedProxies]="selectedProxies()"
+          (proxiesDeleted)="onProxiesDeleted()"
+        ></app-delete-proxies>
       </div>
 
-      <form [formGroup]="filterForm" class="filter-panel__body">
-        <div class="filter-grid">
-          <div>
-            <label for="filterStatus" class="filter-label">Overall Status</label>
-            <p-select
-              id="filterStatus"
-              formControlName="proxyStatus"
-              [options]="proxyStatusOptions"
-              optionLabel="label"
-              optionValue="value"
-              class="w-full"
-              panelStyleClass="bg-gray-800 text-white"
-              [appendTo]="'body'"
-              [scrollHeight]="'200px'"
-            ></p-select>
-          </div>
+      <div class="flex flex-wrap items-center gap-4">
+        <p-button
+          label="Refresh"
+          icon="pi pi-refresh"
+          styleClass="p-button-outlined"
+          [disabled]="isLoading()"
+          (onClick)="refreshList()"
+        ></p-button>
 
-          <div>
-            <label for="filterReputation" class="filter-label">Reputation</label>
-            <p-multiSelect
-              id="filterReputation"
-              formControlName="reputationLabels"
-              [options]="proxyReputationOptions"
-              optionLabel="label"
-              optionValue="value"
-              display="chip"
-              [showClear]="true"
-              class="w-full"
-              [appendTo]="'body'"
-              [scrollHeight]="'200px'"
-              [filter]="true"
-              placeholder="Select reputation labels"
-            ></p-multiSelect>
-          </div>
-        </div>
+        <p-button
+          [label]="filterButtonLabel()"
+          icon="pi pi-filter"
+          [styleClass]="filterToggleClass()"
+          (onClick)="toggleFilterPanel()"
+        ></p-button>
 
-        <div class="filter-section">
-          <div class="filter-section__title">Protocol Alive</div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div class="flex items-center justify-center">
-              <app-checkbox label="HTTP" formControlName="http"></app-checkbox>
-            </div>
-            <div class="flex items-center justify-center">
-              <app-checkbox label="HTTPS" formControlName="https"></app-checkbox>
-            </div>
-            <div class="flex items-center justify-center">
-              <app-checkbox label="SOCKS4" formControlName="socks4"></app-checkbox>
-            </div>
-            <div class="flex items-center justify-center">
-              <app-checkbox label="SOCKS5" formControlName="socks5"></app-checkbox>
-            </div>
-          </div>
-          <p class="filter-hint">Shows proxies with any selected protocol alive.</p>
-        </div>
+        <input
+          type="search"
+          class="proxy-search-input"
+          placeholder="Search proxies"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="onSearchTermChange($event)"
+          aria-label="Search proxies"
+        />
 
-        <div class="filter-grid">
-          <div>
-            <label for="filterCountries" class="filter-label">Country</label>
-            <p-multiSelect
-              id="filterCountries"
-              formControlName="countries"
-              [options]="countryOptions()"
-              optionLabel="label"
-              optionValue="value"
-              display="chip"
-              [showClear]="true"
-              class="w-full"
-              [appendTo]="'body'"
-              [scrollHeight]="'200px'"
-              [filter]="true"
-              placeholder="Select countries"
-            ></p-multiSelect>
-          </div>
-          <div>
-            <label for="filterTypes" class="filter-label">Type</label>
-            <p-multiSelect
-              id="filterTypes"
-              formControlName="types"
-              [options]="typeOptions()"
-              optionLabel="label"
-              optionValue="value"
-              display="chip"
-              [showClear]="true"
-              class="w-full"
-              [appendTo]="'body'"
-              [scrollHeight]="'200px'"
-              [filter]="true"
-              placeholder="Select proxy types"
-            ></p-multiSelect>
-          </div>
-          <div>
-            <label for="filterAnonymity" class="filter-label">Anonymity</label>
-            <p-multiSelect
-              id="filterAnonymity"
-              formControlName="anonymityLevels"
-              [options]="anonymityOptions()"
-              optionLabel="label"
-              optionValue="value"
-              display="chip"
-              [showClear]="true"
-              class="w-full"
-              [appendTo]="'body'"
-              [scrollHeight]="'200px'"
-              [filter]="true"
-              placeholder="Select anonymity levels"
-            ></p-multiSelect>
-          </div>
-        </div>
-
-        <div class="filter-grid">
-          <div>
-            <label for="filterTimeout" class="filter-label">Max Timeout (ms)</label>
-            <p-inputNumber
-              id="filterTimeout"
-              formControlName="maxTimeout"
-              mode="decimal"
-              [showButtons]="true"
-              [min]="0"
-              inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
-            ></p-inputNumber>
-          </div>
-          <div>
-            <label for="filterRetries" class="filter-label">Max Retries</label>
-            <p-inputNumber
-              id="filterRetries"
-              formControlName="maxRetries"
-              mode="decimal"
-              [showButtons]="true"
-              [min]="0"
-              inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
-            ></p-inputNumber>
-          </div>
-        </div>
-      </form>
+        <app-add-proxies
+          (showAddProxiesMessage)="showAddProxiesMessage.emit($event)"
+          (proxiesAdded)="onProxiesAdded()"
+        ></app-add-proxies>
+      </div>
     </div>
-  }
+
+    @if (filterPanelOpen()) {
+      <div class="filter-panel filter-panel--floating">
+        <div class="filter-panel__header">
+          <div>
+            <div class="filter-panel__title">Filters</div>
+            <div class="filter-panel__subtitle">Narrow the list by status, protocol health, or metadata.</div>
+          </div>
+          <div class="filter-panel__actions">
+            <p-button
+              label="Clear"
+              styleClass="p-button-text p-button-sm"
+              (onClick)="clearFilters()"
+            ></p-button>
+            <p-button
+              label="Apply"
+              styleClass="p-button-success p-button-sm"
+              (onClick)="applyFilters()"
+            ></p-button>
+          </div>
+        </div>
+
+        <div class="filter-panel__divider" aria-hidden="true"></div>
+
+        <form [formGroup]="filterForm" class="filter-panel__body">
+          <div class="filter-column filter-column--left">
+            <div class="filter-section filter-section--top">
+              <div class="filter-section__title">Protocol Alive</div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="flex items-center justify-center">
+                  <div class="filter-checkbox-row">
+                    <p-checkbox
+                      inputId="protocolHttp"
+                      formControlName="http"
+                      [binary]="true"
+                      class="filter-checkbox"
+                    ></p-checkbox>
+                    <label for="protocolHttp" class="filter-checkbox-label">HTTP</label>
+                  </div>
+                </div>
+                <div class="flex items-center justify-center">
+                  <div class="filter-checkbox-row">
+                    <p-checkbox
+                      inputId="protocolHttps"
+                      formControlName="https"
+                      [binary]="true"
+                      class="filter-checkbox"
+                    ></p-checkbox>
+                    <label for="protocolHttps" class="filter-checkbox-label">HTTPS</label>
+                  </div>
+                </div>
+                <div class="flex items-center justify-center">
+                  <div class="filter-checkbox-row">
+                    <p-checkbox
+                      inputId="protocolSocks4"
+                      formControlName="socks4"
+                      [binary]="true"
+                      class="filter-checkbox"
+                    ></p-checkbox>
+                    <label for="protocolSocks4" class="filter-checkbox-label">SOCKS4</label>
+                  </div>
+                </div>
+                <div class="flex items-center justify-center">
+                  <div class="filter-checkbox-row">
+                    <p-checkbox
+                      inputId="protocolSocks5"
+                      formControlName="socks5"
+                      [binary]="true"
+                      class="filter-checkbox"
+                    ></p-checkbox>
+                    <label for="protocolSocks5" class="filter-checkbox-label">SOCKS5</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="filter-grid mt-2.5">
+              <div>
+                <label for="filterTimeout" class="filter-label">Max Timeout (ms)</label>
+                <p-inputNumber
+                  id="filterTimeout"
+                  formControlName="maxTimeout"
+                  mode="decimal"
+                  [showButtons]="true"
+                  [min]="0"
+                  inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
+                ></p-inputNumber>
+              </div>
+              <div>
+                <label for="filterRetries" class="filter-label">Max Retries</label>
+                <p-inputNumber
+                  id="filterRetries"
+                  formControlName="maxRetries"
+                  mode="decimal"
+                  [showButtons]="true"
+                  [min]="0"
+                  inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
+                ></p-inputNumber>
+              </div>
+            </div>
+
+            <div class="filter-grid">
+              <div>
+                <label for="filterCountries" class="filter-label">Country</label>
+                <p-multiSelect
+                  id="filterCountries"
+                  formControlName="countries"
+                  [options]="countryOptions()"
+                  optionLabel="label"
+                  optionValue="value"
+                  display="chip"
+                  [showClear]="true"
+                  class="w-full"
+                  [appendTo]="'body'"
+                  [scrollHeight]="'200px'"
+                  [filter]="true"
+                  placeholder="Select countries"
+                ></p-multiSelect>
+              </div>
+              <div>
+                <label for="filterTypes" class="filter-label">Type</label>
+                <p-multiSelect
+                  id="filterTypes"
+                  formControlName="types"
+                  [options]="typeOptions()"
+                  optionLabel="label"
+                  optionValue="value"
+                  display="chip"
+                  [showClear]="true"
+                  class="w-full"
+                  [appendTo]="'body'"
+                  [scrollHeight]="'200px'"
+                  [filter]="true"
+                  placeholder="Select proxy types"
+                ></p-multiSelect>
+              </div>
+            </div>
+          </div>
+
+          <div class="filter-column filter-column--right">
+            <div class="filter-grid">
+              <div>
+                <label for="filterStatus" class="filter-label">Overall Status</label>
+                <p-select
+                  id="filterStatus"
+                  formControlName="proxyStatus"
+                  [options]="proxyStatusOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  class="w-full"
+                  panelStyleClass="bg-gray-800 text-white"
+                  [appendTo]="'body'"
+                  [scrollHeight]="'200px'"
+                ></p-select>
+              </div>
+
+              <div>
+                <label for="filterReputation" class="filter-label">Reputation</label>
+                <p-multiSelect
+                  id="filterReputation"
+                  formControlName="reputationLabels"
+                  [options]="proxyReputationOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  display="chip"
+                  [showClear]="true"
+                  class="w-full"
+                  [appendTo]="'body'"
+                  [scrollHeight]="'200px'"
+                  [filter]="true"
+                  placeholder="Select reputation labels"
+                ></p-multiSelect>
+              </div>
+            </div>
+
+            <div class="filter-grid">
+              <div>
+                <label for="filterAnonymity" class="filter-label">Anonymity</label>
+                <p-multiSelect
+                  id="filterAnonymity"
+                  formControlName="anonymityLevels"
+                  [options]="anonymityOptions()"
+                  optionLabel="label"
+                  optionValue="value"
+                  display="chip"
+                  [showClear]="true"
+                  class="w-full"
+                  [appendTo]="'body'"
+                  [scrollHeight]="'200px'"
+                  [filter]="true"
+                  placeholder="Select anonymity levels"
+                ></p-multiSelect>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    }
+  </div>
 
   <p-table
     [value]="dataSource()"

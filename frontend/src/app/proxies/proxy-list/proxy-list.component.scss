@@ -253,70 +253,150 @@ $border-color: rgba(255, 255, 255, 0.1);
 }
 
 .filter-panel {
-  border: 1px solid $border-color;
-  border-radius: 0.85rem;
-  background: rgba(23, 23, 23, 0.9);
-  padding: 1.25rem;
-  margin-bottom: 1.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.75rem;
+  background: linear-gradient(180deg, rgba(26, 26, 26, 0.95) 0%, rgba(20, 20, 20, 0.92) 100%);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.1rem;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+  animation: filter-panel-reveal 160ms ease-out;
+}
+
+.actions-wrapper {
+  position: relative;
+  z-index: 6;
+  margin-bottom: 1rem;
+}
+
+.actions {
+  margin-bottom: 0;
+}
+
+.filter-panel--floating {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  width: min(720px, 100%);
+  max-height: min(68vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-bottom: 0;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(18, 18, 18, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.35);
+  z-index: 12;
 }
 
 .filter-panel__header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.85rem;
 }
 
 .filter-panel__title {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #f8fafc;
+  letter-spacing: 0.02em;
 }
 
 .filter-panel__subtitle {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: rgba(148, 163, 184, 0.9);
   margin-top: 0.2rem;
+  max-width: 26rem;
 }
 
 .filter-panel__actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
+}
+
+.filter-panel__divider {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.2);
+  margin: 0.2rem 0 0.85rem;
+}
+
+.filter-panel__body {
+  display: grid;
+  gap: 1rem;
+}
+
+.filter-column {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
 }
 
 .filter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
 }
 
 .filter-section {
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid $border-color;
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.filter-section--top {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .filter-section__title {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: #e2e8f0;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.55rem;
 }
 
 .filter-label {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: rgba(226, 232, 240, 0.9);
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-.filter-hint {
-  font-size: 0.75rem;
-  color: rgba(148, 163, 184, 0.85);
-  margin-top: 0.75rem;
+.filter-section .grid {
+  gap: 0.4rem;
+}
+
+.filter-section .grid > div {
+  justify-content: flex-start;
+}
+
+@media (min-width: 960px) {
+  .filter-panel__body {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr);
+    align-items: start;
+  }
+
+  .filter-panel__body > * {
+    margin-top: 0;
+  }
+
+  .filter-panel__body > .filter-column--right {
+    border-left: 1px solid rgba(148, 163, 184, 0.2);
+    padding-left: 1rem;
+  }
+
+  .filter-panel__body > .filter-section {
+    padding-top: 0;
+    border-top: none;
+  }
 }
 
 :host ::ng-deep .filter-toggle {
@@ -331,4 +411,118 @@ $border-color: rgba(255, 255, 255, 0.1);
 
 :host ::ng-deep .filter-toggle.filter-toggle--active .p-button-icon {
   color: $accent-color;
+}
+
+:host ::ng-deep .filter-panel {
+  .filter-checkbox-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .filter-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    height: 0.95rem;
+    line-height: 1;
+    margin: 0;
+    font-size: 0.72rem;
+    color: rgba(226, 232, 240, 0.9);
+    cursor: pointer;
+    letter-spacing: 0.02em;
+  }
+
+  .filter-checkbox {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .filter-checkbox .p-checkbox {
+    display: inline-flex;
+    align-items: center;
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+
+  .filter-checkbox .p-checkbox-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .filter-checkbox .p-checkbox-box {
+    width: 0.95rem;
+    height: 0.95rem;
+    border-radius: 0.25rem;
+    border-color: rgba(148, 163, 184, 0.4);
+  }
+
+  .filter-checkbox .p-checkbox-icon {
+    font-size: 0.6rem;
+  }
+
+  .filter-panel__actions .p-button {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.75rem;
+  }
+
+  .p-inputtext,
+  .p-select,
+  .p-multiselect {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #e2e8f0;
+    border-radius: 0.5rem;
+    min-height: 2.25rem;
+  }
+
+  .p-inputtext:focus,
+  .p-select.p-focus,
+  .p-multiselect.p-focus,
+  .p-inputnumber:focus-within {
+    border-color: $accent-color;
+    box-shadow: 0 0 0 2px rgba($accent-color, 0.18);
+  }
+
+  .p-select-label,
+  .p-multiselect-label,
+  .p-inputtext {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.82rem;
+  }
+
+  .p-inputnumber .p-inputtext {
+    min-height: 2.25rem;
+  }
+
+  .p-inputnumber {
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .p-multiselect-token {
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(148, 163, 184, 0.16);
+    color: rgba(226, 232, 240, 0.9);
+  }
+
+  .p-inputnumber-button {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(148, 163, 184, 0.25);
+  }
+}
+
+@keyframes filter-panel-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

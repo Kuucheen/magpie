@@ -2,7 +2,6 @@ import {Component, EventEmitter, OnInit, Output} from '@angular/core';
 import {DatePipe} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {SelectionModel} from '@angular/cdk/collections';
-import {LoadingComponent} from '../../ui-elements/loading/loading.component';
 import {HttpService} from '../../services/http.service';
 import {ScrapeSourceInfo} from '../../models/ScrapeSourceInfo';
 import {AddScrapeSourceComponent} from '../add-scrape-source/add-scrape-source.component';
@@ -12,6 +11,7 @@ import {TableLazyLoadEvent, TableModule} from 'primeng/table';
 import {ButtonModule} from 'primeng/button';
 import {CheckboxModule} from 'primeng/checkbox';
 import {ConfirmDialogModule} from 'primeng/confirmdialog';
+import {SkeletonModule} from 'primeng/skeleton';
 import {ConfirmationService} from 'primeng/api';
 import {NotificationService} from '../../services/notification-service.service';
 
@@ -20,11 +20,11 @@ import {NotificationService} from '../../services/notification-service.service';
   imports: [
     DatePipe,
     FormsModule,
-    LoadingComponent,
     TableModule,
     ButtonModule,
     CheckboxModule,
     ConfirmDialogModule,
+    SkeletonModule,
     AddScrapeSourceComponent
   ],
   providers: [ConfirmationService],
@@ -45,6 +45,7 @@ export class ScrapeSourceListComponent implements OnInit {
   loading = false;
   checkingRobots: Record<number, boolean> = {};
   respectRobotsEnabled = false;
+  readonly skeletonRows = Array.from({ length: 6 });
 
   constructor(
     private http: HttpService,

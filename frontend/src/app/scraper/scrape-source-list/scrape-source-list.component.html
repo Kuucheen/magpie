@@ -1,129 +1,151 @@
-@if (!hasLoaded) {
-  <app-loading class="flex items-center justify-center mt-20"></app-loading>
-} @else {
-  <div class="proxy-container p-8 min-h-screen text-gray-300">
-    <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex flex-wrap items-center gap-4">
-        <p-button
-          label="Delete Selected"
-          icon="pi pi-trash"
-          styleClass="p-button-danger"
-          [disabled]="getSelectionCount() === 0"
-          (onClick)="deleteSelectedSources()"
-        ></p-button>
+<div class="proxy-container p-8 min-h-screen text-gray-300">
+  <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center gap-4">
+      <p-button
+        label="Delete Selected"
+        icon="pi pi-trash"
+        styleClass="p-button-danger"
+        [disabled]="getSelectionCount() === 0"
+        (onClick)="deleteSelectedSources()"
+      ></p-button>
 
-        <span class="text-sm text-gray-400">
-          Total: {{ totalItems }} sources
-        </span>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-4">
-        <p-button
-          label="Refresh"
-          icon="pi pi-refresh"
-          styleClass="p-button-outlined"
-          (onClick)="refreshList()"
-          [disabled]="loading"
-        ></p-button>
-
-        <app-add-scrape-source
-          (showAddScrapeSourcesMessage)="onShowAddScrapeSourcesMessage($event)"
-          (scrapeSourcesAdded)="onScrapeSourcesAdded()"
-        ></app-add-scrape-source>
-      </div>
+      <span class="text-sm text-gray-400">
+        Total: {{ totalItems }} sources
+      </span>
     </div>
 
-    <p-table
-      [value]="scrapeSources"
-      [loading]="loading"
-      [paginator]="true"
-      [rows]="pageSize"
-      [totalRecords]="totalItems"
-      [lazy]="true"
-      (onLazyLoad)="onLazyLoad($event)"
-      [rowsPerPageOptions]="[20]"
-      dataKey="id"
-      [selection]="selection.selected"
-      [(selection)]="selectedScrapeSources"
-      class="p-datatable-gridlines p-datatable-sm"
-      [rowHover]="true"
-    >
-      <ng-template pTemplate="header">
-        <tr>
-          <th style="width: 3rem">
-            <p-checkbox
-              [binary]="true"
-              (onChange)="masterToggle()"
-              [ngModel]="isAllSelected()"
-              [disabled]="scrapeSources.length === 0"
-              [indeterminate]="isSomeSelected()"
-            ></p-checkbox>
-          </th>
-          <th pSortableColumn="url">
-            URL <p-sortIcon field="url"></p-sortIcon>
-          </th>
-          <th style="width: 9rem" class="text-center" pSortableColumn="proxy_count">
-            Proxy Count <p-sortIcon field="proxy_count"></p-sortIcon>
-          </th>
-          <th style="width: 12rem" class="text-center" pSortableColumn="added_at">
-            Added At <p-sortIcon field="added_at"></p-sortIcon>
-          </th>
-          @if (respectRobotsEnabled) {
-            <th style="width: 11rem" class="text-center">
-              Robots Check
-            </th>
-          }
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="body" let-source>
-        <tr (click)="toggleSelection(source)" [pSelectableRow]="source">
-          <td (click)="$event.stopPropagation()">
-            <p-checkbox
-              [binary]="true"
-              (onChange)="toggleSelection(source)"
-              [ngModel]="selection.isSelected(source)"
-            ></p-checkbox>
-          </td>
-          <td>
-            <a
-              [href]="source.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="scrape-url"
-              [title]="source.url"
-              (click)="$event.stopPropagation()"
-            >
-              {{ source.url }}
-            </a>
-          </td>
-          <td class="text-center">
-            {{ source.proxy_count }}
-          </td>
-          <td class="text-center">
-            {{ source.added_at | date : 'short' }}
-          </td>
-          @if (respectRobotsEnabled) {
-            <td class="text-center">
-              <p-button
-                label="Check robots.txt"
-                icon="pi pi-shield"
-                size="small"
-                [loading]="isCheckingRobots(source.id)"
-                styleClass="p-button-outlined p-button-secondary"
-                (onClick)="checkRobots(source, $event)"
-              ></p-button>
-            </td>
-          }
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="emptyMessage">
-        <tr>
-          <td [attr.colspan]="respectRobotsEnabled ? 5 : 4">No scrape sources found.</td>
-        </tr>
-      </ng-template>
-    </p-table>
+    <div class="flex flex-wrap items-center gap-4">
+      <p-button
+        label="Refresh"
+        icon="pi pi-refresh"
+        styleClass="p-button-outlined"
+        (onClick)="refreshList()"
+        [disabled]="loading"
+      ></p-button>
+
+      <app-add-scrape-source
+        (showAddScrapeSourcesMessage)="onShowAddScrapeSourcesMessage($event)"
+        (scrapeSourcesAdded)="onScrapeSourcesAdded()"
+      ></app-add-scrape-source>
+    </div>
   </div>
-}
+
+  <p-table
+    [value]="scrapeSources"
+    [loading]="loading"
+    [paginator]="true"
+    [rows]="pageSize"
+    [totalRecords]="totalItems"
+    [lazy]="true"
+    (onLazyLoad)="onLazyLoad($event)"
+    [rowsPerPageOptions]="[20]"
+    dataKey="id"
+    [selection]="selection.selected"
+    [(selection)]="selectedScrapeSources"
+    class="p-datatable-gridlines p-datatable-sm"
+    [rowHover]="true"
+    [showLoader]="hasLoaded"
+  >
+    <ng-template pTemplate="header">
+      <tr>
+        <th style="width: 3rem">
+          <p-checkbox
+            [binary]="true"
+            (onChange)="masterToggle()"
+            [ngModel]="isAllSelected()"
+            [disabled]="scrapeSources.length === 0"
+            [indeterminate]="isSomeSelected()"
+          ></p-checkbox>
+        </th>
+        <th pSortableColumn="url">
+          URL <p-sortIcon field="url"></p-sortIcon>
+        </th>
+        <th style="width: 9rem" class="text-center" pSortableColumn="proxy_count">
+          Proxy Count <p-sortIcon field="proxy_count"></p-sortIcon>
+        </th>
+        <th style="width: 12rem" class="text-center" pSortableColumn="added_at">
+          Added At <p-sortIcon field="added_at"></p-sortIcon>
+        </th>
+        @if (respectRobotsEnabled) {
+          <th style="width: 11rem" class="text-center">
+            Robots Check
+          </th>
+        }
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="loadingbody">
+      @if (!hasLoaded) {
+        @for (row of skeletonRows; track $index) {
+          <tr class="scrape-skeleton-row">
+            <td>
+              <p-skeleton width="1.25rem" height="1.25rem" shape="circle"></p-skeleton>
+            </td>
+            <td>
+              <p-skeleton width="100%" height="0.85rem"></p-skeleton>
+            </td>
+            <td class="text-center">
+              <p-skeleton width="3rem" height="0.85rem" class="inline-block"></p-skeleton>
+            </td>
+            <td class="text-center">
+              <p-skeleton width="6rem" height="0.85rem" class="inline-block"></p-skeleton>
+            </td>
+            @if (respectRobotsEnabled) {
+              <td class="text-center">
+                <p-skeleton width="7.5rem" height="1.5rem" class="inline-block"></p-skeleton>
+              </td>
+            }
+          </tr>
+        }
+      }
+    </ng-template>
+    <ng-template pTemplate="body" let-source>
+      <tr (click)="toggleSelection(source)" [pSelectableRow]="source">
+        <td (click)="$event.stopPropagation()">
+          <p-checkbox
+            [binary]="true"
+            (onChange)="toggleSelection(source)"
+            [ngModel]="selection.isSelected(source)"
+          ></p-checkbox>
+        </td>
+        <td>
+          <a
+            [href]="source.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="scrape-url"
+            [title]="source.url"
+            (click)="$event.stopPropagation()"
+          >
+            {{ source.url }}
+          </a>
+        </td>
+        <td class="text-center">
+          {{ source.proxy_count }}
+        </td>
+        <td class="text-center">
+          {{ source.added_at | date : 'short' }}
+        </td>
+        @if (respectRobotsEnabled) {
+          <td class="text-center">
+            <p-button
+              label="Check robots.txt"
+              icon="pi pi-shield"
+              size="small"
+              [loading]="isCheckingRobots(source.id)"
+              styleClass="p-button-outlined p-button-secondary"
+              (onClick)="checkRobots(source, $event)"
+            ></p-button>
+          </td>
+        }
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="emptyMessage">
+      <tr>
+        <td [attr.colspan]="respectRobotsEnabled ? 5 : 4">No scrape sources found.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
 
 <p-confirmDialog
   [style]="{width: '450px'}"

@@ -20,8 +20,8 @@ import {
   ProxySnapshots,
   ReputationBreakdown,
 } from '../services/graphql.service';
-import {LoadingComponent} from '../ui-elements/loading/loading.component';
 import {ProxyReputationCardComponent} from './cards/proxy-reputation-card/proxy-reputation-card.component';
+import {SkeletonModule} from 'primeng/skeleton';
 
 interface SparklineMetric {
   value: number;
@@ -46,8 +46,8 @@ interface DashboardStatus {
     ProxyHistoryCardComponent,
     ProxiesPerCountryCardComponent,
     JudgeByPercentageCardComponent,
-    LoadingComponent,
-    ProxyReputationCardComponent
+    ProxyReputationCardComponent,
+    SkeletonModule
   ],
   styleUrls: ['./dashboard.component.scss']
 })
@@ -87,6 +87,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private readonly destroy$ = new Subject<void>();
   proxyHistoryRefreshing = signal(false);
+  readonly kpiSkeletons = Array.from({ length: 3 });
+  readonly historySkeletons = Array.from({ length: 6 });
+  readonly countrySkeletons = Array.from({ length: 5 });
+  readonly reputationSkeletons = Array.from({ length: 4 });
 
   constructor(private graphqlService: GraphqlService) {}
 

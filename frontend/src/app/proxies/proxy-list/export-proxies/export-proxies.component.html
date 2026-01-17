@@ -15,25 +15,27 @@
   [draggable]="false"
   [resizable]="false"
   [dismissableMask]="true"
+  [appendTo]="'body'"
   [breakpoints]="{ '960px': '90vw', '640px': '95vw' }"
   [style]="{ width: '60rem' }"
   [contentStyle]="{ padding: '0' }"
+  styleClass="export-dialog"
   (onHide)="onDialogHide()"
 >
   <ng-template pTemplate="header">
-    <div class="flex items-center gap-2 text-lg font-semibold">
+    <div class="export-dialog__title flex items-center gap-2 text-lg font-semibold">
       <span>Export Proxies</span>
       <app-tooltip [text]="'Export proxies with optional filters, output formats, and status selections.'"></app-tooltip>
     </div>
   </ng-template>
 
-  <div class="bg-neutral-900 text-gray-200 p-6 space-y-6">
+  <div class="export-dialog__body text-gray-200 p-6 space-y-6">
     <section class="space-y-3">
       <p class="text-sm text-gray-400">Choose how you want to format and filter your export file.</p>
       <div class="flex flex-col sm:flex-row gap-4">
         <label
           for="exportAll"
-          class="flex-1 bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
+          class="export-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
           [class.theme-card--active]="exportOption === 'all'"
         >
           <p-radioButton
@@ -50,7 +52,7 @@
 
         <label
           for="exportSelected"
-          class="flex-1 bg-neutral-800 border border-neutral-700 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
+          class="export-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
           [class.opacity-60]="!canExportSelected()"
           [class.cursor-not-allowed]="!canExportSelected()"
           [class.theme-card--active]="exportOption === 'selected'"
@@ -72,7 +74,7 @@
     </section>
 
     <form [formGroup]="exportForm" class="space-y-6">
-      <section class="bg-neutral-800 border border-neutral-700 rounded-xl p-5 space-y-5 theme-card">
+      <section class="export-card rounded-xl p-5 space-y-5 theme-card">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h4 class="text-base font-semibold text-white">Filter Before Export</h4>
@@ -99,7 +101,7 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div class="export-number-field">
                 <label for="retries" class="block mb-2 text-sm font-medium text-gray-300">Max Retries</label>
                 <p-inputNumber
                   id="retries"
@@ -107,10 +109,11 @@
                   mode="decimal"
                   [showButtons]="true"
                   [min]="0"
-                  inputStyleClass="w-full bg-gray-700 text-white border-gray-600 theme-focus"
+                  styleClass="export-number-control"
+                  inputStyleClass="w-full export-input export-number-input theme-focus"
                 ></p-inputNumber>
               </div>
-              <div>
+              <div class="export-number-field">
                 <label for="timeout" class="block mb-2 text-sm font-medium text-gray-300">Max Timeout (ms)</label>
                 <p-inputNumber
                   id="timeout"
@@ -118,7 +121,8 @@
                   mode="decimal"
                   [showButtons]="true"
                   [min]="0"
-                  inputStyleClass="w-full bg-gray-700 text-white border-gray-600 theme-focus"
+                  styleClass="export-number-control"
+                  inputStyleClass="w-full export-input export-number-input theme-focus"
                 ></p-inputNumber>
               </div>
             </div>
@@ -128,7 +132,7 @@
         }
       </section>
 
-      <section class="bg-neutral-800 border border-neutral-700 rounded-xl p-5 space-y-5 theme-card">
+      <section class="export-card rounded-xl p-5 space-y-5 theme-card">
         <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-4 md:items-start">
           <div class="space-y-4">
             <div>
@@ -172,7 +176,7 @@
             @for (text of predefinedFilters; track text) {
               <p-button
                 [label]="text"
-                styleClass="p-button-outlined p-button-secondary p-button-sm"
+                styleClass="p-button-outlined p-button-secondary p-button-sm export-format-button"
                 (onClick)="addToFilter(text)"
               ></p-button>
             }
@@ -182,7 +186,7 @@
             pInputText
             formControlName="output"
             type="text"
-            class="w-full p-3 bg-gray-800 text-white border border-gray-700 rounded-lg theme-focus"
+            class="export-input w-full theme-focus"
           />
         </div>
       </section>
@@ -190,7 +194,7 @@
   </div>
 
   <ng-template pTemplate="footer">
-    <div class="w-full flex justify-end gap-3 px-6 pb-4">
+    <div class="w-full flex items-center justify-end gap-3 px-6 py-2">
       <p-button
         type="button"
         label="Cancel"

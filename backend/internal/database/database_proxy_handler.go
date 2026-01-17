@@ -441,11 +441,11 @@ func GetAllProxies() ([]domain.Proxy, error) {
 }
 
 func GetProxyInfoPage(userId uint, page int) []dto.ProxyInfo {
-	proxies, _ := GetProxyInfoPageWithFilters(userId, page, proxiesPerPage, "")
+	proxies, _ := GetProxyInfoPageWithFilters(userId, page, proxiesPerPage, "", dto.ProxyListFilters{})
 	return proxies
 }
 
-func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search string) ([]dto.ProxyInfo, int64) {
+func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search string, filters dto.ProxyListFilters) ([]dto.ProxyInfo, int64) {
 	if page < 1 {
 		page = 1
 	}
@@ -475,6 +475,11 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
 		Order("alive DESC, latest_check DESC")
 
+	filterQuery := buildProxyListFilterQuery(userId, filters)
+	if filterQuery != nil {
+		query = query.Where("proxies.id IN (?)", filterQuery)
+	}
+
 	rows := make([]dto.ProxyInfoRow, 0)
 	normalizedSearch := strings.TrimSpace(search)
 	lowerSearch := strings.ToLower(normalizedSearch)
@@ -488,7 +493,15 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 
 		proxies := proxyInfoRowsToDTO(rows)
 		attachReputationsToProxyInfos(proxies)
-		total := GetAllProxyCountOfUser(userId)
+		if filterQuery == nil {
+			total := GetAllProxyCountOfUser(userId)
+			return proxies, total
+		}
+
+		var total int64
+		if err := filterQuery.Distinct("proxies.id").Count(&total).Error; err != nil {
+			return proxies, 0
+		}
 		return proxies, total
 	}
 
@@ -517,6 +530,156 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 	attachReputationsToProxyInfos(pageSlice)
 
 	return pageSlice, total
+}
+
+func buildProxyListFilterQuery(userId uint, filters dto.ProxyListFilters) *gorm.DB {
+	if !hasProxyListFilters(filters) {
+		return nil
+	}
+
+	query := DB.Model(&domain.Proxy{}).
+		Select("proxies.id").
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId)
+
+	if filters.Status == "alive" || filters.Status == "dead" {
+		query = query.Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id")
+		if filters.Status == "alive" {
+			query = query.Where("COALESCE(pos.overall_alive, false) = ?", true)
+		} else {
+			query = query.Where("COALESCE(pos.overall_alive, false) = ?", false)
+		}
+	}
+
+	if len(filters.Countries) > 0 {
+		query = query.Where("COALESCE(NULLIF(LOWER(proxies.country), ''), 'n/a') IN ?", filters.Countries)
+	}
+
+	if len(filters.Types) > 0 {
+		query = query.Where("COALESCE(NULLIF(LOWER(proxies.estimated_type), ''), 'n/a') IN ?", filters.Types)
+	}
+
+	needsLatestStats := len(filters.AnonymityLevels) > 0 || filters.MaxTimeout > 0 || filters.MaxRetries > 0
+	if needsLatestStats {
+		latestStats := DB.Model(&domain.ProxyStatistic{}).
+			Select("DISTINCT ON (proxy_id) proxy_id, level_id, response_time, attempt").
+			Order("proxy_id, created_at DESC, id DESC")
+		query = query.Joins("JOIN (?) AS ps ON ps.proxy_id = proxies.id", latestStats)
+
+		if len(filters.AnonymityLevels) > 0 {
+			query = query.Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
+				Where("COALESCE(LOWER(al.name), 'n/a') IN ?", filters.AnonymityLevels)
+		}
+
+		if filters.MaxTimeout > 0 {
+			query = query.Where("ps.response_time <= ?", filters.MaxTimeout)
+		}
+
+		if filters.MaxRetries > 0 {
+			query = query.Where("ps.attempt <= ?", filters.MaxRetries)
+		}
+	}
+
+	if len(filters.Protocols) > 0 {
+		protocolStats := DB.Model(&domain.ProxyStatistic{}).
+			Select("DISTINCT ON (proxy_id, protocol_id) proxy_id, protocol_id, alive").
+			Order("proxy_id, protocol_id, created_at DESC, id DESC")
+		query = query.Joins("JOIN (?) AS ps_proto ON ps_proto.proxy_id = proxies.id", protocolStats).
+			Joins("JOIN protocols proto ON proto.id = ps_proto.protocol_id").
+			Where("ps_proto.alive = ? AND LOWER(proto.name) IN ?", true, filters.Protocols)
+	}
+
+	if len(filters.ReputationLabels) > 0 {
+		query = applyListReputationFilters(query, filters.ReputationLabels, filters.Protocols)
+	}
+
+	return query
+}
+
+func hasProxyListFilters(filters dto.ProxyListFilters) bool {
+	if filters.Status == "alive" || filters.Status == "dead" {
+		return true
+	}
+	if filters.MaxTimeout > 0 || filters.MaxRetries > 0 {
+		return true
+	}
+	if len(filters.Protocols) > 0 || len(filters.Countries) > 0 || len(filters.Types) > 0 || len(filters.AnonymityLevels) > 0 || len(filters.ReputationLabels) > 0 {
+		return true
+	}
+	return false
+}
+
+func GetProxyFilterOptions(userId uint) (dto.ProxyFilterOptions, error) {
+	if DB == nil {
+		return dto.ProxyFilterOptions{}, fmt.Errorf("database connection was not initialised")
+	}
+
+	countries, err := loadDistinctProxyInfoValue(userId, "proxies.country")
+	if err != nil {
+		return dto.ProxyFilterOptions{}, err
+	}
+
+	types, err := loadDistinctProxyInfoValue(userId, "proxies.estimated_type")
+	if err != nil {
+		return dto.ProxyFilterOptions{}, err
+	}
+
+	anonymityLevels, err := loadDistinctAnonymityLevels(userId)
+	if err != nil {
+		return dto.ProxyFilterOptions{}, err
+	}
+
+	return dto.ProxyFilterOptions{
+		Countries:       countries,
+		Types:           types,
+		AnonymityLevels: anonymityLevels,
+	}, nil
+}
+
+type proxyFilterValueRow struct {
+	Value string `gorm:"column:value"`
+}
+
+func loadDistinctProxyInfoValue(userId uint, column string) ([]string, error) {
+	var rows []proxyFilterValueRow
+	if err := DB.Model(&domain.Proxy{}).
+		Select("DISTINCT COALESCE(NULLIF("+column+", ''), 'N/A') AS value").
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
+		Order("value").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	return extractProxyFilterValues(rows), nil
+}
+
+func loadDistinctAnonymityLevels(userId uint) ([]string, error) {
+	var rows []proxyFilterValueRow
+	latestStats := DB.Model(&domain.ProxyStatistic{}).
+		Select("DISTINCT ON (proxy_id) proxy_id, level_id").
+		Order("proxy_id, created_at DESC, id DESC")
+
+	if err := DB.Model(&domain.Proxy{}).
+		Select("DISTINCT COALESCE(al.name, 'N/A') AS value").
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
+		Joins("LEFT JOIN (?) AS ps ON ps.proxy_id = proxies.id", latestStats).
+		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
+		Order("value").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	return extractProxyFilterValues(rows), nil
+}
+
+func extractProxyFilterValues(rows []proxyFilterValueRow) []string {
+	values := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row.Value) == "" {
+			continue
+		}
+		values = append(values, row.Value)
+	}
+	return values
 }
 
 func proxyInfoRowsToDTO(rows []dto.ProxyInfoRow) []dto.ProxyInfo {
@@ -1395,6 +1558,56 @@ func applyExportReputationFilters(query *gorm.DB, settings dto.ExportSettings) *
 	}
 
 	return query
+}
+
+func applyListReputationFilters(query *gorm.DB, labels []string, protocols []string) *gorm.DB {
+	allowedSet, includeUnknown := normalizeReputationLabels(labels)
+	if len(allowedSet) == 0 && !includeUnknown {
+		return query
+	}
+
+	targetKinds := targetReputationKindsForProtocols(protocols)
+	if len(targetKinds) == 0 {
+		return query
+	}
+
+	keys := setToSlice(allowedSet)
+	labelExpr := "LOWER(COALESCE(NULLIF(pr.label, ''), 'unknown'))"
+
+	if includeUnknown {
+		query = query.Joins("LEFT JOIN proxy_reputations pr ON pr.proxy_id = proxies.id AND LOWER(pr.kind) IN ?", targetKinds)
+		if len(keys) > 0 {
+			query = query.Where(labelExpr+" IN ? OR pr.id IS NULL OR "+labelExpr+" = 'unknown'", keys)
+		} else {
+			query = query.Where("pr.id IS NULL OR " + labelExpr + " = 'unknown'")
+		}
+	} else {
+		query = query.Joins("JOIN proxy_reputations pr ON pr.proxy_id = proxies.id AND LOWER(pr.kind) IN ?", targetKinds)
+		if len(keys) > 0 {
+			query = query.Where(labelExpr+" IN ?", keys)
+		}
+	}
+
+	return query
+}
+
+func targetReputationKindsForProtocols(protocols []string) []string {
+	if len(protocols) == 0 {
+		return []string{domain.ProxyReputationKindOverall}
+	}
+
+	out := make([]string, 0, len(protocols))
+	for _, proto := range protocols {
+		if trimmed := strings.ToLower(strings.TrimSpace(proto)); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+
+	if len(out) == 0 {
+		return []string{domain.ProxyReputationKindOverall}
+	}
+
+	return out
 }
 
 func setToSlice(values map[string]struct{}) []string {

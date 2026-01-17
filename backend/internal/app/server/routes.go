@@ -60,6 +60,7 @@ func OpenRoutes(port int) error {
 
 	apiMux.Handle("GET /getProxyCount", auth.RequireAuth(http.HandlerFunc(getProxyCount)))
 	apiMux.Handle("GET /getProxyPage/{page}", auth.RequireAuth(http.HandlerFunc(getProxyPage)))
+	apiMux.Handle("GET /proxyFilters", auth.RequireAuth(http.HandlerFunc(getProxyFilters)))
 	apiMux.Handle("GET /proxies/{id}/statistics", auth.RequireAuth(http.HandlerFunc(getProxyStatistics)))
 	apiMux.Handle("GET /proxies/{id}/statistics/{statisticId}", auth.RequireAuth(http.HandlerFunc(getProxyStatisticResponseBody)))
 	apiMux.Handle("GET /proxies/{id}", auth.RequireAuth(http.HandlerFunc(getProxyDetail)))

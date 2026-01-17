@@ -114,7 +114,23 @@ func getProxyPage(w http.ResponseWriter, r *http.Request) {
 
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 
-	proxies, total := database.GetProxyInfoPageWithFilters(userID, page, pageSize, search)
+	status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+	if status != "alive" && status != "dead" {
+		status = ""
+	}
+
+	filters := dto.ProxyListFilters{
+		Status:           status,
+		Protocols:        normalizeQueryList(r.URL.Query()["protocol"]),
+		Countries:        normalizeQueryList(r.URL.Query()["country"]),
+		Types:            normalizeQueryList(r.URL.Query()["type"]),
+		AnonymityLevels:  normalizeQueryList(r.URL.Query()["anonymity"]),
+		MaxTimeout:       parsePositiveIntParam(r.URL.Query().Get("maxTimeout")),
+		MaxRetries:       parsePositiveIntParam(r.URL.Query().Get("maxRetries")),
+		ReputationLabels: normalizeQueryList(r.URL.Query()["reputation"]),
+	}
+
+	proxies, total := database.GetProxyInfoPageWithFilters(userID, page, pageSize, search, filters)
 
 	response := dto.ProxyPage{
 		Proxies: proxies,
@@ -122,6 +138,59 @@ func getProxyPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+func getProxyFilters(w http.ResponseWriter, r *http.Request) {
+	userID, userErr := auth.GetUserIDFromRequest(r)
+	if userErr != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	options, err := database.GetProxyFilterOptions(userID)
+	if err != nil {
+		log.Error("error retrieving proxy filters", "error", err.Error())
+		writeError(w, "Failed to retrieve proxy filters", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(options)
+}
+
+func normalizeQueryList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if _, exists := seen[lower]; exists {
+			continue
+		}
+		seen[lower] = struct{}{}
+		normalized = append(normalized, lower)
+	}
+
+	return normalized
+}
+
+func parsePositiveIntParam(value string) int {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0
+	}
+	parsed, err := strconv.Atoi(trimmed)
+	if err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
 }
 
 func getProxyCount(w http.ResponseWriter, r *http.Request) {

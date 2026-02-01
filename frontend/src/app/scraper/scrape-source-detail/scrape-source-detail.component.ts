@@ -1,6 +1,6 @@
 import {Component, OnDestroy, OnInit, signal} from '@angular/core';
 import {CommonModule, DatePipe, NgClass} from '@angular/common';
-import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
+import {FormBuilder, FormGroup} from '@angular/forms';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {ScrapeSourceDetail} from '../../models/ScrapeSourceDetail';
@@ -8,16 +8,12 @@ import {HttpService} from '../../services/http.service';
 import {NotificationService} from '../../services/notification-service.service';
 import {LoadingComponent} from '../../ui-elements/loading/loading.component';
 import {ProxyInfo} from '../../models/ProxyInfo';
-import {ProxyReputation} from '../../models/ProxyReputation';
-import {TableLazyLoadEvent, TableModule} from 'primeng/table';
+import {TableLazyLoadEvent} from 'primeng/table';
 import {ButtonModule} from 'primeng/button';
-import {SkeletonModule} from 'primeng/skeleton';
-import {InputNumberModule} from 'primeng/inputnumber';
-import {Select} from 'primeng/select';
-import {MultiSelectModule} from 'primeng/multiselect';
-import {CheckboxModule} from 'primeng/checkbox';
 import {ProxyListFilters} from '../../models/ProxyListFilters';
 import {ProxyFilterOptions} from '../../models/ProxyFilterOptions';
+import {ProxyFilterPanelComponent} from '../../shared/proxy-filter-panel/proxy-filter-panel.component';
+import {ProxyTableComponent} from '../../shared/proxy-table/proxy-table.component';
 
 type ProxyListFilterFormValues = {
   proxyStatus: 'all' | 'alive' | 'dead';
@@ -58,18 +54,12 @@ type ReputationLabel = 'good' | 'neutral' | 'poor' | 'unknown';
   imports: [
     CommonModule,
     RouterLink,
-    ReactiveFormsModule,
-    FormsModule,
     DatePipe,
     NgClass,
     LoadingComponent,
-    TableModule,
     ButtonModule,
-    SkeletonModule,
-    InputNumberModule,
-    Select,
-    MultiSelectModule,
-    CheckboxModule,
+    ProxyFilterPanelComponent,
+    ProxyTableComponent,
   ],
   templateUrl: './scrape-source-detail.component.html',
   styleUrl: './scrape-source-detail.component.scss'
@@ -410,50 +400,10 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     return 'p-button-outlined filter-toggle';
   }
 
-  onViewProxy(event: Event | { originalEvent?: Event }, proxy: ProxyInfo): void {
-    if ((event as { originalEvent?: Event }).originalEvent) {
-      (event as { originalEvent?: Event }).originalEvent?.stopPropagation?.();
-    } else {
-      (event as Event)?.stopPropagation?.();
-    }
-
+  onViewProxy(proxy: ProxyInfo): void {
     const sourceId = this.sourceId();
     const queryParams = sourceId ? { sourceId } : undefined;
     this.router.navigate(['/proxies', proxy.id], { queryParams }).catch(() => {});
-  }
-
-  hasReputation(proxy: ProxyInfo): boolean {
-    return this.getPrimaryReputation(proxy) !== null;
-  }
-
-  reputationLabel(proxy: ProxyInfo): string {
-    const label = this.getPrimaryReputation(proxy)?.label?.trim();
-    if (label && label.length > 0) {
-      return label;
-    }
-    return 'Unknown';
-  }
-
-  reputationScore(proxy: ProxyInfo): string {
-    const score = this.getPrimaryReputation(proxy)?.score;
-    if (score === null || score === undefined) {
-      return 'N/A';
-    }
-    return Math.round(score).toString();
-  }
-
-  reputationBadgeClassForProxy(proxy: ProxyInfo): string {
-    const label = this.getPrimaryReputation(proxy)?.label?.toLowerCase() ?? '';
-    if (label === 'good') {
-      return 'reputation-badge reputation-badge--good';
-    }
-    if (label === 'neutral') {
-      return 'reputation-badge reputation-badge--neutral';
-    }
-    if (label === 'poor') {
-      return 'reputation-badge reputation-badge--poor';
-    }
-    return 'reputation-badge reputation-badge--unknown';
   }
 
   private loadScrapeSourceDetail(id: number): void {
@@ -683,24 +633,4 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     return Math.max(0, Math.floor(parsed));
   }
 
-  private getPrimaryReputation(proxy: ProxyInfo): ProxyReputation | null {
-    const reputation = proxy.reputation;
-    if (!reputation) {
-      return null;
-    }
-
-    if (reputation.overall) {
-      return reputation.overall;
-    }
-
-    if (reputation.protocols) {
-      for (const rep of Object.values(reputation.protocols)) {
-        if (rep) {
-          return rep;
-        }
-      }
-    }
-
-    return null;
-  }
 }

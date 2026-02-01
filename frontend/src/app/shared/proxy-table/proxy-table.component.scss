@@ -1,0 +1,108 @@
+:host {
+  display: block;
+  --proxy-accent: #1cbb57;
+  --proxy-accent-rgb: 28, 187, 87;
+  --proxy-dead: #ff4444;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: transform 0.2s ease;
+
+  &.alive {
+    background-color: var(--proxy-accent);
+    animation: proxy-pulse 1.5s infinite;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background-color: rgba(var(--proxy-accent-rgb), 0.2);
+      animation: proxy-pulse 1.5s infinite;
+    }
+  }
+
+  &.dead {
+    background-color: var(--proxy-dead);
+    opacity: 0.85;
+  }
+}
+
+@keyframes proxy-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(var(--proxy-accent-rgb), 0.4);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px rgba(var(--proxy-accent-rgb), 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(var(--proxy-accent-rgb), 0);
+  }
+}
+
+.reputation-cell {
+  min-width: 140px;
+  white-space: nowrap;
+}
+
+.proxy-skeleton-row td {
+  padding: 0.75rem 1rem;
+}
+
+.skeleton-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reputation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.16);
+  color: rgba(226, 232, 240, 0.85);
+
+  &--good {
+    background: rgba(34, 197, 94, 0.16);
+    border-color: rgba(34, 197, 94, 0.45);
+    color: #bbf7d0;
+  }
+
+  &--neutral {
+    background: rgba(250, 204, 21, 0.16);
+    border-color: rgba(250, 204, 21, 0.4);
+    color: #fef08a;
+  }
+
+  &--poor {
+    background: rgba(248, 113, 113, 0.16);
+    border-color: rgba(248, 113, 113, 0.45);
+    color: #fecaca;
+  }
+
+  &--unknown {
+    background: rgba(148, 163, 184, 0.16);
+    border-color: rgba(148, 163, 184, 0.35);
+    color: rgba(226, 232, 240, 0.85);
+  }
+
+  &__score {
+    font-weight: 500;
+    font-size: 0.8rem;
+  }
+}

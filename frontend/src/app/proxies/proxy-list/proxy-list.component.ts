@@ -2,26 +2,22 @@ import {AfterViewInit, Component, EventEmitter, OnDestroy, OnInit, Output, signa
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {HttpService} from '../../services/http.service';
 import {ProxyInfo} from '../../models/ProxyInfo';
-import {DatePipe, NgClass} from '@angular/common';
 import {SelectionModel} from '@angular/cdk/collections';
 import {TableLazyLoadEvent} from 'primeng/table'; // Keep this for onLazyLoad
 import {ButtonModule} from 'primeng/button';
-import {TableModule} from 'primeng/table';
-import {CheckboxModule} from 'primeng/checkbox';
-import {SkeletonModule} from 'primeng/skeleton';
 import {NotificationService} from '../../services/notification-service.service';
 import {Subscription} from 'rxjs';
 import {ExportProxiesComponent} from './export-proxies/export-proxies.component';
 import {AddProxiesComponent} from './add-proxies/add-proxies.component';
 import {Router} from '@angular/router';
 import {DeleteProxiesComponent} from './delete-proxies/delete-proxies.component';
-import {ProxyReputation} from '../../models/ProxyReputation';
-import {Tooltip} from 'primeng/tooltip';
 import {InputNumberModule} from 'primeng/inputnumber';
-import {Select} from 'primeng/select';
 import {MultiSelectModule} from 'primeng/multiselect';
 import {ProxyListFilters} from '../../models/ProxyListFilters';
 import {ProxyFilterOptions} from '../../models/ProxyFilterOptions';
+import {ProxyReputation} from '../../models/ProxyReputation';
+import {ProxyFilterPanelComponent} from '../../shared/proxy-filter-panel/proxy-filter-panel.component';
+import {ProxyTableComponent} from '../../shared/proxy-table/proxy-table.component';
 
 type ProxyListFilterFormValues = {
   proxyStatus: 'all' | 'alive' | 'dead';
@@ -59,19 +55,14 @@ type FilterOption = {
   imports: [
     ReactiveFormsModule,
     FormsModule,
-    DatePipe,
     ButtonModule,
-    TableModule,
-    CheckboxModule,
-    SkeletonModule,
     InputNumberModule,
-    Select,
     MultiSelectModule,
     AddProxiesComponent,
     ExportProxiesComponent,
     DeleteProxiesComponent,
-    NgClass,
-    Tooltip,
+    ProxyFilterPanelComponent,
+    ProxyTableComponent,
   ],
   templateUrl: './proxy-list.component.html',
   styleUrls: ['./proxy-list.component.scss']
@@ -86,7 +77,6 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   pageSize = signal(40);
   readonly rowsPerPageOptions = [20, 40, 60, 100];
   readonly skeletonRows = Array.from({ length: 8 });
-  displayedColumns: string[] = ['select', 'alive', 'ip', 'port', 'response_time', 'estimated_type', 'country', 'reputation', 'latest_check', 'actions'];
   totalItems = signal(0);
   hasLoaded = signal(false);
   isLoading = signal(false);
@@ -630,6 +620,27 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     return null;
   }
 
+  private getPrimaryReputation(proxy: ProxyInfo): ProxyReputation | null {
+    const reputation = proxy.reputation;
+    if (!reputation) {
+      return null;
+    }
+
+    if (reputation.overall) {
+      return reputation.overall;
+    }
+
+    if (reputation.protocols) {
+      for (const rep of Object.values(reputation.protocols)) {
+        if (rep) {
+          return rep;
+        }
+      }
+    }
+
+    return null;
+  }
+
   onProxiesAdded(): void {
     this.selection.clear();
     this.selectedProxies.set([]);
@@ -660,12 +671,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedProxies.set([...retained]);
   }
 
-  onViewProxy(event: Event | { originalEvent?: Event }, proxy: ProxyInfo): void {
-    if ((event as { originalEvent?: Event }).originalEvent) {
-      (event as { originalEvent?: Event }).originalEvent?.stopPropagation?.();
-    } else {
-      (event as Event)?.stopPropagation?.();
-    }
+  onViewProxy(proxy: ProxyInfo): void {
     this.markRestoreState();
     this.persistPage(this.page());
     this.persistScrollPosition();
@@ -676,61 +682,6 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selection.clear();
     selected.forEach(proxy => this.selection.select(proxy));
     this.selectedProxies.set([...selected]);
-  }
-
-  hasReputation(proxy: ProxyInfo): boolean {
-    return this.getPrimaryReputation(proxy) !== null;
-  }
-
-  reputationBadgeClass(proxy: ProxyInfo): string {
-    const label = this.getPrimaryReputation(proxy)?.label?.toLowerCase() ?? '';
-    if (label === 'good') {
-      return 'reputation-badge reputation-badge--good';
-    }
-    if (label === 'neutral') {
-      return 'reputation-badge reputation-badge--neutral';
-    }
-    if (label === 'poor') {
-      return 'reputation-badge reputation-badge--poor';
-    }
-    return 'reputation-badge reputation-badge--unknown';
-  }
-
-  reputationLabel(proxy: ProxyInfo): string {
-    const label = this.getPrimaryReputation(proxy)?.label?.trim();
-    if (label && label.length > 0) {
-      return label;
-    }
-    return 'Unknown';
-  }
-
-  reputationScore(proxy: ProxyInfo): string {
-    const score = this.getPrimaryReputation(proxy)?.score;
-    if (score === null || score === undefined) {
-      return '—';
-    }
-    return Math.round(score).toString();
-  }
-
-  private getPrimaryReputation(proxy: ProxyInfo): ProxyReputation | null {
-    const reputation = proxy.reputation;
-    if (!reputation) {
-      return null;
-    }
-
-    if (reputation.overall) {
-      return reputation.overall;
-    }
-
-    if (reputation.protocols) {
-      for (const rep of Object.values(reputation.protocols)) {
-        if (rep) {
-          return rep;
-        }
-      }
-    }
-
-    return null;
   }
 
   private getStoredPageSize(): number | null {

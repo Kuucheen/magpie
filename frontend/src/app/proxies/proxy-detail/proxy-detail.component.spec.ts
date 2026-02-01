@@ -39,6 +39,9 @@ describe('ProxyDetailComponent', () => {
           provide: ActivatedRoute,
           useValue: {
             paramMap: of(convertToParamMap({id: '1'})),
+            snapshot: {
+              queryParamMap: convertToParamMap({}),
+            },
           }
         }
       ]

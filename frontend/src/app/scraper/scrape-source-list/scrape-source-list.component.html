@@ -71,6 +71,9 @@
             Robots Check
           </th>
         }
+        <th style="width: 7rem" class="text-center">
+          Details
+        </th>
       </tr>
     </ng-template>
     <ng-template pTemplate="loadingbody">
@@ -94,6 +97,9 @@
                 <p-skeleton width="7.5rem" height="1.5rem" class="inline-block"></p-skeleton>
               </td>
             }
+            <td class="text-center">
+              <p-skeleton width="4.5rem" height="1.5rem" class="inline-block"></p-skeleton>
+            </td>
           </tr>
         }
       }
@@ -137,11 +143,19 @@
             ></p-button>
           </td>
         }
+        <td class="text-center" (click)="$event.stopPropagation()">
+          <p-button
+            label="Details"
+            icon="pi pi-external-link"
+            styleClass="p-button-text p-button-sm"
+            (onClick)="onViewSource($event, source)"
+          ></p-button>
+        </td>
       </tr>
     </ng-template>
     <ng-template pTemplate="emptyMessage">
       <tr>
-        <td [attr.colspan]="respectRobotsEnabled ? 5 : 4">No scrape sources found.</td>
+        <td [attr.colspan]="respectRobotsEnabled ? 6 : 5">No scrape sources found.</td>
       </tr>
     </ng-template>
   </p-table>

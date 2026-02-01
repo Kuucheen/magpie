@@ -81,6 +81,8 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
 
   chartData = signal<any>({ labels: [], datasets: [] });
   chartOptions = signal<any>(this.buildDefaultChartOptions());
+  returnLink = signal<string>('/proxies');
+  returnLabel = signal<string>('Back to proxies');
 
   private readonly structuredMaxDepth = 3;
   private readonly signalNumberPrecision = 10;
@@ -97,12 +99,13 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.setReturnTarget();
     const sub = this.route.paramMap.subscribe(params => {
       const rawId = params.get('id');
       const id = rawId ? Number(rawId) : NaN;
       if (!Number.isFinite(id) || id <= 0) {
         NotificationService.showError('Invalid proxy identifier');
-        this.router.navigate(['/proxies']).catch(() => {});
+        this.navigateBack();
         return;
       }
 
@@ -117,6 +120,15 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.responseBodySubscription?.unsubscribe();
     this.subscriptions.unsubscribe();
+  }
+
+  private setReturnTarget(): void {
+    const rawSourceId = this.route.snapshot.queryParamMap.get('sourceId');
+    const sourceId = rawSourceId ? Number(rawSourceId) : NaN;
+    if (Number.isFinite(sourceId) && sourceId > 0) {
+      this.returnLink.set(`/scraper/${sourceId}`);
+      this.returnLabel.set('Back to scrape source');
+    }
   }
 
   get fullAddress(): string {
@@ -588,11 +600,15 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
         this.isLoadingDetail.set(false);
         const message = err?.error?.error ?? err?.message ?? 'Failed to load proxy';
         NotificationService.showError(message);
-        this.router.navigate(['/proxies']).catch(() => {});
+        this.navigateBack();
       }
     });
 
     this.subscriptions.add(sub);
+  }
+
+  private navigateBack(): void {
+    this.router.navigateByUrl(this.returnLink()).catch(() => {});
   }
 
   private formatSignalValue(

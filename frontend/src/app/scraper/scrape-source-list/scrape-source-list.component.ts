@@ -2,6 +2,7 @@ import {Component, EventEmitter, OnInit, Output} from '@angular/core';
 import {DatePipe} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {SelectionModel} from '@angular/cdk/collections';
+import {Router} from '@angular/router';
 import {HttpService} from '../../services/http.service';
 import {ScrapeSourceInfo} from '../../models/ScrapeSourceInfo';
 import {AddScrapeSourceComponent} from '../add-scrape-source/add-scrape-source.component';
@@ -49,7 +50,8 @@ export class ScrapeSourceListComponent implements OnInit {
 
   constructor(
     private http: HttpService,
-    private confirmationService: ConfirmationService
+    private confirmationService: ConfirmationService,
+    private router: Router
   ) { }
 
   ngOnInit(): void {
@@ -188,6 +190,15 @@ export class ScrapeSourceListComponent implements OnInit {
 
   onShowAddScrapeSourcesMessage(value: boolean): void {
     this.showAddScrapeSourceMessage.emit(value);
+  }
+
+  onViewSource(event: Event | { originalEvent?: Event }, source: ScrapeSourceInfo): void {
+    if ((event as { originalEvent?: Event }).originalEvent) {
+      (event as { originalEvent?: Event }).originalEvent?.stopPropagation?.();
+    } else {
+      (event as Event)?.stopPropagation?.();
+    }
+    this.router.navigate(['/scraper', source.id]).catch(() => {});
   }
 
   checkRobots(source: ScrapeSourceInfo, event?: Event): void {

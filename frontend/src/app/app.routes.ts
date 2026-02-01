@@ -17,6 +17,7 @@ import {AdminScraperComponent} from './admin/admin-scraper/admin-scraper.compone
 import {AdminOtherComponent} from './admin/admin-other/admin-other.component';
 import {AdminBlacklistComponent} from './admin/admin-blacklist/admin-blacklist.component';
 import {ScraperComponent} from './scraper/scraper.component';
+import {ScrapeSourceDetailComponent} from './scraper/scrape-source-detail/scrape-source-detail.component';
 import {NotificationsComponent} from './notifications/notifications.component';
 
 export const routes: Routes = [
@@ -25,6 +26,7 @@ export const routes: Routes = [
   {path: "rotating", component: RotatingProxiesComponent, canActivate: [AuthGuardService]},
   {path: "proxies", component: ProxiesComponent, canActivate: [AuthGuardService]},
   {path: "proxies/:id", component: ProxyDetailComponent, canActivate: [AuthGuardService]},
+  {path: "scraper/:id", component: ScrapeSourceDetailComponent, canActivate: [AuthGuardService]},
   {path: "scraper", component: ScraperComponent, canActivate: [AuthGuardService]},
   {path: "checker", redirectTo: "checker/settings", pathMatch: "full"},
   {path: "checker/settings", component: CheckerSettingsComponent, canActivate: [AuthGuardService]},

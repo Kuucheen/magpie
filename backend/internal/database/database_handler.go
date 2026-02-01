@@ -92,12 +92,14 @@ func SetupDB(opts ...Option) (*gorm.DB, error) {
 		}
 	}
 
-	if err := ensureProxyReputationSchema(DB); err != nil {
-		log.Error("Failed to ensure proxy reputation schema", "error", err)
-	}
+	if cfg.AutoMigrate {
+		if err := ensureProxyReputationSchema(DB); err != nil {
+			log.Error("Failed to ensure proxy reputation schema", "error", err)
+		}
 
-	if err := ensureBlacklistSchema(DB); err != nil {
-		log.Error("Failed to ensure blacklist schema", "error", err)
+		if err := ensureBlacklistSchema(DB); err != nil {
+			log.Error("Failed to ensure blacklist schema", "error", err)
+		}
 	}
 
 	return DB, nil
@@ -111,7 +113,7 @@ func defaultConfig() Config {
 	return Config{
 		Dialector:    postgres.Open(dsn),
 		Logger:       silentLogger(),
-		AutoMigrate:  true,
+		AutoMigrate:  support.GetEnvBool("DB_AUTO_MIGRATE", true),
 		Migrations:   defaultMigrations(),
 		SeedDefaults: true,
 	}

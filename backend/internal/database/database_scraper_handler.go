@@ -2,8 +2,10 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/log"
 	"magpie/internal/api/dto"
@@ -210,6 +212,223 @@ func GetScrapeSiteInfoPage(userId uint, page int) []dto.ScrapeSiteInfo {
 		Scan(&results)
 
 	return results
+}
+
+type scrapeSiteAggregateRow struct {
+	ProxyCount       uint            `gorm:"column:proxy_count"`
+	AliveCount       uint            `gorm:"column:alive_count"`
+	DeadCount        uint            `gorm:"column:dead_count"`
+	UnknownCount     uint            `gorm:"column:unknown_count"`
+	AvgReputation    sql.NullFloat64 `gorm:"column:avg_reputation"`
+	LastProxyAddedAt sql.NullTime    `gorm:"column:last_proxy_added_at"`
+	LastCheckedAt    sql.NullTime    `gorm:"column:last_checked_at"`
+}
+
+func GetScrapeSiteDetail(userId uint, scrapeSiteId uint64) (*dto.ScrapeSiteDetail, error) {
+	if scrapeSiteId == 0 {
+		return nil, nil
+	}
+
+	type scrapeSiteBaseRow struct {
+		Id      uint64    `gorm:"column:id"`
+		Url     string    `gorm:"column:url"`
+		AddedAt time.Time `gorm:"column:added_at"`
+	}
+
+	var base scrapeSiteBaseRow
+	baseResult := DB.Model(&domain.ScrapeSite{}).
+		Select(
+			"scrape_sites.id AS id, "+
+				"scrape_sites.url AS url, "+
+				"uss.created_at AS added_at",
+		).
+		Joins("JOIN user_scrape_site uss ON uss.scrape_site_id = scrape_sites.id AND uss.user_id = ?", userId).
+		Where("scrape_sites.id = ?", scrapeSiteId).
+		Limit(1).
+		Scan(&base)
+	if baseResult.Error != nil {
+		return nil, baseResult.Error
+	}
+	if baseResult.RowsAffected == 0 {
+		return nil, nil
+	}
+
+	var stats scrapeSiteAggregateRow
+	statsResult := DB.Table("proxy_scrape_site pss").
+		Select(
+			"COUNT(DISTINCT pss.proxy_id) AS proxy_count, "+
+				"COALESCE(SUM(CASE WHEN pos.overall_alive IS TRUE THEN 1 ELSE 0 END), 0) AS alive_count, "+
+				"COALESCE(SUM(CASE WHEN pos.overall_alive IS FALSE THEN 1 ELSE 0 END), 0) AS dead_count, "+
+				"COALESCE(SUM(CASE WHEN pos.proxy_id IS NULL THEN 1 ELSE 0 END), 0) AS unknown_count, "+
+				"AVG(pr.score) AS avg_reputation, "+
+				"MAX(pss.created_at) AS last_proxy_added_at, "+
+				"MAX(pos.last_checked_at) AS last_checked_at",
+		).
+		Joins("JOIN user_proxies up ON up.proxy_id = pss.proxy_id AND up.user_id = ?", userId).
+		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = pss.proxy_id").
+		Joins("LEFT JOIN proxy_reputations pr ON pr.proxy_id = pss.proxy_id AND pr.kind = ?", domain.ProxyReputationKindOverall).
+		Where("pss.scrape_site_id = ?", scrapeSiteId).
+		Scan(&stats)
+	if statsResult.Error != nil {
+		return nil, statsResult.Error
+	}
+
+	type reputationCount struct {
+		Label string `gorm:"column:label"`
+		Count uint   `gorm:"column:count"`
+	}
+
+	var repCounts []reputationCount
+	repResult := DB.Table("proxy_scrape_site pss").
+		Select("LOWER(COALESCE(NULLIF(pr.label, ''), 'unknown')) AS label, COUNT(*) AS count").
+		Joins("JOIN user_proxies up ON up.proxy_id = pss.proxy_id AND up.user_id = ?", userId).
+		Joins("LEFT JOIN proxy_reputations pr ON pr.proxy_id = pss.proxy_id AND pr.kind = ?", domain.ProxyReputationKindOverall).
+		Where("pss.scrape_site_id = ?", scrapeSiteId).
+		Group("label").
+		Scan(&repCounts)
+	if repResult.Error != nil {
+		return nil, repResult.Error
+	}
+
+	breakdown := dto.ScrapeSiteReputationBreakdown{}
+	for _, row := range repCounts {
+		switch row.Label {
+		case "good":
+			breakdown.Good = row.Count
+		case "neutral":
+			breakdown.Neutral = row.Count
+		case "poor":
+			breakdown.Poor = row.Count
+		default:
+			breakdown.Unknown += row.Count
+		}
+	}
+
+	var avgReputation *float32
+	if stats.AvgReputation.Valid {
+		value := float32(stats.AvgReputation.Float64)
+		avgReputation = &value
+	}
+
+	var lastProxyAddedAt *time.Time
+	if stats.LastProxyAddedAt.Valid {
+		value := stats.LastProxyAddedAt.Time
+		lastProxyAddedAt = &value
+	}
+
+	var lastCheckedAt *time.Time
+	if stats.LastCheckedAt.Valid {
+		value := stats.LastCheckedAt.Time
+		lastCheckedAt = &value
+	}
+
+	detail := &dto.ScrapeSiteDetail{
+		Id:                  base.Id,
+		Url:                 base.Url,
+		AddedAt:             base.AddedAt,
+		ProxyCount:          stats.ProxyCount,
+		AliveCount:          stats.AliveCount,
+		DeadCount:           stats.DeadCount,
+		UnknownCount:        stats.UnknownCount,
+		AvgReputation:       avgReputation,
+		LastProxyAddedAt:    lastProxyAddedAt,
+		LastCheckedAt:       lastCheckedAt,
+		ReputationBreakdown: breakdown,
+	}
+
+	return detail, nil
+}
+
+func GetScrapeSiteProxyPage(userId uint, scrapeSiteId uint64, page int, pageSize int, search string, filters dto.ProxyListFilters) ([]dto.ProxyInfo, int64, error) {
+	if scrapeSiteId == 0 {
+		return []dto.ProxyInfo{}, 0, nil
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > maxProxiesPerPage {
+		pageSize = proxiesPerPage
+	}
+
+	subQuery := DB.Model(&domain.ProxyStatistic{}).
+		Select("DISTINCT ON (proxy_id) *").
+		Order("proxy_id, created_at DESC, id DESC")
+
+	query := DB.Model(&domain.Proxy{}).
+		Select(
+			"proxies.id AS id, "+
+				"proxies.ip AS ip_encrypted, "+
+				"proxies.port AS port, "+
+				"COALESCE(NULLIF(proxies.estimated_type, ''), 'N/A') AS estimated_type, "+
+				"COALESCE(ps.response_time, 0) AS response_time, "+
+				"COALESCE(NULLIF(proxies.country, ''), 'N/A') AS country, "+
+				"COALESCE(al.name, 'N/A') AS anonymity_level, "+
+				"COALESCE(pos.overall_alive, false) AS alive, "+
+				"COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS latest_check",
+		).
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
+		Joins("JOIN proxy_scrape_site pss ON pss.proxy_id = proxies.id AND pss.scrape_site_id = ?", scrapeSiteId).
+		Joins("JOIN user_scrape_site uss ON uss.scrape_site_id = pss.scrape_site_id AND uss.user_id = ?", userId).
+		Joins("LEFT JOIN (?) AS ps ON ps.proxy_id = proxies.id", subQuery).
+		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
+		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
+		Order("alive DESC, latest_check DESC")
+
+	filterQuery := buildProxyListFilterQuery(userId, filters)
+	if filterQuery != nil {
+		query = query.Where("proxies.id IN (?)", filterQuery)
+	}
+
+	rows := make([]dto.ProxyInfoRow, 0)
+	normalizedSearch := strings.TrimSpace(search)
+
+	if normalizedSearch == "" {
+		offset := (page - 1) * pageSize
+		query = query.Offset(offset).Limit(pageSize)
+		if err := query.Scan(&rows).Error; err != nil {
+			return []dto.ProxyInfo{}, 0, err
+		}
+
+		proxies := proxyInfoRowsToDTO(rows)
+		attachReputationsToProxyInfos(proxies)
+
+		var total int64
+		countQuery := DB.Model(&domain.Proxy{}).
+			Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
+			Joins("JOIN proxy_scrape_site pss ON pss.proxy_id = proxies.id AND pss.scrape_site_id = ?", scrapeSiteId).
+			Joins("JOIN user_scrape_site uss ON uss.scrape_site_id = pss.scrape_site_id AND uss.user_id = ?", userId)
+		if filterQuery != nil {
+			countQuery = countQuery.Where("proxies.id IN (?)", filterQuery)
+		}
+		if err := countQuery.Distinct("proxies.id").Count(&total).Error; err != nil {
+			return proxies, 0, err
+		}
+
+		return proxies, total, nil
+	}
+
+	if err := query.Scan(&rows).Error; err != nil {
+		return []dto.ProxyInfo{}, 0, err
+	}
+
+	proxies := proxyInfoRowsToDTO(rows)
+	attachReputationsToProxyInfos(proxies)
+	filtered := filterProxiesBySearch(proxies, normalizedSearch)
+	total := int64(len(filtered))
+	start := (page - 1) * pageSize
+	if start >= len(filtered) {
+		return []dto.ProxyInfo{}, total, nil
+	}
+
+	end := start + pageSize
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+
+	pageSlice := filtered[start:end]
+	attachReputationsToProxyInfos(pageSlice)
+
+	return pageSlice, total, nil
 }
 
 func DeleteScrapeSiteRelation(userId uint, scrapeSite []int) (int64, []domain.ScrapeSite, error) {

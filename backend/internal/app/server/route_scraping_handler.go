@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	"magpie/internal/api/dto"
 	"magpie/internal/auth"
 	"magpie/internal/config"
 	"magpie/internal/database"
@@ -45,6 +46,96 @@ func getScrapeSourcePage(w http.ResponseWriter, r *http.Request) {
 	scrapeSiteInfoPages := database.GetScrapeSiteInfoPage(userID, page)
 
 	json.NewEncoder(w).Encode(scrapeSiteInfoPages)
+}
+
+func getScrapeSourceProxies(w http.ResponseWriter, r *http.Request) {
+	userID, userErr := auth.GetUserIDFromRequest(r)
+	if userErr != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	sourceID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		log.Error("error converting scrape source id", "error", err.Error())
+		writeError(w, "Invalid scrape source id", http.StatusBadRequest)
+		return
+	}
+
+	page := 1
+	if rawPage := strings.TrimSpace(r.URL.Query().Get("page")); rawPage != "" {
+		if parsed, parseErr := strconv.Atoi(rawPage); parseErr == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	pageSize := 0
+	if rawPageSize := strings.TrimSpace(r.URL.Query().Get("pageSize")); rawPageSize != "" {
+		if parsed, parseErr := strconv.Atoi(rawPageSize); parseErr == nil && parsed > 0 {
+			pageSize = parsed
+		}
+	}
+
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+
+	status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+	if status != "alive" && status != "dead" {
+		status = ""
+	}
+
+	filters := dto.ProxyListFilters{
+		Status:           status,
+		Protocols:        normalizeQueryList(r.URL.Query()["protocol"]),
+		Countries:        normalizeQueryList(r.URL.Query()["country"]),
+		Types:            normalizeQueryList(r.URL.Query()["type"]),
+		AnonymityLevels:  normalizeQueryList(r.URL.Query()["anonymity"]),
+		MaxTimeout:       parsePositiveIntParam(r.URL.Query().Get("maxTimeout")),
+		MaxRetries:       parsePositiveIntParam(r.URL.Query().Get("maxRetries")),
+		ReputationLabels: normalizeQueryList(r.URL.Query()["reputation"]),
+	}
+
+	proxies, total, dbErr := database.GetScrapeSiteProxyPage(userID, sourceID, page, pageSize, search, filters)
+	if dbErr != nil {
+		log.Error("error retrieving scrape source proxies", "error", dbErr.Error(), "scrape_source_id", sourceID)
+		writeError(w, "Failed to retrieve scrape source proxies", http.StatusInternalServerError)
+		return
+	}
+
+	response := dto.ProxyPage{
+		Proxies: proxies,
+		Total:   total,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func getScrapeSourceDetail(w http.ResponseWriter, r *http.Request) {
+	userID, userErr := auth.GetUserIDFromRequest(r)
+	if userErr != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	sourceID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		log.Error("error converting scrape source id", "error", err.Error())
+		writeError(w, "Invalid scrape source id", http.StatusBadRequest)
+		return
+	}
+
+	detail, dbErr := database.GetScrapeSiteDetail(userID, sourceID)
+	if dbErr != nil {
+		log.Error("error retrieving scrape source detail", "error", dbErr.Error(), "scrape_source_id", sourceID)
+		writeError(w, "Failed to retrieve scrape source", http.StatusInternalServerError)
+		return
+	}
+
+	if detail == nil {
+		writeError(w, "Scrape source not found", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(detail)
 }
 
 func deleteScrapingSources(w http.ResponseWriter, r *http.Request) {

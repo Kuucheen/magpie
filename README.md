@@ -6,6 +6,9 @@
 <div align="center">
   <img src="https://img.shields.io/github/license/Kuucheen/magpie.svg" alt="license">
   <img src="https://img.shields.io/github/issues/Kuucheen/magpie.svg" alt="issues">
+  <a href="https://magpie.tools">
+      <img src="https://img.shields.io/badge/Website-magpie.tools-0f766e?style=flat-square&logoColor=white" alt="website">
+  </a>
   <a href="https://discord.gg/7FWAGXzhkC">
       <img src="https://img.shields.io/badge/Discord-%235865F2.svg?&logo=discord&logoColor=white" alt="discord">
   </a>
@@ -131,6 +134,7 @@ Magpie targets Go 1.24.x, Angular 20, PostgreSQL, and Redis. Keep those versions
 - [AbuseIPDB](https://www.abuseipdb.com/) — logo used with permission when linking to their site.
 
 ## Community
+- Website: https://magpie.tools
 - Discord: https://discord.gg/7FWAGXzhkC
 - Issues & feature requests: open them on GitHub.
 

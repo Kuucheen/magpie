@@ -5,8 +5,6 @@ import {
   Activity, 
   Award, 
   RefreshCw,
-  Users,
-  Server,
   Zap,
   Lock
 } from 'lucide-react';
@@ -68,7 +66,7 @@ function FeatureCard({ icon, title, description, image, index }: FeatureCardProp
   return (
     <div 
       ref={cardRef}
-      className="perspective-1000"
+      className="perspective-1000 h-full"
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => {
@@ -77,7 +75,7 @@ function FeatureCard({ icon, title, description, image, index }: FeatureCardProp
       }}
     >
       <Card 
-        className={`relative overflow-hidden bg-[#1a1a1a] border-[#2a2a2a] hover:border-[#3fa37a]/50 transition-all duration-500 preserve-3d card-shine group ${
+        className={`relative h-full overflow-hidden bg-[#1a1a1a] border-[#2a2a2a] hover:border-[#3fa37a]/50 transition-all duration-500 preserve-3d card-shine group py-0 gap-0 ${
           isHovered ? 'shadow-xl shadow-[#3fa37a]/10' : ''
         }`}
         style={{

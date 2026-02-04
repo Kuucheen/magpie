@@ -1,5 +1,5 @@
 import {Component, EventEmitter, Output, computed, signal} from '@angular/core';
-import {CommonModule} from '@angular/common';
+
 import {FormsModule} from "@angular/forms";
 import {ProcesingPopupComponent} from './procesing-popup/procesing-popup.component';
 import {Button} from 'primeng/button';
@@ -12,13 +12,12 @@ import {AddProxiesDetails} from '../../../models/AddProxiesResponse';
 @Component({
     selector: 'app-add-proxies',
   imports: [
-    CommonModule,
     FormsModule,
     TooltipComponent,
     ProcesingPopupComponent,
     Button,
-    DialogModule,
-  ],
+    DialogModule
+],
     templateUrl: './add-proxies.component.html',
     styleUrl: './add-proxies.component.scss'
 })

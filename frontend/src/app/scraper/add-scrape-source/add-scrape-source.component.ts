@@ -1,5 +1,5 @@
 import {Component, EventEmitter, Output, computed, signal} from '@angular/core';
-import {CommonModule} from '@angular/common';
+
 import {FormsModule, ReactiveFormsModule} from "@angular/forms";
 import {HttpService} from '../../services/http.service';
 
@@ -15,7 +15,6 @@ import {
 @Component({
   selector: 'app-add-scrape-source',
   imports: [
-    CommonModule,
     ProcesingPopupComponent,
     ReactiveFormsModule,
     FormsModule,
@@ -23,7 +22,7 @@ import {
     TextareaModule,
     TooltipModule,
     DialogModule
-  ],
+],
   templateUrl: './add-scrape-source.component.html',
   styleUrl: './add-scrape-source.component.scss'
 })

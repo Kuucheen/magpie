@@ -1,5 +1,5 @@
 import {Component, OnDestroy, OnInit, computed, signal} from '@angular/core';
-import {CommonModule, DatePipe, NgClass} from '@angular/common';
+import { CommonModule, DatePipe, NgClass } from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {UIChart} from 'primeng/chart';
 import {TableModule} from 'primeng/table';

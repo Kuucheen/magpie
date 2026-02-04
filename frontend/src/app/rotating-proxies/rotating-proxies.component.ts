@@ -1,5 +1,5 @@
 import {Component, OnDestroy, OnInit, signal} from '@angular/core';
-import {CommonModule, DatePipe} from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import {FormBuilder, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {forkJoin, Subject} from 'rxjs';
 import {takeUntil} from 'rxjs/operators';

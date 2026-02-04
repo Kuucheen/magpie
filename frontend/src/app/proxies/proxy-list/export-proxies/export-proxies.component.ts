@@ -1,4 +1,4 @@
-import {CommonModule} from '@angular/common';
+
 import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators} from '@angular/forms';
 import {Button} from 'primeng/button';
@@ -33,7 +33,6 @@ type ExportFormDefaults = {
   selector: 'app-export-proxies',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     ReactiveFormsModule,
     Button,
@@ -44,8 +43,8 @@ type ExportFormDefaults = {
     DialogModule,
     Select,
     MultiSelectModule,
-    TooltipComponent,
-  ],
+    TooltipComponent
+],
   templateUrl: './export-proxies.component.html',
   styleUrls: ['./export-proxies.component.scss'],
 })

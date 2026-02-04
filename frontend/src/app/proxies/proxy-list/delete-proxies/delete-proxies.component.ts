@@ -1,4 +1,4 @@
-import {CommonModule} from '@angular/common';
+
 import {Component, EventEmitter, Input, OnChanges, Output, SimpleChanges} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {Button} from 'primeng/button';
@@ -31,7 +31,6 @@ type DeleteFormDefaults = {
   selector: 'app-delete-proxies',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     ReactiveFormsModule,
     Button,
@@ -41,8 +40,8 @@ type DeleteFormDefaults = {
     DialogModule,
     Select,
     MultiSelectModule,
-    TooltipComponent,
-  ],
+    TooltipComponent
+],
   templateUrl: './delete-proxies.component.html',
   styleUrls: ['./delete-proxies.component.scss'],
 })

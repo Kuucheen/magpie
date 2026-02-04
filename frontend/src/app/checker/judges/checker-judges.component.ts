@@ -1,5 +1,5 @@
 import {Component, OnDestroy, OnInit} from '@angular/core';
-import {CommonModule} from '@angular/common';
+
 import {FormArray, FormBuilder, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {TooltipComponent} from '../../tooltip/tooltip.component';
 import {InputText} from 'primeng/inputtext';
@@ -13,7 +13,7 @@ import {filter, takeUntil} from 'rxjs/operators';
 @Component({
   selector: 'app-checker-judges',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, TooltipComponent, InputText, Button],
+  imports: [ReactiveFormsModule, TooltipComponent, InputText, Button],
   templateUrl: './checker-judges.component.html',
   styleUrls: ['./checker-judges.component.scss']
 })

@@ -77,6 +77,10 @@ export class UserService {
     UserService.setAuthState(loggedIn ? 'authenticated' : 'unauthenticated');
   }
 
+  public static setChecking() {
+    UserService.setAuthState('checking');
+  }
+
   public static setRole(role: string) {
     UserService.role = role;
     UserService.roleSubject.next(role);

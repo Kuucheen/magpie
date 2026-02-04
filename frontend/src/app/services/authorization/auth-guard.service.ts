@@ -11,6 +11,7 @@ export class AuthGuardService implements CanActivate, CanActivateChild {
 
   canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean | UrlTree | Promise<boolean | UrlTree> {
     const returnUrl = state.url || '';
+    const hasToken = typeof window !== 'undefined' && !!window.localStorage.getItem('magpie-jwt');
 
     if (UserService.authState() === 'checking') {
       this.storeReturnUrl(returnUrl);
@@ -18,6 +19,12 @@ export class AuthGuardService implements CanActivate, CanActivateChild {
     }
 
     if (!UserService.isLoggedIn()) {
+      if (hasToken) {
+        UserService.setChecking();
+        this.storeReturnUrl(returnUrl);
+        return this.waitForAuthResolution(returnUrl);
+      }
+
       this.storeReturnUrl(returnUrl);
       return this.router.createUrlTree(['login'], {
         queryParams: returnUrl ? { returnUrl } : undefined,

@@ -21,7 +21,7 @@ export class AuthLoginGuardService implements CanActivate, CanActivateChild {
       : null;
     const authState = UserService.authState();
 
-    if (!token || authState === 'unauthenticated') {
+    if (!token) {
       return of(true);
     }
 
@@ -42,6 +42,10 @@ export class AuthLoginGuardService implements CanActivate, CanActivateChild {
       }
 
       return of(this.router.parseUrl(target));
+    }
+
+    if (authState === 'unauthenticated') {
+      UserService.setChecking();
     }
 
     return this.http.checkLogin().pipe(

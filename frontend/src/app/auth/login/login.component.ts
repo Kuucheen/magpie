@@ -1,6 +1,6 @@
-import { Component, model } from '@angular/core';
+import { Component, OnDestroy, model, signal } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
@@ -13,6 +13,7 @@ import { UserService } from '../../services/authorization/user.service';
 import { AuthInterceptor } from '../../services/auth-interceptor.interceptor';
 import {NotificationService} from '../../services/notification-service.service';
 import {ThemeService} from '../../services/theme.service';
+import {LoadingComponent} from '../../ui-elements/loading/loading.component';
 
 @Component({
   selector: 'app-login',
@@ -24,20 +25,25 @@ import {ThemeService} from '../../services/theme.service';
     CardModule,
     InputTextModule,
     ButtonModule,
-    CheckboxModule
+    CheckboxModule,
+    LoadingComponent,
   ],
   templateUrl: './login.component.html',
   styleUrl: '../auth.component.scss'
 })
-export class LoginComponent {
+export class LoginComponent implements OnDestroy {
   loginForm: FormGroup;
   rememberPass = model(false);
   shouldRemember = false;
+  autoLoginChecking = signal(false);
+  private autoLoginTimeoutId?: ReturnType<typeof setTimeout>;
+  private autoLoginIntervalId?: ReturnType<typeof setInterval>;
 
   constructor(
     private fb: FormBuilder,
     private http: HttpService,
     private router: Router,
+    private route: ActivatedRoute,
     protected themeService: ThemeService,
     private notification: NotificationService
   ) {
@@ -47,6 +53,24 @@ export class LoginComponent {
     });
 
     this.rememberPass.subscribe(res => (this.shouldRemember = res));
+
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+    const isBrowser = typeof window !== 'undefined';
+    const hasToken = isBrowser && !!window.localStorage.getItem('magpie-jwt');
+    if (returnUrl) {
+      this.autoLoginChecking.set(true);
+    } else {
+      this.autoLoginChecking.set(false);
+    }
+    if (returnUrl && hasToken) {
+      this.startAutoLoginWatcher();
+    } else if (returnUrl && isBrowser && !hasToken) {
+      this.autoLoginChecking.set(false);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.clearAutoLoginTimers();
   }
 
   onLogin() {
@@ -83,5 +107,43 @@ export class LoginComponent {
         }
       },
     });
+  }
+
+  private startAutoLoginWatcher(): void {
+    const timeoutMs = 10000;
+    const intervalMs = 50;
+    const start = Date.now();
+
+    this.autoLoginIntervalId = setInterval(() => {
+      const state = UserService.authState();
+      if (state !== 'checking') {
+        if (state === 'unauthenticated') {
+          this.autoLoginChecking.set(false);
+        }
+        this.clearAutoLoginTimers();
+        return;
+      }
+
+      if (Date.now() - start >= timeoutMs) {
+        this.autoLoginChecking.set(false);
+        this.clearAutoLoginTimers();
+      }
+    }, intervalMs);
+
+    this.autoLoginTimeoutId = setTimeout(() => {
+      this.autoLoginChecking.set(false);
+      this.clearAutoLoginTimers();
+    }, timeoutMs);
+  }
+
+  private clearAutoLoginTimers(): void {
+    if (this.autoLoginIntervalId) {
+      clearInterval(this.autoLoginIntervalId);
+      this.autoLoginIntervalId = undefined;
+    }
+    if (this.autoLoginTimeoutId) {
+      clearTimeout(this.autoLoginTimeoutId);
+      this.autoLoginTimeoutId = undefined;
+    }
   }
 }

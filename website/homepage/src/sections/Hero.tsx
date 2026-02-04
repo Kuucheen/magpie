@@ -21,6 +21,13 @@ export default function Hero() {
   const imageRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
+  const scrollToInstall = () => {
+    const element = document.querySelector('#install');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   // Particle network animation
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -237,6 +244,7 @@ export default function Hero() {
               <Button 
                 size="lg" 
                 className="bg-[#3fa37a] hover:bg-[#44b381] text-white px-8 py-6 text-base font-medium transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-[#3fa37a]/25 group"
+                onClick={scrollToInstall}
               >
                 Get Started
                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />

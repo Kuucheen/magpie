@@ -18,10 +18,17 @@ export default function Installation() {
   const [activeTab, setActiveTab] = useState<'macos' | 'windows' | 'docker'>('macos');
   const [typedText, setTypedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [typingEnabled, setTypingEnabled] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Typing animation
   useEffect(() => {
+    if (!typingEnabled) {
+      setTypedText('');
+      setIsTyping(false);
+      return;
+    }
+
     const command = installCommands[activeTab];
     setTypedText('');
     setIsTyping(true);
@@ -38,7 +45,7 @@ export default function Installation() {
     }, 30);
 
     return () => clearInterval(typeInterval);
-  }, [activeTab]);
+  }, [activeTab, typingEnabled]);
 
   // Entrance animation
   useEffect(() => {
@@ -56,7 +63,11 @@ export default function Installation() {
           trigger: sectionRef.current,
           start: 'top 70%',
           toggleActions: 'play none none none',
-          onEnter: (self) => triggers.push(self),
+          onEnter: (self) => {
+            triggers.push(self);
+            setTypingEnabled(true);
+          },
+          onEnterBack: () => setTypingEnabled(true),
         },
       }
     );
@@ -75,6 +86,7 @@ export default function Installation() {
   return (
     <section 
       ref={sectionRef}
+      id="install"
       className="relative w-full py-24 lg:py-32 bg-[#0e0e0e] overflow-hidden"
     >
       {/* Background gradient */}
@@ -163,9 +175,11 @@ export default function Installation() {
               {/* Prompt */}
               <div className="flex items-start gap-2">
                 <span className="text-[#3fa37a]">$</span>
-                <div className="flex-1 overflow-x-auto">
-                  <span className="text-white whitespace-pre">{typedText}</span>
-                  <span className={`inline-block w-2 h-5 bg-[#3fa37a] ml-0.5 ${isTyping ? '' : 'cursor-blink'}`} />
+                <div className="flex-1 min-w-0">
+                  <span className="text-white whitespace-pre-wrap break-words leading-5">
+                    {typedText}
+                  </span>
+                  <span className={`inline-block w-2 h-5 bg-[#3fa37a] ml-0.5 align-baseline ${isTyping ? '' : 'cursor-blink'}`} />
                 </div>
               </div>
 

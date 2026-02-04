@@ -50,7 +50,7 @@ export default function Navigation() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             >
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#3fa37a] to-[#44b381] flex items-center justify-center group-hover:shadow-lg group-hover:shadow-[#3fa37a]/30 transition-shadow duration-300 overflow-hidden">
+              <div className="w-10 h-10 flex items-center justify-center group-hover:shadow-lg group-hover:shadow-[#3fa37a]/30 transition-shadow duration-300">
                 <img 
                   src="/magpie-light-green.svg" 
                   alt="Magpie" 
@@ -93,15 +93,9 @@ export default function Navigation() {
               <Button
                 size="sm"
                 className="bg-[#3fa37a] hover:bg-[#44b381] text-white"
-                asChild
+                onClick={() => scrollToSection('#install')}
               >
-                <a 
-                  href="https://github.com/Kuucheen/magpie#readme"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Get Started
-                </a>
+                Get Started
               </Button>
             </div>
 
@@ -162,15 +156,9 @@ export default function Navigation() {
               </Button>
               <Button
                 className="w-full bg-[#3fa37a] hover:bg-[#44b381] text-white"
-                asChild
+                onClick={() => scrollToSection('#install')}
               >
-                <a 
-                  href="https://github.com/Kuucheen/magpie#readme"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Get Started
-                </a>
+                Get Started
               </Button>
             </div>
           </div>

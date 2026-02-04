@@ -189,11 +189,19 @@ export default function TechStack() {
 
           {/* Center - Magpie Logo */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3fa37a] to-[#44b381] flex items-center justify-center shadow-lg shadow-[#3fa37a]/30 animate-pulse-glow">
+            <div
+              className="w-28 h-28 rounded-full flex items-center justify-center"
+              style={{
+                backgroundColor: hexToRgba('#3fa37a', 0.18),
+                borderColor: '#3fa37a',
+                borderWidth: '1px',
+                boxShadow: `0 0 30px ${hexToRgba('#3fa37a', 0.35)}`,
+              }}
+            >
               <img 
                 src="/magpie-light-green.svg" 
                 alt="Magpie" 
-                className="w-16 h-16 object-contain"
+                className="w-16 h-16 object-contain drop-shadow-[0_0_6px_rgba(63,163,122,0.6)]"
               />
             </div>
           </div>

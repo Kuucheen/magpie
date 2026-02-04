@@ -179,7 +179,7 @@ export default function Installation() {
                   <span className="text-white whitespace-pre-wrap break-words leading-5">
                     {typedText}
                   </span>
-                  <span className={`inline-block w-2 h-5 bg-[#3fa37a] ml-0.5 align-baseline ${isTyping ? '' : 'cursor-blink'}`} />
+                  <span className={`inline-block w-2 h-5 bg-[#3fa37a] ml-0.5 align-text-bottom ${isTyping ? '' : 'cursor-blink'}`} />
                 </div>
               </div>
 

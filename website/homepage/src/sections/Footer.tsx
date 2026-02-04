@@ -25,7 +25,7 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#3fa37a] to-[#44b381] flex items-center justify-center overflow-hidden">
+            <div className="w-10 h-10 flex items-center justify-center">
               <img 
                 src="/magpie-light-green.svg" 
                 alt="Magpie" 

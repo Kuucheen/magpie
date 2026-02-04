@@ -73,17 +73,20 @@ export default function DashboardPreview() {
     }
 
     // Parallax effect on scroll
-    gsap.to(imageRef.current, {
-      y: -50,
-      ease: 'none',
-      scrollTrigger: {
-        trigger: sectionRef.current,
-        start: 'top bottom',
-        end: 'bottom top',
-        scrub: 1,
-        onEnter: (self) => triggers.push(self),
-      },
-    });
+    gsap.fromTo(imageRef.current,
+      { y: -20 },
+      {
+        y: 20,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: sectionRef.current,
+          start: 'top bottom',
+          end: 'bottom top',
+          scrub: 1,
+          onEnter: (self) => triggers.push(self),
+        },
+      }
+    );
 
     return () => {
       triggers.forEach(t => t.kill());
@@ -128,7 +131,7 @@ export default function DashboardPreview() {
           <div className="relative overflow-hidden bg-[#151515]">
             <img 
               ref={imageRef}
-              src="/dashboard-full.png" 
+              src="/dashboard-hero.png"
               alt="Magpie Dashboard Full Preview"
               className="w-full h-auto"
               loading="lazy"

@@ -132,7 +132,7 @@ export default function DashboardPreview() {
             <img 
               ref={imageRef}
               src="/dashboard-hero.png"
-              alt="Magpie Dashboard Full Preview"
+              alt="Magpie dashboard full preview with proxy statistics and charts"
               className="w-full h-auto"
               loading="lazy"
             />

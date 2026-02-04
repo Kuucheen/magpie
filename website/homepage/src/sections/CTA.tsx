@@ -62,7 +62,7 @@ export default function CTA() {
 
           {/* Subheadline */}
           <p className="text-lg text-[#a0a0a0] max-w-xl mx-auto">
-            Join the community of developers who trust Magpie for their proxy management needs. Free, open source, and self-hosted.
+            Join the community of teams and individuals who trust Magpie for their proxy management needs. Free, open source, and self-hosted.
           </p>
 
           {/* CTAs */}

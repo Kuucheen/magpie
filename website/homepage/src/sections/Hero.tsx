@@ -289,7 +289,7 @@ export default function Hero() {
               <div className="relative rounded-xl overflow-hidden border border-[#2a2a2a] shadow-2xl bg-[#151515]">
                 <img 
                   src="/dashboard-hero.png" 
-                  alt="Magpie Dashboard"
+                  alt="Magpie dashboard preview showing proxy stats and charts"
                   className="w-full h-auto"
                   loading="eager"
                 />

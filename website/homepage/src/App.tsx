@@ -6,6 +6,7 @@ import HowItWorks from './sections/HowItWorks';
 import DashboardPreview from './sections/DashboardPreview';
 import TechStack from './sections/TechStack';
 import Installation from './sections/Installation';
+import FAQ from './sections/FAQ';
 import CTA from './sections/CTA';
 import Footer from './sections/Footer';
 
@@ -62,6 +63,11 @@ function App() {
 
         {/* CTA Section */}
         <CTA />
+
+        {/* FAQ Section */}
+        <section id="faq">
+          <FAQ />
+        </section>
       </main>
 
       {/* Footer */}

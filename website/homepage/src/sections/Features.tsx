@@ -129,49 +129,37 @@ const features = [
     icon: <Globe className="w-6 h-6" />,
     title: 'Auto-scraping',
     description: 'Automatically scrape proxies from various public sources. Keep your pool fresh without manual intervention.',
-    image: '/feature-scraping.png',
+    image: '/feature-scraping.svg',
   },
   {
     icon: <Activity className="w-6 h-6" />,
     title: 'Proxy Checking',
     description: 'Continuously verify which proxies are alive. Health checks run automatically to ensure reliability.',
-    image: '/feature-checking.png',
+    image: '/feature-checking.svg',
   },
   {
     icon: <Award className="w-6 h-6" />,
     title: 'Reputation System',
     description: 'Assign reputation scores based on uptime, latency, and anonymity. Filter out poor performers automatically.',
-    image: '/feature-reputation.png',
+    image: '/feature-reputation.svg',
   },
   {
     icon: <RefreshCw className="w-6 h-6" />,
     title: 'Rotating Endpoints',
     description: 'Create your own rotating proxy endpoints from the healthy pool. Distribute traffic intelligently.',
-    image: '/feature-rotating.png',
-  },
-  {
-    icon: <Users className="w-6 h-6" />,
-    title: 'Multi-user Support',
-    description: 'Share your proxy pool securely with team members. Role-based access control built-in.',
-    image: '/feature-multiuser.png',
-  },
-  {
-    icon: <Server className="w-6 h-6" />,
-    title: 'Dashboard + API',
-    description: 'Beautiful web dashboard and REST API for full programmatic control over your proxy infrastructure.',
-    image: '/feature-api.png',
+    image: '/feature-rotating.svg',
   },
   {
     icon: <Zap className="w-6 h-6" />,
     title: 'Multiple Protocols',
     description: 'Support for HTTP, HTTPS, SOCKS4, and SOCKS5 proxies. TCP and QUIC/HTTP3 transport protocols.',
-    image: '/feature-protocols.png',
+    image: '/feature-protocols.svg',
   },
   {
     icon: <Lock className="w-6 h-6" />,
     title: 'Self-hosted',
     description: 'Your data stays on your servers. Full privacy with end-to-end encryption for stored credentials.',
-    image: '/feature-privacy.png',
+    image: '/feature-privacy.svg',
   },
 ];
 
@@ -238,7 +226,7 @@ export default function Features() {
         {/* Features Grid */}
         <div 
           ref={gridRef}
-          className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6"
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"
         >
           {features.map((feature, index) => (
             <FeatureCard

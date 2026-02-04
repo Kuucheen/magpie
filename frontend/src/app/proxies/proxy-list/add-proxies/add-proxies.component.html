@@ -125,6 +125,7 @@
     [item]="'proxies'"
     [showDetailsButton]="hasUploadDetails()"
     [autoCloseOnSuccess]="!hasUploadDetails()"
+    [hideOverlay]="detailsVisible()"
     (closed)="onPopupClose()"
     (detailsRequested)="openDetails()"
   ></app-procesing-popup>
@@ -149,7 +150,7 @@
     </div>
   </ng-template>
 
-  <div class="p-6 bg-neutral-900 text-gray-200">
+  <div class="p-6 bg-neutral-900 text-gray-200 rounded-b-2xl">
     @if (uploadDetails()) {
       <div class="space-y-4">
         <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">

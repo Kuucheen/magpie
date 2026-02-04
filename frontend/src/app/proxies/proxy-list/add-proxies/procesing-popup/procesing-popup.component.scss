@@ -9,8 +9,12 @@
   justify-content: center;
   align-items: center;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 1200;
+  z-index: 3000;
   gap: 1rem;
+}
+
+.popup-overlay--hidden {
+  display: none;
 }
 
 .popup-content {
@@ -22,7 +26,7 @@
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
-  z-index: 1201;
+  z-index: 3001;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -78,7 +82,7 @@ app-star-background {
 
 .close-button {
   position: relative;
-  z-index: 1202;
+  z-index: 3002;
   background: rgba(255, 255, 255, 0.12);
   color: #f1f5f9;
   padding: 0.75rem 1.5rem;
@@ -96,7 +100,7 @@ app-star-background {
 
 .action-buttons {
   position: relative;
-  z-index: 1202;
+  z-index: 3002;
   display: flex;
   gap: 0.75rem;
 }

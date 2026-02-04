@@ -1,4 +1,5 @@
-import {Component, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges} from '@angular/core';
+import {Component, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges, AfterViewInit, ElementRef, Inject} from '@angular/core';
+import {DOCUMENT} from '@angular/common';
 import {animate, style, transition, trigger} from '@angular/animations';
 import {StarBackgroundComponent} from '../../../../ui-elements/star-background/star-background.component';
 
@@ -19,11 +20,12 @@ import {StarBackgroundComponent} from '../../../../ui-elements/star-background/s
         ]),
     ]
 })
-export class ProcesingPopupComponent implements OnInit, OnChanges, OnDestroy {
+export class ProcesingPopupComponent implements OnInit, OnChanges, OnDestroy, AfterViewInit {
   @Input() status: 'processing' | 'success' | 'error' = 'processing';
   @Input() count: number = 0;
   @Input() item: string = "";
   @Input() showDetailsButton = false;
+  @Input() hideOverlay = false;
   @Input() autoCloseOnSuccess = true;
   @Output() closed = new EventEmitter<void>();
   @Output() detailsRequested = new EventEmitter<void>();
@@ -39,10 +41,22 @@ export class ProcesingPopupComponent implements OnInit, OnChanges, OnDestroy {
     return this.messages[this.currentMessageIndex];
   }
 
+  constructor(
+    private elementRef: ElementRef<HTMLElement>,
+    @Inject(DOCUMENT) private document: Document
+  ) {}
+
   ngOnInit() {
     this.initializeMessages();
     if (this.status === 'processing') {
       this.startMessageRotation();
+    }
+  }
+
+  ngAfterViewInit(): void {
+    const host = this.elementRef?.nativeElement;
+    if (host && this.document?.body && host.parentElement !== this.document.body) {
+      this.document.body.appendChild(host);
     }
   }
 
@@ -84,6 +98,10 @@ export class ProcesingPopupComponent implements OnInit, OnChanges, OnDestroy {
   ngOnDestroy(): void {
     this.clearMessageRotation();
     this.clearAutoCloseTimeout();
+    const host = this.elementRef?.nativeElement;
+    if (host?.parentElement === this.document?.body) {
+      this.document.body.removeChild(host);
+    }
   }
 
   startMessageRotation() {

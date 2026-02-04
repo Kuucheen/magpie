@@ -1,4 +1,4 @@
-<div class="popup-overlay">
+<div class="popup-overlay" [class.popup-overlay--hidden]="hideOverlay">
   <div class="popup-content">
     <app-star-background></app-star-background>
     @if (status == 'processing') {

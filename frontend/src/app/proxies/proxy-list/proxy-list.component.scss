@@ -1,3 +1,5 @@
+@use "sass:color";
+
 $background-color: #171717;
 $text-color: rgb(171 171 171);
 $accent-color: #1cbb57;
@@ -27,7 +29,7 @@ $border-color: rgba(255, 255, 255, 0.1);
   }
 
   &::placeholder {
-    color: lighten($text-color, 15%);
+    color: color.scale($text-color, $lightness: 15%);
   }
 }
 
@@ -39,7 +41,7 @@ $border-color: rgba(255, 255, 255, 0.1);
   overflow: hidden;
 
   .mat-header-cell {
-    background-color: darken($background-color, 3%);
+    background-color: color.scale($background-color, $lightness: -3%);
     color: white;
     font-size: 0.9rem;
     font-weight: 600;
@@ -55,7 +57,7 @@ $border-color: rgba(255, 255, 255, 0.1);
     transition: background-color 0.2s ease;
 
     &:hover {
-      background-color: lighten($background-color, 5%);
+      background-color: color.scale($background-color, $lightness: 5%);
     }
 
     &:not(:last-child) {

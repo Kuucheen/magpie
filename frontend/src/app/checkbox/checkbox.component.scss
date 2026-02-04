@@ -1,3 +1,5 @@
+@use "sass:color";
+
 .checkbox-wrapper-46 input[type="checkbox"] {
   display: none;
   visibility: hidden;
@@ -17,7 +19,7 @@
   box-shadow: 0 0 5px var(--theme-primary-shadow);
 
   &:hover {
-    background-color: darken(#2d2d2d, 5%);
+    background-color: color.scale(#2d2d2d, $lightness: -5%);
   }
 }
 .checkbox-wrapper-46 .cbx span {

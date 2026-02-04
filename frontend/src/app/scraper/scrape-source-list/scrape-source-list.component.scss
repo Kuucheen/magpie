@@ -1,3 +1,5 @@
+@use "sass:color";
+
 $background-color: #171717;
 $text-color: rgb(171, 171, 171);
 $accent-color: #1cbb57;
@@ -14,7 +16,7 @@ $border-color: rgba(255, 255, 255, 0.1);
   word-break: break-all;
 
   &:hover {
-    color: lighten($text-color, 20%);
+    color: color.scale($text-color, $lightness: 20%);
   }
 }
 

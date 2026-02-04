@@ -1,4 +1,5 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {MessageService} from 'primeng/api';
 import {of} from 'rxjs';
 import {DeleteProxiesComponent} from './delete-proxies.component';
 import {SettingsService} from '../../../services/settings.service';
@@ -13,7 +14,8 @@ describe('DeleteProxiesComponent', () => {
       imports: [DeleteProxiesComponent],
       providers: [
         {provide: SettingsService, useValue: {getUserSettings: () => ({})}},
-        {provide: HttpService, useValue: {deleteProxies: () => of('')}}
+        {provide: HttpService, useValue: {deleteProxies: () => of('')}},
+        MessageService,
       ]
     }).compileComponents();
 
@@ -26,4 +28,3 @@ describe('DeleteProxiesComponent', () => {
     expect(component).toBeTruthy();
   });
 });
-

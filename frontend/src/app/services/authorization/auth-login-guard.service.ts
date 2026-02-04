@@ -1,5 +1,5 @@
 import {Injectable} from '@angular/core';
-import { ActivatedRouteSnapshot, CanActivate, Router, RouterStateSnapshot, UrlTree } from '@angular/router';
+import { ActivatedRouteSnapshot, CanActivate, CanActivateChild, Router, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { Observable, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { HttpService } from '../http.service';
@@ -8,7 +8,7 @@ import { UserService } from './user.service';
 @Injectable({
   providedIn: 'root'
 })
-export class AuthLoginGuardService implements CanActivate {
+export class AuthLoginGuardService implements CanActivate, CanActivateChild {
   constructor(
     private http: HttpService,
     private router: Router,
@@ -25,9 +25,14 @@ export class AuthLoginGuardService implements CanActivate {
       return of(true);
     }
 
-    const returnUrl = typeof window !== 'undefined'
+    const queryReturnUrl = route.queryParamMap.get('returnUrl');
+    const sessionReturnUrl = typeof window !== 'undefined'
       ? window.sessionStorage.getItem('magpie-return-url')
       : null;
+    const rawReturnUrl = queryReturnUrl && queryReturnUrl.trim().length > 0
+      ? queryReturnUrl
+      : sessionReturnUrl;
+    const returnUrl = rawReturnUrl && rawReturnUrl.startsWith('/') ? rawReturnUrl : null;
 
     if (authState === 'authenticated') {
       const target = returnUrl && returnUrl.trim().length > 0 ? returnUrl : '/';
@@ -58,5 +63,9 @@ export class AuthLoginGuardService implements CanActivate {
         return of(true);
       })
     );
+  }
+
+  canActivateChild(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Observable<boolean | UrlTree> {
+    return this.canActivate(route, state);
   }
 }

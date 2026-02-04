@@ -2,6 +2,7 @@ import {Injectable, signal} from '@angular/core';
 import {HttpService} from '../http.service';
 import {Router} from '@angular/router';
 import {NotificationService} from '../notification-service.service';
+import {AuthInterceptor} from '../auth-interceptor.interceptor';
 import {BehaviorSubject} from 'rxjs';
 
 type AuthState = 'checking' | 'authenticated' | 'unauthenticated';
@@ -15,12 +16,17 @@ export class UserService {
   private static roleSubject = new BehaviorSubject<string | undefined>(undefined);
   public readonly role$ = UserService.roleSubject.asObservable();
 
-  constructor(private http: HttpService, private router: Router) {
+  constructor(
+    private http: HttpService,
+    private router: Router,
+    private notification: NotificationService
+  ) {
     this.initializeSession();
   }
 
   private initializeSession() {
     if (typeof window === 'undefined') {
+      UserService.setAuthState('unauthenticated');
       return;
     }
 
@@ -45,7 +51,7 @@ export class UserService {
       },
       error: err => {
         if (err.status && err.status !== 401 && err.status !== 403) {
-          NotificationService.showError("Error while getting user role! " + err.error.message)
+          this.notification.showError("Error while getting user role! " + err.error.message)
         }
         if (err.status === 401 || err.status === 403) {
           this.logoutAndRedirect();
@@ -84,6 +90,7 @@ export class UserService {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('magpie-jwt');
     }
+    AuthInterceptor.setToken('');
     UserService.setLoggedIn(false);
     UserService.setRole('user');
   }

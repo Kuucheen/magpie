@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
+import { MessageService } from 'primeng/api';
 import { AdminCheckerComponent } from './admin-checker.component';
 
 describe('AdminCheckerComponent', () => {
@@ -8,7 +8,8 @@ describe('AdminCheckerComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [AdminCheckerComponent]
+      imports: [AdminCheckerComponent],
+      providers: [MessageService]
     })
     .compileComponents();
 

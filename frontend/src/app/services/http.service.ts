@@ -72,51 +72,7 @@ export class HttpService {
       params = params.set('search', options.search.trim());
     }
 
-    if (options?.filters) {
-      const filters = options.filters;
-
-      if (filters.status) {
-        params = params.set('status', filters.status);
-      }
-
-      if (filters.protocols?.length) {
-        filters.protocols.forEach(protocol => {
-          params = params.append('protocol', protocol);
-        });
-      }
-
-      if (filters.countries?.length) {
-        filters.countries.forEach(country => {
-          params = params.append('country', country);
-        });
-      }
-
-      if (filters.types?.length) {
-        filters.types.forEach(type => {
-          params = params.append('type', type);
-        });
-      }
-
-      if (filters.anonymityLevels?.length) {
-        filters.anonymityLevels.forEach(level => {
-          params = params.append('anonymity', level);
-        });
-      }
-
-      if (filters.reputationLabels?.length) {
-        filters.reputationLabels.forEach(label => {
-          params = params.append('reputation', label);
-        });
-      }
-
-      if (filters.maxTimeout && filters.maxTimeout > 0) {
-        params = params.set('maxTimeout', filters.maxTimeout.toString());
-      }
-
-      if (filters.maxRetries && filters.maxRetries > 0) {
-        params = params.set('maxRetries', filters.maxRetries.toString());
-      }
-    }
+    params = this.appendProxyFilterParams(params, options?.filters);
 
     return this.http.get<ProxyPage>(`${this.apiUrl}/getProxyPage/${pageNumber}`, { params });
   }
@@ -177,7 +133,7 @@ export class HttpService {
 
 
   saveGlobalSettings(payload: GlobalSettings) {
-    return this.http.post(environment.apiUrl + "/saveSettings", payload)
+    return this.http.post(this.apiUrl + "/saveSettings", payload)
   }
 
   getGlobalSettings() {
@@ -189,11 +145,11 @@ export class HttpService {
   }
 
   saveUserSettings(payload: UserSettings) {
-    return this.http.post(environment.apiUrl + "/user/settings", payload)
+    return this.http.post(this.apiUrl + "/user/settings", payload)
   }
 
   saveUserScrapingSites(payload: string[]) {
-    return this.http.post(environment.apiUrl + "/user/scrapingSites", payload)
+    return this.http.post(this.apiUrl + "/user/scrapingSites", payload)
   }
 
   getUserRole() {
@@ -234,51 +190,7 @@ export class HttpService {
       params = params.set('search', options.search.trim());
     }
 
-    if (options?.filters) {
-      const filters = options.filters;
-
-      if (filters.status) {
-        params = params.set('status', filters.status);
-      }
-
-      if (filters.protocols?.length) {
-        filters.protocols.forEach(protocol => {
-          params = params.append('protocol', protocol);
-        });
-      }
-
-      if (filters.countries?.length) {
-        filters.countries.forEach(country => {
-          params = params.append('country', country);
-        });
-      }
-
-      if (filters.types?.length) {
-        filters.types.forEach(type => {
-          params = params.append('type', type);
-        });
-      }
-
-      if (filters.anonymityLevels?.length) {
-        filters.anonymityLevels.forEach(level => {
-          params = params.append('anonymity', level);
-        });
-      }
-
-      if (filters.reputationLabels?.length) {
-        filters.reputationLabels.forEach(label => {
-          params = params.append('reputation', label);
-        });
-      }
-
-      if (filters.maxTimeout && filters.maxTimeout > 0) {
-        params = params.set('maxTimeout', filters.maxTimeout.toString());
-      }
-
-      if (filters.maxRetries && filters.maxRetries > 0) {
-        params = params.set('maxRetries', filters.maxRetries.toString());
-      }
-    }
+    params = this.appendProxyFilterParams(params, options?.filters);
 
     return this.http.get<ProxyPage>(`${this.apiUrl}/scrapingSources/${sourceId}/proxies`, { params });
   }
@@ -300,5 +212,55 @@ export class HttpService {
 
   getDashboardInfo() {
     return this.http.get<DashboardInfo>(this.apiUrl + '/getDashboardInfo');
+  }
+
+  private appendProxyFilterParams(params: HttpParams, filters?: ProxyListFilters): HttpParams {
+    if (!filters) {
+      return params;
+    }
+
+    if (filters.status) {
+      params = params.set('status', filters.status);
+    }
+
+    if (filters.protocols?.length) {
+      filters.protocols.forEach(protocol => {
+        params = params.append('protocol', protocol);
+      });
+    }
+
+    if (filters.countries?.length) {
+      filters.countries.forEach(country => {
+        params = params.append('country', country);
+      });
+    }
+
+    if (filters.types?.length) {
+      filters.types.forEach(type => {
+        params = params.append('type', type);
+      });
+    }
+
+    if (filters.anonymityLevels?.length) {
+      filters.anonymityLevels.forEach(level => {
+        params = params.append('anonymity', level);
+      });
+    }
+
+    if (filters.reputationLabels?.length) {
+      filters.reputationLabels.forEach(label => {
+        params = params.append('reputation', label);
+      });
+    }
+
+    if (filters.maxTimeout && filters.maxTimeout > 0) {
+      params = params.set('maxTimeout', filters.maxTimeout.toString());
+    }
+
+    if (filters.maxRetries && filters.maxRetries > 0) {
+      params = params.set('maxRetries', filters.maxRetries.toString());
+    }
+
+    return params;
   }
 }

@@ -1,4 +1,5 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {MessageService} from 'primeng/api';
 import {ProxyDetailComponent} from './proxy-detail.component';
 import {ActivatedRoute, convertToParamMap} from '@angular/router';
 import {RouterTestingModule} from '@angular/router/testing';
@@ -34,6 +35,7 @@ describe('ProxyDetailComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ProxyDetailComponent, RouterTestingModule],
       providers: [
+        MessageService,
         {provide: HttpService, useValue: httpServiceStub},
         {
           provide: ActivatedRoute,

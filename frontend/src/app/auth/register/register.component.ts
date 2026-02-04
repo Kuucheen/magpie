@@ -34,7 +34,8 @@ export class RegisterComponent {
     private http: HttpService,
     private router: Router,
     private user: UserService,
-    protected themeService: ThemeService
+    protected themeService: ThemeService,
+    private notification: NotificationService
   ) {
     this.registerForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
@@ -55,14 +56,15 @@ export class RegisterComponent {
 
       this.http.registerUser(user).subscribe({
         next: (response) => {
+          localStorage.removeItem('magpie-jwt');
           AuthInterceptor.setToken(response.token);
           UserService.setLoggedIn(true);
           this.user.getAndSetRole();
-          NotificationService.showSuccess('Registration successful');
+          this.notification.showSuccess('Registration successful');
           this.router.navigate(['/']);
         },
         error: (error) =>
-          NotificationService.showError('Registration failed: ' + error.error.error)
+          this.notification.showError('Registration failed: ' + error.error.error)
       });
     }
   }

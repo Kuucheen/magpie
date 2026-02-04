@@ -40,7 +40,11 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
   settingsForm: FormGroup;
   private destroy$ = new Subject<void>();
 
-  constructor(private fb: FormBuilder, private settingsService: SettingsService) {
+  constructor(
+    private fb: FormBuilder,
+    private settingsService: SettingsService,
+    private notification: NotificationService
+  ) {
     this.settingsForm = this.createDefaultForm();
   }
 
@@ -52,7 +56,7 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: settings => this.updateFormWithSettings(settings),
-        error: err => NotificationService.showError("Could not get scraper settings" + err.error.message)
+        error: err => this.notification.showError("Could not get scraper settings" + err.error.message)
     });
 
     const threadsCtrl  = this.settingsForm.get('scraper_threads');
@@ -65,7 +69,7 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
       .subscribe({
       next: (isDynamic: boolean) => {
         this.updateThreadControlState(isDynamic);
-      }, error: err => NotificationService.showError("Error while toggling threadCtrl: " + err.error.message)
+      }, error: err => this.notification.showError("Error while toggling threadCtrl: " + err.error.message)
     });
 
     proxyLimitCtrl!.valueChanges
@@ -73,7 +77,7 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
       .subscribe({
       next: (enabled: boolean) => {
         this.updateProxyLimitState(enabled);
-      }, error: err => NotificationService.showError("Error while toggling proxy limit: " + err.error.message)
+      }, error: err => this.notification.showError("Error while toggling proxy limit: " + err.error.message)
     });
 
     this.updateThreadControlState(dynamicCtrl?.value ?? true);
@@ -199,13 +203,13 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
   onSubmit() {
     this.settingsService.saveGlobalSettings(this.settingsForm.getRawValue()).subscribe({
       next: (resp) => {
-        NotificationService.showSuccess(resp.message)
+        this.notification.showSuccess(resp.message)
         this.settingsForm.markAsPristine()
       },
       error: (err) => {
         console.error("Error saving settings:", err);
         const reason = err?.error?.message ?? err?.error?.error ?? 'Unknown error';
-        NotificationService.showError("Failed to save settings: " + reason);
+        this.notification.showError("Failed to save settings: " + reason);
       }
     });
   }

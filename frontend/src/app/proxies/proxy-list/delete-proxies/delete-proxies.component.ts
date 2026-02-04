@@ -69,7 +69,12 @@ export class DeleteProxiesComponent implements OnChanges {
 
   private defaultFormValues: DeleteFormDefaults;
 
-  constructor(private fb: FormBuilder, private settingsService: SettingsService, private http: HttpService) {
+  constructor(
+    private fb: FormBuilder,
+    private settingsService: SettingsService,
+    private http: HttpService,
+    private notification: NotificationService
+  ) {
     const settings = this.settingsService.getUserSettings();
 
     this.defaultFormValues = {
@@ -105,7 +110,7 @@ export class DeleteProxiesComponent implements OnChanges {
 
   openDialog(): void {
     if (!this.hasAnyProxies()) {
-      NotificationService.showError('No proxies available to delete.');
+      this.notification.showError('No proxies available to delete.');
       return;
     }
 
@@ -132,13 +137,13 @@ export class DeleteProxiesComponent implements OnChanges {
 
   submitDelete(): void {
     if (this.deleteOption === 'selected' && !this.canDeleteSelected()) {
-      NotificationService.showError('No proxies selected for deletion.');
+      this.notification.showError('No proxies selected for deletion.');
       return;
     }
 
     const deleteSettings = this.transformFormToDelete(this.deleteForm, this.deleteOption);
     if (deleteSettings.scope === 'selected' && deleteSettings.proxies.length === 0) {
-      NotificationService.showError('No proxies selected for deletion.');
+      this.notification.showError('No proxies selected for deletion.');
       return;
     }
 
@@ -150,9 +155,9 @@ export class DeleteProxiesComponent implements OnChanges {
         const normalized = message.trim().toLowerCase();
 
         if (normalized.includes('no proxies')) {
-          NotificationService.showInfo(message);
+          this.notification.showInfo(message);
         } else {
-          NotificationService.showSuccess(message);
+          this.notification.showSuccess(message);
         }
 
         this.isDeleting = false;
@@ -162,7 +167,7 @@ export class DeleteProxiesComponent implements OnChanges {
       error: err => {
         this.isDeleting = false;
         const message = err?.error?.message ?? err?.message ?? 'Unknown error';
-        NotificationService.showError('Could not delete proxies: ' + message);
+        this.notification.showError('Could not delete proxies: ' + message);
       }
     });
   }

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MessageService } from 'primeng/api';
 import {BehaviorSubject, of} from 'rxjs';
 
 import { AdminOtherComponent } from './admin-other.component';
@@ -61,7 +62,10 @@ describe('AdminOtherComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AdminOtherComponent],
-      providers: [{ provide: SettingsService, useClass: SettingsServiceStub }]
+      providers: [
+        { provide: SettingsService, useClass: SettingsServiceStub },
+        MessageService,
+      ]
     })
     .compileComponents();
 

@@ -34,8 +34,13 @@ export class LoginComponent {
   rememberPass = model(false);
   shouldRemember = false;
 
-  constructor(private fb: FormBuilder, private http: HttpService, private router: Router,
-              protected themeService: ThemeService) {
+  constructor(
+    private fb: FormBuilder,
+    private http: HttpService,
+    private router: Router,
+    protected themeService: ThemeService,
+    private notification: NotificationService
+  ) {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(6)]],
@@ -53,8 +58,9 @@ export class LoginComponent {
         if (this.shouldRemember) {
           localStorage.setItem('magpie-jwt', response.token);
         } else {
-          AuthInterceptor.setToken(response.token);
+          localStorage.removeItem('magpie-jwt');
         }
+        AuthInterceptor.setToken(response.token);
         UserService.setLoggedIn(true);
         UserService.setRole(response.role);
         const returnUrl = typeof window !== 'undefined'
@@ -71,9 +77,9 @@ export class LoginComponent {
       error: (err) => {
         UserService.setLoggedIn(false);
         if (err.status === 401) {
-          NotificationService.showError('Username or Password is incorrect');
+          this.notification.showError('Username or Password is incorrect');
         } else {
-          NotificationService.showError('Something went wrong while login! Error code: ' + err.status)
+          this.notification.showError('Something went wrong while login! Error code: ' + err.status)
         }
       },
     });

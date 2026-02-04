@@ -96,6 +96,7 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
     private http: HttpService,
     private clipboard: Clipboard,
     private sanitizer: DomSanitizer,
+    private notification: NotificationService,
   ) {}
 
   ngOnInit(): void {
@@ -104,7 +105,7 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
       const rawId = params.get('id');
       const id = rawId ? Number(rawId) : NaN;
       if (!Number.isFinite(id) || id <= 0) {
-        NotificationService.showError('Invalid proxy identifier');
+        this.notification.showError('Invalid proxy identifier');
         this.navigateBack();
         return;
       }
@@ -249,19 +250,19 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
   private copyToClipboard(value: string, successMessage: string): void {
     const copied = this.clipboard.copy(value);
     if (copied) {
-      NotificationService.showSuccess(successMessage);
+      this.notification.showSuccess(successMessage);
       return;
     }
 
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(value).then(
-        () => NotificationService.showSuccess(successMessage),
-        () => NotificationService.showError('Failed to access clipboard')
+        () => this.notification.showSuccess(successMessage),
+        () => this.notification.showError('Failed to access clipboard')
       );
       return;
     }
 
-    NotificationService.showError('Clipboard not available');
+    this.notification.showError('Clipboard not available');
   }
 
   get authenticationDisplay(): string {
@@ -599,7 +600,7 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
       error: err => {
         this.isLoadingDetail.set(false);
         const message = err?.error?.error ?? err?.message ?? 'Failed to load proxy';
-        NotificationService.showError(message);
+        this.notification.showError(message);
         this.navigateBack();
       }
     });
@@ -1044,7 +1045,7 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
       error: err => {
         this.isLoadingStatistics.set(false);
         const message = err?.error?.error ?? err?.message ?? 'Failed to load proxy statistics';
-        NotificationService.showError(message);
+        this.notification.showError(message);
       }
     });
 
@@ -1053,7 +1054,7 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
 
   openStatisticResponse(row: ProxyStatistic): void {
     if (!this.proxyId()) {
-      NotificationService.showError('Unable to determine proxy identifier');
+      this.notification.showError('Unable to determine proxy identifier');
       return;
     }
 

@@ -71,7 +71,12 @@ export class ExportProxiesComponent implements OnChanges {
 
   private defaultFormValues: ExportFormDefaults;
 
-  constructor(private fb: FormBuilder, private settingsService: SettingsService, private http: HttpService) {
+  constructor(
+    private fb: FormBuilder,
+    private settingsService: SettingsService,
+    private http: HttpService,
+    private notification: NotificationService
+  ) {
     const settings = this.settingsService.getUserSettings();
 
     this.defaultFormValues = {
@@ -109,7 +114,7 @@ export class ExportProxiesComponent implements OnChanges {
 
   openDialog(): void {
     if (!this.hasAnyProxies()) {
-      NotificationService.showError('No proxies available to export.');
+      this.notification.showError('No proxies available to export.');
       return;
     }
     this.syncDefaultsWithUserSettings();
@@ -142,7 +147,7 @@ export class ExportProxiesComponent implements OnChanges {
   submitExport(): void {
     const proxies = this.exportOption === 'selected' ? this.selectedProxies : this.allProxies;
     if (!proxies || proxies.length === 0) {
-      NotificationService.showError('No proxies selected for export.');
+      this.notification.showError('No proxies selected for export.');
       return;
     }
 
@@ -160,7 +165,7 @@ export class ExportProxiesComponent implements OnChanges {
       error: err => {
         this.isExporting = false;
         const message = err?.error?.message ?? err?.message ?? 'Unknown error';
-        NotificationService.showError('Error while exporting proxies: ' + message);
+        this.notification.showError('Error while exporting proxies: ' + message);
       }
     });
   }

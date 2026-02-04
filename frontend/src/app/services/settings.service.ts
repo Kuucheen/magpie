@@ -20,7 +20,11 @@ export class SettingsService {
 
   private globalSettingsLoaded = false;
 
-  constructor(private http: HttpService, private userService: UserService) {
+  constructor(
+    private http: HttpService,
+    private userService: UserService,
+    private notification: NotificationService
+  ) {
     this.loadSettings();
 
     this.userService.role$
@@ -67,7 +71,7 @@ export class SettingsService {
           this.globalSettingsLoaded = false;
           return;
         }
-        NotificationService.showError("Error while getting global settings " + err.error.message)
+        this.notification.showError("Error while getting global settings " + err.error.message)
       }
     });
   }
@@ -162,7 +166,7 @@ export class SettingsService {
           this.clearUserSettings();
           return;
         }
-        NotificationService.showError("Error while getting user settings" + err.error?.message);
+        this.notification.showError("Error while getting user settings" + err.error?.message);
       }
     });
   }

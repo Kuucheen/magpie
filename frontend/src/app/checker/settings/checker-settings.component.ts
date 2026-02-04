@@ -31,7 +31,11 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
     'TCP uses standard HTTP over TCP. QUIC and HTTP/3 both use HTTP/3 over QUIC; QUIC enables HTTP/3 datagrams (unreliable messages), HTTP/3 uses streams only.';
   private destroy$ = new Subject<void>();
 
-  constructor(private fb: FormBuilder, private settingsService: SettingsService) {
+  constructor(
+    private fb: FormBuilder,
+    private settingsService: SettingsService,
+    private notification: NotificationService
+  ) {
     this.settingsForm = this.createForm();
     this.configureAutoRemoveThresholdToggle();
   }
@@ -106,12 +110,12 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
 
     this.settingsService.saveUserSettings(payload).subscribe({
       next: (resp) => {
-        NotificationService.showSuccess(resp.message);
+        this.notification.showSuccess(resp.message);
         this.populateForm(this.settingsService.getUserSettings());
       },
       error: (err) => {
         console.error('Error saving settings:', err);
-        NotificationService.showError('Failed to save settings!');
+        this.notification.showError('Failed to save settings!');
       }
     });
   }

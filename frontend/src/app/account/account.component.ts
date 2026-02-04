@@ -50,7 +50,8 @@ export class AccountComponent {
   constructor(private fb: FormBuilder,
               private http: HttpService,
               private themeService: ThemeService,
-              private userService: UserService) {
+              private userService: UserService,
+              private notification: NotificationService) {
     this.passwordForm = this.fb.group(
       {
         oldPassword: ['', [Validators.required]],
@@ -99,8 +100,8 @@ export class AccountComponent {
       const changePass: ChangePassword = this.passwordForm.value
 
       this.http.changePassword(changePass).subscribe({
-        next:  res  => NotificationService.showInfo(res),
-        error: err => NotificationService.showError("There has been an error while changing the password! " + err.error.message)
+        next:  res  => this.notification.showInfo(res),
+        error: err => this.notification.showError("There has been an error while changing the password! " + err.error.message)
       });
 
       // this.passwordForm.reset();
@@ -116,13 +117,13 @@ export class AccountComponent {
 
       this.http.deleteAccount(payload).subscribe({
         next: res => {
-          NotificationService.showSuccess(res);
+          this.notification.showSuccess(res);
           this.userService.logoutAndRedirect();
         },
         error: err => {
           this.deletingAccount = false;
           const detail = err?.error?.message ?? err?.error?.error ?? 'Please try again.';
-          NotificationService.showError("There has been an error while deleting the account! " + detail);
+          this.notification.showError("There has been an error while deleting the account! " + detail);
         }
       });
     } else {
@@ -149,7 +150,7 @@ export class AccountComponent {
     const remaining = this.purpleActivationTarget - this.purpleActivationCount;
 
     if (remaining > 0 && remaining <= 3) {
-      NotificationService.showInfo(`${remaining}...`);
+      this.notification.showInfo(`${remaining}...`);
     }
 
     if (remaining <= 0) {

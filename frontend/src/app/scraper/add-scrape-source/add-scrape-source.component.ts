@@ -55,7 +55,10 @@ export class AddScrapeSourceComponent {
     this.uniqueFileSourcesCount() + this.uniqueTextAreaSourcesCount() + this.uniqueClipboardSourcesCount()
   );
 
-  constructor(private service: HttpService) { }
+  constructor(
+    private service: HttpService,
+    private notification: NotificationService
+  ) { }
 
   async pasteFromClipboard(): Promise<void> {
     try {
@@ -186,7 +189,7 @@ export class AddScrapeSourceComponent {
         error: (err) => {
           this.popupStatus.set('error');
           const reason = err?.error?.message ?? err?.error?.error ?? 'Unknown error';
-          NotificationService.showError("There has been an error while uploading the scrape sources! " + reason)
+          this.notification.showError("There has been an error while uploading the scrape sources! " + reason)
         },
       });
     } else {

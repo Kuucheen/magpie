@@ -20,23 +20,31 @@ import {ScraperComponent} from './scraper/scraper.component';
 import {ScrapeSourceDetailComponent} from './scraper/scrape-source-detail/scrape-source-detail.component';
 import {NotificationsComponent} from './notifications/notifications.component';
 
+const authGuard = [AuthGuardService];
+const adminGuard = [AuthGuardAdminService];
+const loginGuard = [AuthLoginGuardService];
+
 export const routes: Routes = [
-  {path: "account", component: AccountComponent, canActivate: [AuthGuardService]},
-  {path: "addProxies", component: AddProxiesComponent, canActivate: [AuthGuardService]},
-  {path: "rotating", component: RotatingProxiesComponent, canActivate: [AuthGuardService]},
-  {path: "proxies", component: ProxiesComponent, canActivate: [AuthGuardService]},
-  {path: "proxies/:id", component: ProxyDetailComponent, canActivate: [AuthGuardService]},
-  {path: "scraper/:id", component: ScrapeSourceDetailComponent, canActivate: [AuthGuardService]},
-  {path: "scraper", component: ScraperComponent, canActivate: [AuthGuardService]},
-  {path: "checker", redirectTo: "checker/settings", pathMatch: "full"},
-  {path: "checker/settings", component: CheckerSettingsComponent, canActivate: [AuthGuardService]},
-  {path: "checker/judges", component: CheckerJudgesComponent, canActivate: [AuthGuardService]},
-  {path: "global/checker", component: AdminCheckerComponent, canActivate: [AuthGuardAdminService]},
-  {path: "global/scraper", component: AdminScraperComponent, canActivate: [AuthGuardAdminService]},
-  {path: "global/blacklist", component: AdminBlacklistComponent, canActivate: [AuthGuardAdminService]},
-  {path: "global/other", component: AdminOtherComponent, canActivate: [AuthGuardAdminService]},
-  {path: "notifications", component: NotificationsComponent, canActivate: [AuthGuardService]},
-  {path: "register", component: RegisterComponent, canActivate: [AuthLoginGuardService]},
-  {path: "login", component: LoginComponent, canActivate: [AuthLoginGuardService]},
-  {path: "**", component: DashboardComponent, canActivate: [AuthGuardService]}
+  {path: 'register', component: RegisterComponent, canActivate: loginGuard},
+  {path: 'login', component: LoginComponent, canActivate: loginGuard},
+
+  {path: 'global/checker', component: AdminCheckerComponent, canActivate: adminGuard},
+  {path: 'global/scraper', component: AdminScraperComponent, canActivate: adminGuard},
+  {path: 'global/blacklist', component: AdminBlacklistComponent, canActivate: adminGuard},
+  {path: 'global/other', component: AdminOtherComponent, canActivate: adminGuard},
+
+  {path: 'account', component: AccountComponent, canActivate: authGuard},
+  {path: 'addProxies', component: AddProxiesComponent, canActivate: authGuard},
+  {path: 'rotating', component: RotatingProxiesComponent, canActivate: authGuard},
+  {path: 'proxies', component: ProxiesComponent, canActivate: authGuard},
+  {path: 'proxies/:id', component: ProxyDetailComponent, canActivate: authGuard},
+  {path: 'scraper/:id', component: ScrapeSourceDetailComponent, canActivate: authGuard},
+  {path: 'scraper', component: ScraperComponent, canActivate: authGuard},
+  {path: 'checker', redirectTo: 'checker/settings', pathMatch: 'full'},
+  {path: 'checker/settings', component: CheckerSettingsComponent, canActivate: authGuard},
+  {path: 'checker/judges', component: CheckerJudgesComponent, canActivate: authGuard},
+  {path: 'notifications', component: NotificationsComponent, canActivate: authGuard},
+  {path: 'dashboard', component: DashboardComponent, canActivate: authGuard},
+  {path: '', component: DashboardComponent, canActivate: authGuard, pathMatch: 'full'},
+  {path: '**', redirectTo: ''},
 ];

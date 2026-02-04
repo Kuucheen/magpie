@@ -6,11 +6,7 @@ import {InputNumberModule} from 'primeng/inputnumber';
 import {Select} from 'primeng/select';
 import {MultiSelectModule} from 'primeng/multiselect';
 import {NgClass} from '@angular/common';
-
-export type ProxyFilterOption = {
-  label: string;
-  value: string;
-};
+import {ProxyFilterOption} from '../proxy-filters';
 
 @Component({
   selector: 'app-proxy-filter-panel',

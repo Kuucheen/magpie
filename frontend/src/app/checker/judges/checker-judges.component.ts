@@ -21,7 +21,11 @@ export class CheckerJudgesComponent implements OnInit, OnDestroy {
   judgesForm: FormArray<FormGroup>;
   private destroy$ = new Subject<void>();
 
-  constructor(private fb: FormBuilder, private settingsService: SettingsService) {
+  constructor(
+    private fb: FormBuilder,
+    private settingsService: SettingsService,
+    private notification: NotificationService
+  ) {
     this.judgesForm = this.fb.array<FormGroup>([]);
   }
 
@@ -75,13 +79,13 @@ export class CheckerJudgesComponent implements OnInit, OnDestroy {
 
     this.settingsService.saveUserSettings(payload).subscribe({
       next: (resp) => {
-        NotificationService.showSuccess(resp.message);
+        this.notification.showSuccess(resp.message);
         this.populateJudges(this.settingsService.getUserSettings());
       },
       error: (err) => {
         console.error('Error saving judges:', err);
         const reason = err?.error?.message ?? err?.error?.error ?? 'Failed to save settings!';
-        NotificationService.showError(reason);
+        this.notification.showError(reason);
       }
     });
   }

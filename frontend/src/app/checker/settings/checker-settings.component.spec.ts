@@ -1,4 +1,5 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {MessageService} from 'primeng/api';
 import {of} from 'rxjs';
 import {CheckerSettingsComponent} from './checker-settings.component';
 import {SettingsService} from '../../services/settings.service';
@@ -38,7 +39,10 @@ describe('CheckerSettingsComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [CheckerSettingsComponent],
-      providers: [{ provide: SettingsService, useClass: SettingsServiceStub }]
+      providers: [
+        { provide: SettingsService, useClass: SettingsServiceStub },
+        MessageService,
+      ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(CheckerSettingsComponent);

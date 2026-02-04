@@ -14,36 +14,21 @@ import {ProxyListFilters} from '../../models/ProxyListFilters';
 import {ProxyFilterOptions} from '../../models/ProxyFilterOptions';
 import {ProxyFilterPanelComponent} from '../../shared/proxy-filter-panel/proxy-filter-panel.component';
 import {ProxyTableComponent} from '../../shared/proxy-table/proxy-table.component';
-
-type ProxyListFilterFormValues = {
-  proxyStatus: 'all' | 'alive' | 'dead';
-  http: boolean;
-  https: boolean;
-  socks4: boolean;
-  socks5: boolean;
-  maxTimeout: number;
-  maxRetries: number;
-  countries: string[];
-  types: string[];
-  anonymityLevels: string[];
-  reputationLabels: string[];
-};
-
-type ProxyListAppliedFilters = {
-  status: 'all' | 'alive' | 'dead';
-  protocols: string[];
-  maxTimeout: number;
-  maxRetries: number;
-  countries: string[];
-  types: string[];
-  anonymityLevels: string[];
-  reputationLabels: string[];
-};
-
-type FilterOption = {
-  label: string;
-  value: string;
-};
+import {
+  ProxyFilterOption,
+  ProxyListAppliedFilters,
+  ProxyListFilterFormValues,
+  PROXY_REPUTATION_OPTIONS,
+  PROXY_STATUS_OPTIONS,
+  activeProxyFilterCount,
+  buildFilterOptionList,
+  buildFiltersFromFormValue,
+  buildProxyListFilterPayload,
+  createDefaultProxyFilterValues,
+  createDefaultProxyListAppliedFilters,
+  normalizeFilterOptions,
+  syncFilterFormWithApplied,
+} from '../../shared/proxy-filters';
 
 type HealthTone = 'healthy' | 'mixed' | 'unhealthy' | 'empty';
 type ReputationLabel = 'good' | 'neutral' | 'poor' | 'unknown';
@@ -78,44 +63,14 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
   filterPanelOpen = signal(false);
   filterOptionsLoaded = signal(false);
   filterOptions = signal<ProxyFilterOptions>({countries: [], types: [], anonymityLevels: []});
-  countryOptions = signal<FilterOption[]>([]);
-  typeOptions = signal<FilterOption[]>([]);
-  anonymityOptions = signal<FilterOption[]>([]);
-  appliedFilters = signal<ProxyListAppliedFilters>({
-    status: 'all',
-    protocols: [],
-    maxTimeout: 0,
-    maxRetries: 0,
-    countries: [],
-    types: [],
-    anonymityLevels: [],
-    reputationLabels: [],
-  });
+  countryOptions = signal<ProxyFilterOption[]>([]);
+  typeOptions = signal<ProxyFilterOption[]>([]);
+  anonymityOptions = signal<ProxyFilterOption[]>([]);
+  appliedFilters = signal<ProxyListAppliedFilters>(createDefaultProxyListAppliedFilters());
   filterForm: FormGroup;
-  readonly proxyStatusOptions = [
-    {label: 'All Proxies', value: 'all'},
-    {label: 'Only Alive Proxies', value: 'alive'},
-    {label: 'Only Dead Proxies', value: 'dead'},
-  ];
-  readonly proxyReputationOptions = [
-    {label: 'Good', value: 'good'},
-    {label: 'Neutral', value: 'neutral'},
-    {label: 'Poor', value: 'poor'},
-    {label: 'Unknown', value: 'unknown'},
-  ];
-  private readonly defaultFilterValues: ProxyListFilterFormValues = {
-    proxyStatus: 'all',
-    http: false,
-    https: false,
-    socks4: false,
-    socks5: false,
-    maxTimeout: 0,
-    maxRetries: 0,
-    countries: [],
-    types: [],
-    anonymityLevels: [],
-    reputationLabels: [],
-  };
+  readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
+  readonly proxyReputationOptions = PROXY_REPUTATION_OPTIONS;
+  private readonly defaultFilterValues: ProxyListFilterFormValues = createDefaultProxyFilterValues();
   readonly proxySkeletonRows = Array.from({ length: 6 });
 
   private proxySearchDebounce?: ReturnType<typeof setTimeout>;
@@ -127,6 +82,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private http: HttpService,
     private fb: FormBuilder,
+    private notification: NotificationService,
   ) {
     this.filterForm = this.fb.group({
       proxyStatus: [this.defaultFilterValues.proxyStatus],
@@ -148,7 +104,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
       const rawId = params.get('id');
       const id = rawId ? Number(rawId) : NaN;
       if (!Number.isFinite(id) || id <= 0) {
-        NotificationService.showError('Invalid scrape source identifier');
+        this.notification.showError('Invalid scrape source identifier');
         this.router.navigate(['/scraper']).catch(() => {});
         return;
       }
@@ -371,16 +327,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
 
   clearFilters(): void {
     this.filterForm.reset(this.defaultFilterValues);
-    this.appliedFilters.set({
-      status: 'all',
-      protocols: [],
-      maxTimeout: 0,
-      maxRetries: 0,
-      countries: [],
-      types: [],
-      anonymityLevels: [],
-      reputationLabels: [],
-    });
+    this.appliedFilters.set(createDefaultProxyListAppliedFilters());
     this.proxyPage.set(1);
     this.loadProxyList();
   }
@@ -414,7 +361,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
         this.isLoading.set(false);
       },
       error: err => {
-        NotificationService.showError('Could not load scrape source detail: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
+        this.notification.showError('Could not load scrape source detail: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
         this.isLoading.set(false);
         this.router.navigate(['/scraper']).catch(() => {});
       }
@@ -443,7 +390,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
         this.proxyHasLoaded.set(true);
       },
       error: err => {
-        NotificationService.showError('Could not load scrape source proxies: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
+        this.notification.showError('Could not load scrape source proxies: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
         this.proxyLoading.set(false);
         this.proxyHasLoaded.set(true);
       }
@@ -453,33 +400,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
   }
 
   private activeFilterCount(): number {
-    const filters = this.appliedFilters();
-    let count = 0;
-    if (filters.status !== 'all') {
-      count += 1;
-    }
-    if (filters.protocols.length > 0) {
-      count += 1;
-    }
-    if (filters.countries.length > 0) {
-      count += 1;
-    }
-    if (filters.types.length > 0) {
-      count += 1;
-    }
-    if (filters.anonymityLevels.length > 0) {
-      count += 1;
-    }
-    if (filters.maxTimeout > 0) {
-      count += 1;
-    }
-    if (filters.maxRetries > 0) {
-      count += 1;
-    }
-    if (filters.reputationLabels.length > 0) {
-      count += 1;
-    }
-    return count;
+    return activeProxyFilterCount(this.appliedFilters());
   }
 
   private ensureFilterOptionsLoaded(): void {
@@ -489,148 +410,31 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
 
     this.http.getProxyFilterOptions().subscribe({
       next: options => {
-        const normalized = this.normalizeFilterOptions(options);
+        const normalized = normalizeFilterOptions(options);
         this.filterOptions.set(normalized);
-        this.countryOptions.set(this.buildFilterOptionList(normalized.countries));
-        this.typeOptions.set(this.buildFilterOptionList(normalized.types));
-        this.anonymityOptions.set(this.buildFilterOptionList(normalized.anonymityLevels));
+        this.countryOptions.set(buildFilterOptionList(normalized.countries));
+        this.typeOptions.set(buildFilterOptionList(normalized.types));
+        this.anonymityOptions.set(buildFilterOptionList(normalized.anonymityLevels));
         this.filterOptionsLoaded.set(true);
       },
       error: err => {
         const message = err?.error?.message ?? err?.message ?? 'Unknown error';
-        NotificationService.showError('Could not load filter options: ' + message);
+        this.notification.showError('Could not load filter options: ' + message);
       }
     });
-  }
-
-  private normalizeFilterOptions(options: ProxyFilterOptions): ProxyFilterOptions {
-    return {
-      countries: this.sortFilterOptions(options.countries),
-      types: this.sortFilterOptions(options.types),
-      anonymityLevels: this.sortFilterOptions(options.anonymityLevels),
-    };
-  }
-
-  private sortFilterOptions(values: string[]): string[] {
-    const cleaned = (values ?? []).filter(value => value && value.trim().length > 0);
-    cleaned.sort((a, b) => {
-      if (a === 'N/A') {
-        return 1;
-      }
-      if (b === 'N/A') {
-        return -1;
-      }
-      return a.localeCompare(b);
-    });
-    return cleaned;
-  }
-
-  private buildFilterOptionList(values: string[]): FilterOption[] {
-    return (values ?? []).map(value => ({label: value, value}));
   }
 
   private syncFilterFormWithApplied(): void {
-    const filters = this.appliedFilters();
-    this.filterForm.patchValue({
-      proxyStatus: filters.status,
-      http: filters.protocols.includes('http'),
-      https: filters.protocols.includes('https'),
-      socks4: filters.protocols.includes('socks4'),
-      socks5: filters.protocols.includes('socks5'),
-      maxTimeout: filters.maxTimeout ?? 0,
-      maxRetries: filters.maxRetries ?? 0,
-      countries: [...filters.countries],
-      types: [...filters.types],
-      anonymityLevels: [...filters.anonymityLevels],
-      reputationLabels: [...filters.reputationLabels],
-    }, {emitEvent: false});
+    syncFilterFormWithApplied(this.filterForm, this.appliedFilters());
   }
 
   private buildFiltersFromForm(): ProxyListAppliedFilters {
     const formValue = this.filterForm.getRawValue() as ProxyListFilterFormValues;
-    const protocols: string[] = [];
-    if (formValue.http) {
-      protocols.push('http');
-    }
-    if (formValue.https) {
-      protocols.push('https');
-    }
-    if (formValue.socks4) {
-      protocols.push('socks4');
-    }
-    if (formValue.socks5) {
-      protocols.push('socks5');
-    }
-
-    return {
-      status: formValue.proxyStatus ?? 'all',
-      protocols,
-      maxTimeout: this.normalizeNumber(formValue.maxTimeout),
-      maxRetries: this.normalizeNumber(formValue.maxRetries),
-      countries: this.normalizeSelection(formValue.countries),
-      types: this.normalizeSelection(formValue.types),
-      anonymityLevels: this.normalizeSelection(formValue.anonymityLevels),
-      reputationLabels: this.normalizeSelection(formValue.reputationLabels),
-    };
+    return buildFiltersFromFormValue(formValue);
   }
 
   private buildFilterPayload(filters: ProxyListAppliedFilters): ProxyListFilters | undefined {
-    const payload: ProxyListFilters = {};
-
-    if (filters.status !== 'all') {
-      payload.status = filters.status;
-    }
-    if (filters.protocols.length > 0) {
-      payload.protocols = filters.protocols;
-    }
-    if (filters.countries.length > 0) {
-      payload.countries = filters.countries;
-    }
-    if (filters.types.length > 0) {
-      payload.types = filters.types;
-    }
-    if (filters.anonymityLevels.length > 0) {
-      payload.anonymityLevels = filters.anonymityLevels;
-    }
-    if (filters.maxTimeout > 0) {
-      payload.maxTimeout = filters.maxTimeout;
-    }
-    if (filters.maxRetries > 0) {
-      payload.maxRetries = filters.maxRetries;
-    }
-    if (filters.reputationLabels.length > 0) {
-      payload.reputationLabels = filters.reputationLabels;
-    }
-
-    return Object.keys(payload).length > 0 ? payload : undefined;
-  }
-
-  private normalizeSelection(values: string[] | null | undefined): string[] {
-    if (!values || values.length === 0) {
-      return [];
-    }
-    const seen = new Set<string>();
-    const normalized: string[] = [];
-    for (const value of values) {
-      const trimmed = `${value}`.trim();
-      if (!trimmed || seen.has(trimmed)) {
-        continue;
-      }
-      seen.add(trimmed);
-      normalized.push(trimmed);
-    }
-    return normalized;
-  }
-
-  private normalizeNumber(value: number | string | null | undefined): number {
-    if (value === null || value === undefined) {
-      return 0;
-    }
-    const parsed = typeof value === 'string' ? Number(value) : value;
-    if (!Number.isFinite(parsed)) {
-      return 0;
-    }
-    return Math.max(0, Math.floor(parsed));
+    return buildProxyListFilterPayload(filters);
   }
 
 }

@@ -59,7 +59,10 @@ export class AddProxiesComponent {
     this.uniqueFileProxiesCount() + this.uniqueTextAreaProxiesCount() + this.uniqueClipboardProxiesCount()
   );
 
-  constructor(private service: HttpService) { }
+  constructor(
+    private service: HttpService,
+    private notification: NotificationService
+  ) { }
 
   async pasteFromClipboard(): Promise<void> {
     try {
@@ -201,7 +204,7 @@ export class AddProxiesComponent {
         },
         error: (err) => {
           this.popupStatus.set('error');
-          NotificationService.showError("Could not upload proxies: " + err.error.message)
+          this.notification.showError("Could not upload proxies: " + err.error.message)
         },
       });
     } else {

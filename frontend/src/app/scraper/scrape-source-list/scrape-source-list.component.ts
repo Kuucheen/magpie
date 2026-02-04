@@ -51,7 +51,8 @@ export class ScrapeSourceListComponent implements OnInit {
   constructor(
     private http: HttpService,
     private confirmationService: ConfirmationService,
-    private router: Router
+    private router: Router,
+    private notification: NotificationService
   ) { }
 
   ngOnInit(): void {
@@ -66,7 +67,7 @@ export class ScrapeSourceListComponent implements OnInit {
         this.respectRobotsEnabled = !!res?.respect_robots_txt;
       },
       error: err => {
-        NotificationService.showWarn('Could not load robots.txt setting: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
+        this.notification.showWarn('Could not load robots.txt setting: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
         this.respectRobotsEnabled = false;
       }
     });
@@ -85,7 +86,7 @@ export class ScrapeSourceListComponent implements OnInit {
         this.showAddScrapeSourceMessage.emit(shouldShowEmptyState);
       },
       error: err => {
-        NotificationService.showError("Could not get scraping sources" + err.error.message);
+        this.notification.showError("Could not get scraping sources" + err.error.message);
         this.loading = false;
         this.hasLoaded = true;
         this.showAddScrapeSourceMessage.emit(false);
@@ -101,7 +102,7 @@ export class ScrapeSourceListComponent implements OnInit {
         this.showAddScrapeSourceMessage.emit(shouldShowEmptyState);
       },
       error: err => {
-        NotificationService.showError("Could not get scrape sources count " + err.error.message);
+        this.notification.showError("Could not get scrape sources count " + err.error.message);
       }
     });
   }
@@ -136,13 +137,13 @@ export class ScrapeSourceListComponent implements OnInit {
 
         this.http.deleteScrapingSource(selectedIds).subscribe({
           next: res => {
-            NotificationService.showSuccess(res);
+            this.notification.showSuccess(res);
             this.totalItems -= selected.length;
             this.selection.clear();
             this.selectedScrapeSources = [];
             this.getAndSetScrapeSourcesList();
           },
-          error: err => NotificationService.showError("Could not delete scraping source " + err.error.message)
+          error: err => this.notification.showError("Could not delete scraping source " + err.error.message)
         });
       }
     });
@@ -213,19 +214,19 @@ export class ScrapeSourceListComponent implements OnInit {
         const { allowed, robots_found, error } = res ?? { allowed: true, robots_found: false };
 
         if (allowed && robots_found) {
-          NotificationService.showSuccess('robots.txt allows scraping this URL');
+          this.notification.showSuccess('robots.txt allows scraping this URL');
         } else if (!allowed && robots_found) {
-          NotificationService.showWarn('robots.txt disallows scraping this URL');
+          this.notification.showWarn('robots.txt disallows scraping this URL');
         } else if (allowed && !robots_found) {
-          NotificationService.showInfo('No robots.txt found; scraping is allowed by default');
+          this.notification.showInfo('No robots.txt found; scraping is allowed by default');
         }
 
         if (error) {
-          NotificationService.showWarn('Robots check completed with warnings: ' + error);
+          this.notification.showWarn('Robots check completed with warnings: ' + error);
         }
       },
       error: err => {
-        NotificationService.showError('Could not check robots.txt: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
+        this.notification.showError('Could not check robots.txt: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
       }
     }).add(() => {
       delete this.checkingRobots[source.id];

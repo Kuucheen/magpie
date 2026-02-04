@@ -37,7 +37,11 @@ export class AdminOtherComponent implements OnInit, OnDestroy {
   lastUpdatedLabel = 'Never';
   private destroy$ = new Subject<void>();
 
-  constructor(private fb: FormBuilder, private settingsService: SettingsService) {
+  constructor(
+    private fb: FormBuilder,
+    private settingsService: SettingsService,
+    private notification: NotificationService
+  ) {
     this.form = this.fb.group({
       api_key: [''],
       auto_update: [false],
@@ -94,12 +98,12 @@ export class AdminOtherComponent implements OnInit, OnDestroy {
 
     this.settingsService.saveGlobalSettings(payload).subscribe({
       next: (resp) => {
-        NotificationService.showSuccess(resp.message ?? 'Settings saved');
+        this.notification.showSuccess(resp.message ?? 'Settings saved');
         this.form.markAsPristine();
       },
       error: (err) => {
         console.error('Error saving GeoLite settings:', err);
-        NotificationService.showError('Failed to save GeoLite settings: ' + (err?.error?.message ?? 'Unknown error'));
+        this.notification.showError('Failed to save GeoLite settings: ' + (err?.error?.message ?? 'Unknown error'));
       }
     });
   }

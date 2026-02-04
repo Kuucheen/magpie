@@ -40,7 +40,11 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
   secondsList = Array.from({ length: 60 }, (_, i) => ({ label: `${i} Seconds`, value: i }));
   private destroy$ = new Subject<void>();
 
-  constructor(private fb: FormBuilder, private settingsService: SettingsService) {
+  constructor(
+    private fb: FormBuilder,
+    private settingsService: SettingsService,
+    private notification: NotificationService
+  ) {
     this.settingsForm = this.createDefaultForm();
   }
 
@@ -51,7 +55,7 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
           this.updateFormWithCheckerSettings(checkerSettings);
         }
       },
-      error: err => {NotificationService.showError("Could not get checker settings: " + err.error.message)}
+      error: err => {this.notification.showError("Could not get checker settings: " + err.error.message)}
     });
 
     const settings = this.settingsService.getGlobalSettings();
@@ -80,7 +84,7 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
 
     dynamicControl?.valueChanges?.subscribe({
       next: dynamic => dynamic ? threadsControl?.disable() : threadsControl?.enable(),
-      error: err => NotificationService.showError("Could not get dynamic thread info " + err.error.message)
+      error: err => this.notification.showError("Could not get dynamic thread info " + err.error.message)
     });
   }
 
@@ -246,13 +250,13 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
   onSubmit() {
     this.settingsService.saveGlobalSettings(this.settingsForm.value).subscribe({
       next: (resp) => {
-        NotificationService.showSuccess(resp.message)
+        this.notification.showSuccess(resp.message)
         this.settingsForm.markAsPristine()
       },
       error: (err) => {
         console.error("Error saving settings:", err);
         const reason = err?.error?.message ?? err?.error?.error ?? "Failed to save settings!";
-        NotificationService.showError(reason);
+        this.notification.showError(reason);
       }
     });
   }

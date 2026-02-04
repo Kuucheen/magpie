@@ -31,7 +31,11 @@ export class AdminBlacklistComponent implements OnInit, OnDestroy {
   form: FormGroup;
   private destroy$ = new Subject<void>();
 
-  constructor(private fb: FormBuilder, private settingsService: SettingsService) {
+  constructor(
+    private fb: FormBuilder,
+    private settingsService: SettingsService,
+    private notification: NotificationService
+  ) {
     this.form = this.fb.group({
       blacklist_timer: this.fb.group({
         days: [0],
@@ -105,13 +109,13 @@ export class AdminBlacklistComponent implements OnInit, OnDestroy {
   onSubmit(): void {
     this.settingsService.saveGlobalSettings(this.form.getRawValue()).subscribe({
       next: (resp) => {
-        NotificationService.showSuccess(resp.message ?? 'Settings saved');
+        this.notification.showSuccess(resp.message ?? 'Settings saved');
         this.form.markAsPristine();
       },
       error: (err) => {
         console.error('Error saving blacklist settings:', err);
         const reason = err?.error?.message ?? err?.error?.error ?? 'Unknown error';
-        NotificationService.showError('Failed to save blacklist settings: ' + reason);
+        this.notification.showError('Failed to save blacklist settings: ' + reason);
       }
     });
   }

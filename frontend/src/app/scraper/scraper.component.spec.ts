@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
+import { MessageService } from 'primeng/api';
 import { ScraperComponent } from './scraper.component';
 
 describe('ScraperComponent', () => {
@@ -8,7 +8,8 @@ describe('ScraperComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ScraperComponent]
+      imports: [ScraperComponent],
+      providers: [MessageService]
     })
     .compileComponents();
 

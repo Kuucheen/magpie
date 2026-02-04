@@ -76,6 +76,7 @@ $control-border: rgba(148, 163, 184, 0.25);
 ::ng-deep .export-dialog .p-dialog-header {
   padding: 1.25rem 1.5rem;
   background: rgba(18, 18, 18, 0.92);
+  border-top-radius: 200px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.2);
 }
 

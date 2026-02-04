@@ -85,7 +85,11 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   rotatorHost = signal(this.loopbackHost);
   private destroy$ = new Subject<void>();
 
-  constructor(private fb: FormBuilder, private http: HttpService) {
+  constructor(
+    private fb: FormBuilder,
+    private http: HttpService,
+    private notification: NotificationService
+  ) {
     this.createForm = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(120)]],
       protocol: ['', Validators.required],
@@ -184,7 +188,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       error: err => {
         this.loading.set(false);
         this.hasLoaded.set(true);
-        NotificationService.showError('Failed to load rotating proxies: ' + this.getErrorMessage(err));
+        this.notification.showError('Failed to load rotating proxies: ' + this.getErrorMessage(err));
       }
     });
   }
@@ -217,7 +221,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     if (!payload.name) {
       this.createForm.get('name')?.setValue('');
       this.createForm.get('name')?.markAsTouched();
-      NotificationService.showWarn('Name cannot be empty.');
+      this.notification.showWarn('Name cannot be empty.');
       return;
     }
 
@@ -244,13 +248,13 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           this.createForm.patchValue({name: ''}, {emitEvent: false});
           this.createForm.get('authUsername')?.reset('', {emitEvent: false});
           this.createForm.get('authPassword')?.reset('', {emitEvent: false});
-          NotificationService.showSuccess('Rotating proxy created.');
+          this.notification.showSuccess('Rotating proxy created.');
         },
         error: err => {
           this.submitting.set(false);
           this.updateFormDisabledStates();
           this.updateAuthControls(!!this.createForm.get('authRequired')?.value, false);
-          NotificationService.showError('Could not create rotating proxy: ' + this.getErrorMessage(err));
+          this.notification.showError('Could not create rotating proxy: ' + this.getErrorMessage(err));
         }
       });
   }
@@ -270,10 +274,10 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
             this.selectedRotator.set(null);
             this.detailsVisible.set(false);
           }
-          NotificationService.showSuccess('Rotating proxy deleted.');
+          this.notification.showSuccess('Rotating proxy deleted.');
         },
         error: err => {
-          NotificationService.showError('Could not delete rotating proxy: ' + this.getErrorMessage(err));
+          this.notification.showError('Could not delete rotating proxy: ' + this.getErrorMessage(err));
         }
       });
   }
@@ -323,7 +327,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           if (currentSelected && currentSelected.id === updatedRotator.id) {
             this.selectedRotator.set(updatedRotator);
           }
-          NotificationService.showSuccess(`Serving ${address}`);
+          this.notification.showSuccess(`Serving ${address}`);
         },
         error: err => {
           this.rotateLoading.update(set => {
@@ -331,14 +335,14 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
             next.delete(proxy.id);
             return next;
           });
-          NotificationService.showError('Could not rotate proxy: ' + this.getErrorMessage(err));
+          this.notification.showError('Could not rotate proxy: ' + this.getErrorMessage(err));
         }
       });
   }
 
   copyRotatorConnection(proxy: RotatingProxy | null): void {
     if (!proxy) {
-      NotificationService.showWarn('Rotator connection is not available yet.');
+      this.notification.showWarn('Rotator connection is not available yet.');
       return;
     }
 
@@ -570,16 +574,16 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
 
   private copyValueToClipboard(value: string, successMessage: string, emptyMessage: string): void {
     if (!value) {
-      NotificationService.showWarn(emptyMessage);
+      this.notification.showWarn(emptyMessage);
       return;
     }
 
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(value)
-        .then(() => NotificationService.showSuccess(successMessage))
-        .catch(() => NotificationService.showWarn('Could not copy to clipboard.'));
+        .then(() => this.notification.showSuccess(successMessage))
+        .catch(() => this.notification.showWarn('Could not copy to clipboard.'));
     } else {
-      NotificationService.showWarn('Clipboard access is not available.');
+      this.notification.showWarn('Clipboard access is not available.');
     }
   }
 

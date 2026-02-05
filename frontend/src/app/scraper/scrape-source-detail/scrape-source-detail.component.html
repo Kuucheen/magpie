@@ -14,15 +14,26 @@
           <h1 class="text-2xl font-semibold">Scrape Source</h1>
           <div class="mt-2">
             @if (detail()?.url) {
-              <a
-                class="source-url"
-                [href]="detail()?.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                [title]="detail()?.url"
-              >
-                {{ detail()?.url }}
-              </a>
+              <div class="source-url-row">
+                <a
+                  class="source-url"
+                  [href]="detail()?.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [title]="detail()?.url"
+                >
+                  {{ detail()?.url }}
+                </a>
+                <button
+                  type="button"
+                  pButton
+                  icon="pi pi-copy"
+                  class="copy-address-button"
+                  (click)="copyUrl()"
+                  title="Copy URL"
+                  aria-label="Copy URL"
+                ></button>
+              </div>
             } @else {
               <span class="muted-text">No URL available.</span>
             }

@@ -3,6 +3,7 @@ import { CommonModule, DatePipe, NgClass } from '@angular/common';
 import {FormBuilder, FormGroup} from '@angular/forms';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
+import {ClipboardModule, Clipboard} from '@angular/cdk/clipboard';
 import {ScrapeSourceDetail} from '../../models/ScrapeSourceDetail';
 import {HttpService} from '../../services/http.service';
 import {NotificationService} from '../../services/notification-service.service';
@@ -43,6 +44,7 @@ type ReputationLabel = 'good' | 'neutral' | 'poor' | 'unknown';
     NgClass,
     LoadingComponent,
     ButtonModule,
+    ClipboardModule,
     ProxyFilterPanelComponent,
     ProxyTableComponent,
   ],
@@ -82,6 +84,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private http: HttpService,
     private fb: FormBuilder,
+    private clipboard: Clipboard,
     private notification: NotificationService,
   ) {
     this.filterForm = this.fb.group({
@@ -353,6 +356,14 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     this.router.navigate(['/proxies', proxy.id], { queryParams }).catch(() => {});
   }
 
+  copyUrl(): void {
+    const value = this.detail()?.url?.trim();
+    if (!value) {
+      return;
+    }
+    this.copyToClipboard(value, 'URL copied');
+  }
+
   private loadScrapeSourceDetail(id: number): void {
     this.isLoading.set(true);
     const sub = this.http.getScrapeSourceDetail(id).subscribe({
@@ -431,6 +442,24 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
   private buildFiltersFromForm(): ProxyListAppliedFilters {
     const formValue = this.filterForm.getRawValue() as ProxyListFilterFormValues;
     return buildFiltersFromFormValue(formValue);
+  }
+
+  private copyToClipboard(value: string, successMessage: string): void {
+    const copied = this.clipboard.copy(value);
+    if (copied) {
+      this.notification.showSuccess(successMessage);
+      return;
+    }
+
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(value).then(
+        () => this.notification.showSuccess(successMessage),
+        () => this.notification.showError('Failed to access clipboard')
+      );
+      return;
+    }
+
+    this.notification.showError('Clipboard not available');
   }
 
   private buildFilterPayload(filters: ProxyListAppliedFilters): ProxyListFilters | undefined {

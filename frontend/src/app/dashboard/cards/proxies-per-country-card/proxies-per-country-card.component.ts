@@ -1,4 +1,4 @@
-import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
+import {AfterViewInit, Component, Input, OnChanges, SimpleChanges, ViewChild} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {Card} from 'primeng/card';
 import {PrimeTemplate} from 'primeng/api';
@@ -147,7 +147,7 @@ const COUNTRY_CODE_OVERRIDES: Record<string, string> = {
   templateUrl: './proxies-per-country-card.component.html',
   styleUrl: './proxies-per-country-card.component.scss'
 })
-export class ProxiesPerCountryCardComponent implements OnChanges {
+export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit {
   @Input() title = 'Proxies per country';
   @Input() countries: CountryBreakdown[] = [];
   @Input() styleClass = 'chart-card bg-neutral-900 border border-neutral-800 mb-4';
@@ -161,6 +161,9 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
   readonly listLimit = 7;
   showAllCountries = false;
   searchTerm = '';
+  private refreshQueued = false;
+
+  @ViewChild('mapChart') mapChart?: UIChart;
 
   private readonly regionNames = typeof Intl.DisplayNames !== 'undefined'
     ? new Intl.DisplayNames(['en'], { type: 'region' })
@@ -172,6 +175,10 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
       this.recalculateTotals();
       this.buildMap();
     }
+  }
+
+  ngAfterViewInit(): void {
+    this.scheduleMapRefresh();
   }
 
   countryFlag(country: CountryBreakdown): string {
@@ -202,6 +209,9 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
 
   setViewMode(mode: 'map' | 'countries'): void {
     this.viewMode = mode;
+    if (mode === 'map') {
+      this.scheduleMapRefresh();
+    }
   }
 
   countryPercent(country: CountryBreakdown): number {
@@ -367,9 +377,9 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
           outline: WORLD_FEATURES as any[],
           data: dataset,
           borderColor: 'rgba(255, 255, 255, 0.18)',
-          borderWidth: 0.8,
+          borderWidth: 1.1,
           hoverBorderColor: 'rgba(255, 255, 255, 0.85)',
-          hoverBorderWidth: 1.6,
+          hoverBorderWidth: 1.1,
           hoverBackgroundColor: (context: any) => {
             const raw = context.raw as { value?: number } | undefined;
             const value = typeof raw?.value === 'number' ? raw.value : 0;
@@ -381,6 +391,25 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
     };
 
     this.mapOptions = this.createMapOptions(this.maxCountryValue);
+    this.scheduleMapRefresh();
+  }
+
+  private scheduleMapRefresh(): void {
+    if (this.refreshQueued) {
+      return;
+    }
+    this.refreshQueued = true;
+
+    const finalize = () => {
+      this.refreshQueued = false;
+      this.mapChart?.refresh();
+    };
+
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(() => requestAnimationFrame(finalize));
+    } else {
+      setTimeout(finalize, 0);
+    }
   }
 
   private resolveFeature(name: string | undefined | null): CountryFeature | undefined {
@@ -473,6 +502,11 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
     const max = Math.max(maxValue, 1);
     return {
       maintainAspectRatio: false,
+      transitions: {
+        active: {
+          animation: { duration: 0 }
+        }
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -498,7 +532,7 @@ export class ProxiesPerCountryCardComponent implements OnChanges {
           borderColor: 'rgba(255, 255, 255, 0.2)',
           borderWidth: 1.1,
           hoverBorderColor: 'rgba(255, 255, 255, 0.85)',
-          hoverBorderWidth: 1.6,
+          hoverBorderWidth: 1.1,
           graticuleBorderColor: 'rgba(255, 255, 255, 0.08)',
           graticuleBorderWidth: 0.6
         }

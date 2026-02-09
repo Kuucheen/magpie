@@ -507,9 +507,28 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
           animation: { duration: 0 }
         }
       },
+      interaction: {
+        mode: 'nearest',
+        intersect: true
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
+          position: 'nearest',
+          animation: {
+            duration: 60,
+            easing: 'linear'
+          },
+          animations: {
+            numbers: {
+              duration: 60,
+              easing: 'linear'
+            },
+            opacity: {
+              duration: 60,
+              easing: 'linear'
+            }
+          },
           callbacks: {
             label: (context: TooltipItem<'choropleth'>) => {
               const raw = context.raw as any;

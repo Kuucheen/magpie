@@ -185,6 +185,26 @@ func GetAllScrapeSiteCountOfUser(userId uint) int64 {
 func GetScrapeSiteInfoPage(userId uint, page int) []dto.ScrapeSiteInfo {
 	offset := (page - 1) * scrapeSitesPerPage
 
+	var results []dto.ScrapeSiteInfo
+
+	query := buildScrapeSiteInfoQuery(userId).Select(
+		"scrape_sites.id         AS id, " +
+			"scrape_sites.url        AS url, " +
+			"COALESCE(pc.proxy_count, 0) AS proxy_count, " +
+			"COALESCE(ps.alive_count, 0) AS alive_count, " +
+			"COALESCE(ps.dead_count, 0) AS dead_count, " +
+			"COALESCE(ps.unknown_count, 0) AS unknown_count",
+	)
+
+	query.Order("uss.created_at DESC").
+		Offset(offset).
+		Limit(scrapeSitesPerPage).
+		Scan(&results)
+
+	return results
+}
+
+func buildScrapeSiteInfoQuery(userId uint) *gorm.DB {
 	// subquery: for each scrape_site_id, count only the proxies that this user has
 	subQuery := DB.
 		Model(&domain.ProxyScrapeSite{}).
@@ -192,26 +212,25 @@ func GetScrapeSiteInfoPage(userId uint, page int) []dto.ScrapeSiteInfo {
 		Joins("JOIN user_proxies up ON up.proxy_id = proxy_scrape_site.proxy_id AND up.user_id = ?", userId).
 		Group("scrape_site_id")
 
-	var results []dto.ScrapeSiteInfo
-
-	DB.
-		Model(&domain.ScrapeSite{}).
+	statusQuery := DB.
+		Table("proxy_scrape_site pss").
 		Select(
-			"scrape_sites.id         AS id, "+
-				"scrape_sites.url        AS url, "+
-				"COALESCE(pc.proxy_count, 0) AS proxy_count, "+
-				"uss.created_at          AS added_at",
+			"pss.scrape_site_id AS scrape_site_id, "+
+				"COALESCE(SUM(CASE WHEN pos.overall_alive IS TRUE THEN 1 ELSE 0 END), 0) AS alive_count, "+
+				"COALESCE(SUM(CASE WHEN pos.overall_alive IS FALSE THEN 1 ELSE 0 END), 0) AS dead_count, "+
+				"COALESCE(SUM(CASE WHEN pos.proxy_id IS NULL THEN 1 ELSE 0 END), 0) AS unknown_count",
 		).
+		Joins("JOIN user_proxies up ON up.proxy_id = pss.proxy_id AND up.user_id = ?", userId).
+		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = pss.proxy_id").
+		Group("pss.scrape_site_id")
+
+	return DB.
+		Model(&domain.ScrapeSite{}).
 		// only the sites this user has added
 		Joins("JOIN user_scrape_site uss ON uss.scrape_site_id = scrape_sites.id AND uss.user_id = ?", userId).
 		// attach the per-site, per-user proxy counts
 		Joins("LEFT JOIN (?) AS pc ON pc.scrape_site_id = scrape_sites.id", subQuery).
-		Order("uss.created_at DESC").
-		Offset(offset).
-		Limit(scrapeSitesPerPage).
-		Scan(&results)
-
-	return results
+		Joins("LEFT JOIN (?) AS ps ON ps.scrape_site_id = scrape_sites.id", statusQuery)
 }
 
 type scrapeSiteAggregateRow struct {

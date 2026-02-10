@@ -193,7 +193,8 @@ func GetScrapeSiteInfoPage(userId uint, page int) []dto.ScrapeSiteInfo {
 			"COALESCE(pc.proxy_count, 0) AS proxy_count, " +
 			"COALESCE(ps.alive_count, 0) AS alive_count, " +
 			"COALESCE(ps.dead_count, 0) AS dead_count, " +
-			"COALESCE(ps.unknown_count, 0) AS unknown_count",
+			"COALESCE(ps.unknown_count, 0) AS unknown_count, " +
+			"uss.created_at          AS added_at",
 	)
 
 	query.Order("uss.created_at DESC").

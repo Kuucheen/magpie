@@ -16,6 +16,11 @@ import {SkeletonModule} from 'primeng/skeleton';
 import {ConfirmationService} from 'primeng/api';
 import {NotificationService} from '../../services/notification-service.service';
 
+interface ScrapeSourceView extends ScrapeSourceInfo {
+  urlHead: string;
+  urlTail: string;
+}
+
 @Component({
   selector: 'app-scrape-source-list',
   imports: [
@@ -36,9 +41,9 @@ import {NotificationService} from '../../services/notification-service.service';
 export class ScrapeSourceListComponent implements OnInit {
   @Output() showAddScrapeSourceMessage = new EventEmitter<boolean>();
 
-  scrapeSources: ScrapeSourceInfo[] = [];
-  selection = new SelectionModel<ScrapeSourceInfo>(true, []);
-  selectedScrapeSources: ScrapeSourceInfo[] = [];
+  scrapeSources: ScrapeSourceView[] = [];
+  selection = new SelectionModel<ScrapeSourceView>(true, []);
+  selectedScrapeSources: ScrapeSourceView[] = [];
   page = 0; // PrimeNG uses 0-based pagination
   pageSize = 20;
   totalItems = 0;
@@ -78,7 +83,7 @@ export class ScrapeSourceListComponent implements OnInit {
     this.http.getScrapingSourcePage(this.page + 1).subscribe({
       next: res => {
         const sources = Array.isArray(res) ? res : [];
-        this.scrapeSources = sources;
+        this.scrapeSources = sources.map(source => this.buildViewSource(source));
         this.syncSelectionWithData();
         this.loading = false;
         this.hasLoaded = true;
@@ -154,7 +159,7 @@ export class ScrapeSourceListComponent implements OnInit {
     return this.selection.selected.length;
   }
 
-  toggleSelection(source: ScrapeSourceInfo): void {
+  toggleSelection(source: ScrapeSourceView): void {
     this.selection.toggle(source);
     this.selectedScrapeSources = [...this.selection.selected];
   }
@@ -193,7 +198,7 @@ export class ScrapeSourceListComponent implements OnInit {
     this.showAddScrapeSourceMessage.emit(value);
   }
 
-  onViewSource(event: Event | { originalEvent?: Event }, source: ScrapeSourceInfo): void {
+  onViewSource(event: Event | { originalEvent?: Event }, source: ScrapeSourceView): void {
     if ((event as { originalEvent?: Event }).originalEvent) {
       (event as { originalEvent?: Event }).originalEvent?.stopPropagation?.();
     } else {
@@ -202,7 +207,7 @@ export class ScrapeSourceListComponent implements OnInit {
     this.router.navigate(['/scraper', source.id]).catch(() => {});
   }
 
-  checkRobots(source: ScrapeSourceInfo, event?: Event): void {
+  checkRobots(source: ScrapeSourceView, event?: Event): void {
     event?.stopPropagation();
     if (!source?.url) {
       return;
@@ -235,6 +240,48 @@ export class ScrapeSourceListComponent implements OnInit {
 
   isCheckingRobots(sourceId: number): boolean {
     return this.checkingRobots[sourceId];
+  }
+
+  private buildViewSource(source: ScrapeSourceInfo): ScrapeSourceView {
+    const { head, tail } = this.splitUrlForDisplay(source.url);
+    return {
+      ...source,
+      urlHead: head,
+      urlTail: tail
+    };
+  }
+
+  private splitUrlForDisplay(url: string | null | undefined): { head: string; tail: string } {
+    const safeUrl = (url ?? '').trim();
+    if (!safeUrl) {
+      return { head: '', tail: '' };
+    }
+
+    const minLengthForSplit = 36;
+    if (safeUrl.length <= minLengthForSplit) {
+      return { head: safeUrl, tail: '' };
+    }
+
+    const trimmed = safeUrl.endsWith('/') ? safeUrl.slice(0, -1) : safeUrl;
+    const schemeIndex = trimmed.indexOf('://');
+    const hostStart = schemeIndex >= 0 ? schemeIndex + 3 : 0;
+    const lastSlash = trimmed.lastIndexOf('/');
+
+    if (lastSlash > hostStart && lastSlash < trimmed.length - 1) {
+      const head = trimmed.slice(0, lastSlash);
+      const tail = trimmed.slice(lastSlash) + (safeUrl.endsWith('/') ? '/' : '');
+      return { head, tail };
+    }
+
+    const fallbackTailLength = 12;
+    if (safeUrl.length <= fallbackTailLength) {
+      return { head: safeUrl, tail: '' };
+    }
+
+    return {
+      head: safeUrl.slice(0, safeUrl.length - fallbackTailLength),
+      tail: safeUrl.slice(-fallbackTailLength)
+    };
   }
 
   private syncSelectionWithData(): void {

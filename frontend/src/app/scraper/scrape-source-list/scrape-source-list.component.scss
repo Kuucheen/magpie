@@ -10,14 +10,39 @@ $border-color: rgba(255, 255, 255, 0.1);
   min-height: 100vh;
 }
 
+:host ::ng-deep .p-datatable table {
+  table-layout: fixed;
+}
+
+.url-cell {
+  overflow: hidden;
+  min-width: 0;
+}
+
 .scrape-url {
   color: $text-color;
   text-decoration: none;
-  word-break: break-all;
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
+  vertical-align: middle;
 
   &:hover {
     color: color.scale($text-color, $lightness: 20%);
   }
+}
+
+.scrape-url-start {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scrape-url-end {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .actions {

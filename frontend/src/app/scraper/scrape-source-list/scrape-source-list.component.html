@@ -57,7 +57,7 @@
             [indeterminate]="isSomeSelected()"
           ></p-checkbox>
         </th>
-        <th pSortableColumn="url">
+        <th pSortableColumn="url" class="url-cell">
           URL <p-sortIcon field="url"></p-sortIcon>
         </th>
         <th style="width: 9rem" class="text-center" pSortableColumn="proxy_count">
@@ -113,7 +113,7 @@
             [ngModel]="selection.isSelected(source)"
           ></p-checkbox>
         </td>
-        <td>
+        <td class="url-cell">
           <a
             [href]="source.url"
             target="_blank"
@@ -122,7 +122,7 @@
             [title]="source.url"
             (click)="$event.stopPropagation()"
           >
-            {{ source.url }}
+            <span class="scrape-url-start">{{ source.urlHead }}</span><span class="scrape-url-end">{{ source.urlTail }}</span>
           </a>
         </td>
         <td class="text-center">

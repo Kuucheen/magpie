@@ -2,5 +2,7 @@ export interface ScrapeSourceInfo {
   "id": number;
   "url": string;
   "proxy_count": number;
-  "added_at": string;
+  "alive_count": number;
+  "dead_count": number;
+  "unknown_count": number;
 }

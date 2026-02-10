@@ -1,5 +1,5 @@
 import {Component, EventEmitter, OnInit, Output} from '@angular/core';
-import {DatePipe} from '@angular/common';
+import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {SelectionModel} from '@angular/cdk/collections';
 import {Router} from '@angular/router';
@@ -16,15 +16,29 @@ import {SkeletonModule} from 'primeng/skeleton';
 import {ConfirmationService} from 'primeng/api';
 import {NotificationService} from '../../services/notification-service.service';
 
+type HealthTone = 'healthy' | 'mixed' | 'unhealthy' | 'empty';
+
+interface ScrapeSourceHealthView {
+  tone: HealthTone;
+  label: string;
+  ratioLabel: string;
+  pillClass: string;
+  dotClass: Record<string, boolean>;
+  alivePercent: number;
+  deadPercent: number;
+  unknownPercent: number;
+}
+
 interface ScrapeSourceView extends ScrapeSourceInfo {
   urlHead: string;
   urlTail: string;
+  health: ScrapeSourceHealthView;
 }
 
 @Component({
   selector: 'app-scrape-source-list',
   imports: [
-    DatePipe,
+    CommonModule,
     FormsModule,
     TableModule,
     ButtonModule,
@@ -247,7 +261,8 @@ export class ScrapeSourceListComponent implements OnInit {
     return {
       ...source,
       urlHead: head,
-      urlTail: tail
+      urlTail: tail,
+      health: this.buildHealthView(source)
     };
   }
 
@@ -294,5 +309,65 @@ export class ScrapeSourceListComponent implements OnInit {
       }
     });
     this.selectedScrapeSources = [...this.selection.selected];
+  }
+
+  private buildHealthView(source: ScrapeSourceInfo): ScrapeSourceHealthView {
+    const total = Math.max(0, source.proxy_count ?? 0);
+    const alive = Math.max(0, source.alive_count ?? 0);
+    const dead = Math.max(0, source.dead_count ?? 0);
+    const unknownFallback = Math.max(0, total - alive - dead);
+    const unknown = Math.max(0, source.unknown_count ?? unknownFallback);
+
+    let tone: HealthTone = 'empty';
+    if (total > 0) {
+      const ratio = alive / total;
+      if (ratio >= 0.7) {
+        tone = 'healthy';
+      } else if (ratio >= 0.4) {
+        tone = 'mixed';
+      } else {
+        tone = 'unhealthy';
+      }
+    }
+
+    const label = tone === 'healthy'
+      ? 'Healthy'
+      : tone === 'mixed'
+        ? 'Mixed'
+        : tone === 'unhealthy'
+          ? 'Unhealthy'
+          : 'No data';
+
+    const ratioLabel = total > 0 ? `${Math.round((alive / total) * 100)}% alive` : 'No data';
+
+    const pillClass = tone === 'mixed'
+      ? 'status-pill--mixed'
+      : tone === 'unhealthy'
+        ? 'status-pill--dead'
+        : tone === 'empty'
+          ? 'status-pill--unknown'
+          : '';
+
+    const dotClass = {
+      alive: tone === 'healthy',
+      mixed: tone === 'mixed',
+      dead: tone === 'unhealthy',
+      unknown: tone === 'empty',
+    };
+
+    const alivePercent = total > 0 ? (alive / total) * 100 : 0;
+    const deadPercent = total > 0 ? (dead / total) * 100 : 0;
+    const unknownPercent = total > 0 ? (unknown / total) * 100 : 0;
+
+    return {
+      tone,
+      label,
+      ratioLabel,
+      pillClass,
+      dotClass,
+      alivePercent,
+      deadPercent,
+      unknownPercent,
+    };
   }
 }

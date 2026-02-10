@@ -42,7 +42,7 @@
     dataKey="id"
     [selection]="selection.selected"
     [(selection)]="selectedScrapeSources"
-    class="p-datatable-gridlines p-datatable-sm"
+    class="scrape-source-table p-datatable-gridlines p-datatable-sm"
     [rowHover]="true"
     [showLoader]="hasLoaded"
   >
@@ -63,8 +63,8 @@
         <th style="width: 9rem" class="text-center" pSortableColumn="proxy_count">
           Proxy Count <p-sortIcon field="proxy_count"></p-sortIcon>
         </th>
-        <th style="width: 12rem" class="text-center" pSortableColumn="added_at">
-          Added At <p-sortIcon field="added_at"></p-sortIcon>
+        <th style="width: 13rem" class="text-center" pSortableColumn="health">
+          Health <p-sortIcon field="health"></p-sortIcon>
         </th>
         @if (respectRobotsEnabled) {
           <th style="width: 11rem" class="text-center">
@@ -90,7 +90,10 @@
               <p-skeleton width="3rem" height="0.85rem" class="inline-block"></p-skeleton>
             </td>
             <td class="text-center">
-              <p-skeleton width="6rem" height="0.85rem" class="inline-block"></p-skeleton>
+              <div class="health-skeleton">
+                <p-skeleton width="7rem" height="1.35rem" class="inline-block"></p-skeleton>
+                <p-skeleton width="4.5rem" height="0.6rem" class="inline-block"></p-skeleton>
+              </div>
             </td>
             @if (respectRobotsEnabled) {
               <td class="text-center">
@@ -129,7 +132,18 @@
           {{ source.proxy_count }}
         </td>
         <td class="text-center">
-          {{ source.added_at | date : 'short' }}
+          <div class="health-cell">
+            <div class="status-pill" [ngClass]="source.health.pillClass">
+              <span class="status-dot" [ngClass]="source.health.dotClass"></span>
+              {{ source.health.label }}
+            </div>
+            <div class="health-sub">{{ source.health.ratioLabel }}</div>
+            <div class="health-bar" aria-hidden="true">
+              <span class="health-bar__segment health-bar__segment--alive" [style.width.%]="source.health.alivePercent"></span>
+              <span class="health-bar__segment health-bar__segment--dead" [style.width.%]="source.health.deadPercent"></span>
+              <span class="health-bar__segment health-bar__segment--unknown" [style.width.%]="source.health.unknownPercent"></span>
+            </div>
+          </div>
         </td>
         @if (respectRobotsEnabled) {
           <td class="text-center">

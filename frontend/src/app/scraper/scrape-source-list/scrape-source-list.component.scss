@@ -29,7 +29,8 @@ $border-color: rgba(255, 255, 255, 0.1);
 
 :host ::ng-deep .scrape-source-table .p-datatable-wrapper {
   border-radius: 0.5rem;
-  overflow: hidden;
+  overflow: visible !important;
+  max-height: none !important;
 }
 
 :host ::ng-deep .scrape-source-table .p-datatable-table {
@@ -215,18 +216,13 @@ $border-color: rgba(255, 255, 255, 0.1);
   background: rgba(148, 163, 184, 0.2);
 }
 
-.health-hover {
+.health-tooltip {
+  position: fixed;
+  transform: translate(-100%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translate(-50%, 0.4rem);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease;
   padding: 0.6rem 0.75rem;
   border-radius: 0.75rem;
   background: rgba(24, 24, 27, 0.68);
@@ -234,14 +230,9 @@ $border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  z-index: 5;
+  z-index: 1000;
   min-width: 10rem;
-}
-
-.health-cell:hover .health-hover {
-  opacity: 1;
-  transform: translate(-50%, 0.7rem);
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .health-counts {

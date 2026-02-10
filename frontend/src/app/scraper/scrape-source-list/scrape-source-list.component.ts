@@ -58,6 +58,7 @@ export class ScrapeSourceListComponent implements OnInit {
   @Output() showAddScrapeSourceMessage = new EventEmitter<boolean>();
 
   scrapeSources: ScrapeSourceView[] = [];
+  hoveredHealth: { source: ScrapeSourceView; x: number; y: number } | null = null;
   selection = new SelectionModel<ScrapeSourceView>(true, []);
   selectedScrapeSources: ScrapeSourceView[] = [];
   page = 0; // PrimeNG uses 0-based pagination
@@ -256,6 +257,25 @@ export class ScrapeSourceListComponent implements OnInit {
 
   isCheckingRobots(sourceId: number): boolean {
     return this.checkingRobots[sourceId];
+  }
+
+  showHealthPopup(event: MouseEvent, source: ScrapeSourceView): void {
+    const target = event.currentTarget as HTMLElement | null;
+    if (!target) {
+      return;
+    }
+    const bar = target.querySelector<HTMLElement>('.health-bar');
+    const rect = (bar ?? target).getBoundingClientRect();
+    const spacing = 10;
+    this.hoveredHealth = {
+      source,
+      x: rect.left - spacing,
+      y: rect.top + rect.height / 2,
+    };
+  }
+
+  hideHealthPopup(): void {
+    this.hoveredHealth = null;
   }
 
   private buildViewSource(source: ScrapeSourceInfo): ScrapeSourceView {

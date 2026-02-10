@@ -162,6 +162,7 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
   showAllCountries = false;
   searchTerm = '';
   private refreshQueued = false;
+  private readonly tooltipNumber = new Intl.NumberFormat('en-US');
 
   @ViewChild('mapChart') mapChart?: UIChart;
 
@@ -515,19 +516,10 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
         legend: { display: false },
         tooltip: {
           position: 'nearest',
-          animation: {
-            duration: 60,
-            easing: 'linear'
-          },
+          animation: false,
           animations: {
-            numbers: {
-              duration: 60,
-              easing: 'linear'
-            },
-            opacity: {
-              duration: 60,
-              easing: 'linear'
-            }
+            numbers: { duration: 0 },
+            opacity: { duration: 0 }
           },
           callbacks: {
             label: (context: TooltipItem<'choropleth'>) => {
@@ -535,7 +527,7 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
               const feature = raw?.feature as CountryFeature | undefined;
               const label = feature?.properties?.name ?? context.label ?? 'Unknown';
               const value = typeof raw?.value === 'number' ? raw.value : 0;
-              return `${label}: ${value}`;
+              return `${label}: ${this.tooltipNumber.format(value)}`;
             }
           },
           backgroundColor: '#0b1220',

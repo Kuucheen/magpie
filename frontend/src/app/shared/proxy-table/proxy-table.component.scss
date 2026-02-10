@@ -48,6 +48,36 @@
   }
 }
 
+.proxy-checkbox {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.25);
+  accent-color: var(--proxy-accent);
+  cursor: pointer;
+}
+
+.proxy-details-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--theme-link-color);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+
+  &:hover {
+    color: var(--theme-link-hover);
+    background-color: var(--theme-primary-text-hover-bg);
+  }
+}
+
 .reputation-cell {
   min-width: 140px;
   white-space: nowrap;

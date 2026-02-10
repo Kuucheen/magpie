@@ -1,33 +1,50 @@
-import {Component, EventEmitter, Input, Output} from '@angular/core';
-import {DatePipe, NgClass} from '@angular/common';
-import {FormsModule} from '@angular/forms';
+import {ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges} from '@angular/core';
+import {NgClass} from '@angular/common';
 import {SelectionModel} from '@angular/cdk/collections';
 import {TableLazyLoadEvent, TableModule} from 'primeng/table';
-import {CheckboxModule} from 'primeng/checkbox';
 import {SkeletonModule} from 'primeng/skeleton';
-import {ButtonModule} from 'primeng/button';
 import {Tooltip} from 'primeng/tooltip';
 import {ProxyInfo} from '../../models/ProxyInfo';
 import {ProxyReputation} from '../../models/ProxyReputation';
+
+interface ProxyRowMeta {
+  hasReputation: boolean;
+  reputationBadgeClass: string;
+  reputationLabel: string;
+  reputationScore: string;
+  latestCheckLabel: string;
+}
+
+type ProxyRow = ProxyInfo & { __meta?: ProxyRowMeta };
 
 @Component({
   selector: 'app-proxy-table',
   standalone: true,
   imports: [
-    DatePipe,
     NgClass,
-    FormsModule,
     TableModule,
-    CheckboxModule,
     SkeletonModule,
-    ButtonModule,
     Tooltip,
   ],
   templateUrl: './proxy-table.component.html',
   styleUrls: ['./proxy-table.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ProxyTableComponent {
-  @Input() proxies: ProxyInfo[] = [];
+export class ProxyTableComponent implements OnChanges {
+  private _proxies: ProxyRow[] = [];
+  private readonly dateFormatter = new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+
+  @Input()
+  set proxies(value: ProxyInfo[]) {
+    this._proxies = (value ?? []) as ProxyRow[];
+    this.decorateProxies();
+  }
+  get proxies(): ProxyRow[] {
+    return this._proxies;
+  }
   @Input() loading = false;
   @Input() hasLoaded = false;
   @Input() page = 1;
@@ -47,6 +64,9 @@ export class ProxyTableComponent {
 
   @Input() emptyReputationLabel = '—';
   @Input() missingReputationScoreLabel: string | null = null;
+  @Input() virtualScroll = false;
+  @Input() virtualScrollItemSize = 46;
+  @Input() scrollHeight: string | null = null;
 
   @Output() lazyLoad = new EventEmitter<TableLazyLoadEvent>();
   @Output() selectionChange = new EventEmitter<ProxyInfo[]>();
@@ -55,12 +75,22 @@ export class ProxyTableComponent {
   @Output() sort = new EventEmitter<{ field: string; order: number }>();
   @Output() viewProxy = new EventEmitter<ProxyInfo>();
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['emptyReputationLabel'] || changes['missingReputationScoreLabel']) {
+      this.decorateProxies();
+    }
+  }
+
   get columnCount(): number {
     return this.selectionEnabled ? 10 : 9;
   }
 
   get scoreFallback(): string {
     return this.missingReputationScoreLabel ?? this.emptyReputationLabel;
+  }
+
+  trackByProxy(_index: number, proxy: ProxyRow): number {
+    return proxy.id;
   }
 
   onSelectionChange(value: ProxyInfo[]): void {
@@ -100,38 +130,63 @@ export class ProxyTableComponent {
     this.viewProxy.emit(proxy);
   }
 
-  hasReputation(proxy: ProxyInfo): boolean {
-    return this.getPrimaryReputation(proxy) !== null;
+  private decorateProxies(): void {
+    if (!this._proxies.length) {
+      return;
+    }
+    for (const proxy of this._proxies) {
+      this.buildMeta(proxy);
+    }
   }
 
-  reputationBadgeClass(proxy: ProxyInfo): string {
-    const label = this.getPrimaryReputation(proxy)?.label?.toLowerCase() ?? '';
-    if (label === 'good') {
-      return 'reputation-badge reputation-badge--good';
+  private buildMeta(proxy: ProxyRow): ProxyRowMeta {
+    const reputation = this.getPrimaryReputation(proxy);
+    if (!reputation) {
+      proxy.__meta = {
+        hasReputation: false,
+        reputationBadgeClass: 'reputation-badge reputation-badge--unknown',
+        reputationLabel: 'Unknown',
+        reputationScore: this.scoreFallback,
+        latestCheckLabel: this.formatLatestCheck(proxy.latest_check),
+      };
+      return proxy.__meta;
     }
-    if (label === 'neutral') {
-      return 'reputation-badge reputation-badge--neutral';
+
+    const rawLabel = `${reputation.label ?? ''}`.trim();
+    const label = rawLabel.length > 0 ? rawLabel : 'Unknown';
+    const normalized = label.toLowerCase();
+    let badgeClass = 'reputation-badge reputation-badge--unknown';
+    if (normalized === 'good') {
+      badgeClass = 'reputation-badge reputation-badge--good';
+    } else if (normalized === 'neutral') {
+      badgeClass = 'reputation-badge reputation-badge--neutral';
+    } else if (normalized === 'poor') {
+      badgeClass = 'reputation-badge reputation-badge--poor';
     }
-    if (label === 'poor') {
-      return 'reputation-badge reputation-badge--poor';
-    }
-    return 'reputation-badge reputation-badge--unknown';
+
+    const score = reputation.score === null || reputation.score === undefined
+      ? this.scoreFallback
+      : Math.round(reputation.score).toString();
+
+    proxy.__meta = {
+      hasReputation: true,
+      reputationBadgeClass: badgeClass,
+      reputationLabel: label,
+      reputationScore: score,
+      latestCheckLabel: this.formatLatestCheck(proxy.latest_check),
+    };
+    return proxy.__meta;
   }
 
-  reputationLabel(proxy: ProxyInfo): string {
-    const label = this.getPrimaryReputation(proxy)?.label?.trim();
-    if (label && label.length > 0) {
-      return label;
+  private formatLatestCheck(value: unknown): string {
+    if (!value) {
+      return '—';
     }
-    return 'Unknown';
-  }
-
-  reputationScore(proxy: ProxyInfo): string {
-    const score = this.getPrimaryReputation(proxy)?.score;
-    if (score === null || score === undefined) {
-      return this.scoreFallback;
+    const date = value instanceof Date ? value : new Date(value as string);
+    if (!Number.isFinite(date.getTime())) {
+      return '—';
     }
-    return Math.round(score).toString();
+    return this.dateFormatter.format(date);
   }
 
   private getPrimaryReputation(proxy: ProxyInfo): ProxyReputation | null {

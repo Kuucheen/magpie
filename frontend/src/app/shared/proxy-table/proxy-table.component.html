@@ -16,16 +16,23 @@
   (onSort)="onSort($event)"
   [loading]="loading"
   [showLoader]="hasLoaded"
+  [rowTrackBy]="trackByProxy"
+  [scrollable]="virtualScroll"
+  [scrollHeight]="virtualScroll ? (scrollHeight ?? '60vh') : undefined"
+  [virtualScroll]="virtualScroll"
+  [virtualScrollItemSize]="virtualScroll ? virtualScrollItemSize : undefined"
 >
   <ng-template pTemplate="header">
     <tr>
       @if (selectionEnabled) {
         <th style="width: 3rem">
-          <p-checkbox
-            [binary]="true"
-            (onChange)="onMasterToggle()"
-            [ngModel]="isAllSelected"
-          ></p-checkbox>
+          <input
+            type="checkbox"
+            class="proxy-checkbox"
+            [checked]="isAllSelected"
+            (click)="$event.stopPropagation()"
+            (change)="onMasterToggle()"
+          />
         </th>
       }
 
@@ -119,11 +126,13 @@
     @if (selectionEnabled) {
       <tr (click)="onToggleSelection(proxy)" [pSelectableRow]="proxy">
         <td>
-          <p-checkbox
-            [binary]="true"
-            (onChange)="onToggleSelection(proxy)"
-            [ngModel]="selectionModel?.isSelected(proxy)"
-          ></p-checkbox>
+          <input
+            type="checkbox"
+            class="proxy-checkbox"
+            [checked]="selectionModel?.isSelected(proxy)"
+            (click)="$event.stopPropagation()"
+            (change)="onToggleSelection(proxy)"
+          />
         </td>
         <td>
           <div class="status-dot" [ngClass]="proxy.alive ? 'alive' : 'dead'"></div>
@@ -134,25 +143,23 @@
         <td>{{ proxy.estimated_type }}</td>
         <td>{{ proxy.country }}</td>
         <td class="reputation-cell">
-          @if (hasReputation(proxy)) {
-            <span [ngClass]="reputationBadgeClass(proxy)">
-              <span>{{ reputationLabel(proxy) }}</span>
-              <span class="reputation-badge__score">{{ reputationScore(proxy) }}</span>
+          @if (proxy.__meta?.hasReputation) {
+            <span [ngClass]="proxy.__meta?.reputationBadgeClass">
+              <span>{{ proxy.__meta?.reputationLabel }}</span>
+              <span class="reputation-badge__score">{{ proxy.__meta?.reputationScore }}</span>
             </span>
           } @else {
             {{ emptyReputationLabel }}
           }
         </td>
         <td class="w-[170px]">
-          {{ proxy.latest_check | date : 'short' }}
+          {{ proxy.__meta?.latestCheckLabel ?? '—' }}
         </td>
         <td>
-          <p-button
-            label="Details"
-            icon="pi pi-external-link"
-            styleClass="p-button-text p-button-sm"
-            (onClick)="onViewProxy($event, proxy)"
-          ></p-button>
+          <button type="button" class="proxy-details-button" (click)="onViewProxy($event, proxy)">
+            <i class="pi pi-external-link" aria-hidden="true"></i>
+            <span>Details</span>
+          </button>
         </td>
       </tr>
     } @else {
@@ -166,25 +173,23 @@
         <td>{{ proxy.estimated_type }}</td>
         <td>{{ proxy.country }}</td>
         <td class="reputation-cell">
-          @if (hasReputation(proxy)) {
-            <span [ngClass]="reputationBadgeClass(proxy)">
-              <span>{{ reputationLabel(proxy) }}</span>
-              <span class="reputation-badge__score">{{ reputationScore(proxy) }}</span>
+          @if (proxy.__meta?.hasReputation) {
+            <span [ngClass]="proxy.__meta?.reputationBadgeClass">
+              <span>{{ proxy.__meta?.reputationLabel }}</span>
+              <span class="reputation-badge__score">{{ proxy.__meta?.reputationScore }}</span>
             </span>
           } @else {
             {{ emptyReputationLabel }}
           }
         </td>
         <td class="w-[170px]">
-          {{ proxy.latest_check | date : 'short' }}
+          {{ proxy.__meta?.latestCheckLabel ?? '—' }}
         </td>
         <td>
-          <p-button
-            label="Details"
-            icon="pi pi-external-link"
-            styleClass="p-button-text p-button-sm"
-            (onClick)="onViewProxy($event, proxy)"
-          ></p-button>
+          <button type="button" class="proxy-details-button" (click)="onViewProxy($event, proxy)">
+            <i class="pi pi-external-link" aria-hidden="true"></i>
+            <span>Details</span>
+          </button>
         </td>
       </tr>
     }

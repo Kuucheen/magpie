@@ -6,10 +6,11 @@ import {SelectionModel} from '@angular/cdk/collections';
 import {TableLazyLoadEvent} from 'primeng/table'; // Keep this for onLazyLoad
 import {ButtonModule} from 'primeng/button';
 import {NotificationService} from '../../services/notification-service.service';
-import {Subscription} from 'rxjs';
+import {Observable, Subscription} from 'rxjs';
+import {filter, finalize, takeUntil} from 'rxjs/operators';
 import {ExportProxiesComponent} from './export-proxies/export-proxies.component';
 import {AddProxiesComponent} from './add-proxies/add-proxies.component';
-import {Router} from '@angular/router';
+import {NavigationStart, Router} from '@angular/router';
 import {DeleteProxiesComponent} from './delete-proxies/delete-proxies.component';
 import {InputNumberModule} from 'primeng/inputnumber';
 import {MultiSelectModule} from 'primeng/multiselect';
@@ -86,11 +87,14 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly restoreStateStorageKey = 'magpie-proxy-list-restore-state';
   private readonly filterStorageKey = 'magpie-proxy-list-filters';
   private pendingScrollY: number | null = null;
+  private navigationStart$: Observable<NavigationStart>;
+  private isNavigatingAway = false;
 
   sortField = signal<string | null>(null);
   sortOrder = signal<number | null>(null); // 1 for ascending, -1 for descending
 
   private proxyListSubscription?: Subscription;
+  private navigationSubscription?: Subscription;
 
   constructor(
     private http: HttpService,
@@ -98,6 +102,13 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     private fb: FormBuilder,
     private notification: NotificationService
   ) {
+    this.navigationStart$ = this.router.events.pipe(
+      filter((event): event is NavigationStart => event instanceof NavigationStart)
+    );
+    this.navigationSubscription = this.navigationStart$.subscribe(() => {
+      this.isNavigatingAway = true;
+      this.proxyListSubscription?.unsubscribe();
+    });
     this.filterForm = this.fb.group({
       proxyStatus: [this.defaultFilterValues.proxyStatus],
       http: [this.defaultFilterValues.http],
@@ -144,9 +155,13 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
   getAndSetProxyList(event?: TableLazyLoadEvent) {
     this.proxyListSubscription?.unsubscribe();
+    this.isNavigatingAway = false;
     this.isLoading.set(true);
-    const page = event ? Math.floor((event.first ?? 0) / (event.rows ?? this.pageSize())) + 1 : this.page();
-    const rows = event?.rows ?? this.pageSize();
+    const requestedRows = event?.rows ?? this.pageSize();
+    const normalizedRows = Number.isFinite(requestedRows) && requestedRows > 0 ? requestedRows : this.pageSize();
+    const rawPage = event ? Math.floor((event.first ?? 0) / normalizedRows) + 1 : this.page();
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+    const rows = normalizedRows;
     const requestedSortField = this.resolveSortField(event?.sortField);
     const requestedSortOrder = event?.sortOrder ?? this.sortOrder() ?? null;
     const normalizedSortOrder = requestedSortOrder && requestedSortOrder !== 0 ? requestedSortOrder : null;
@@ -162,30 +177,41 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       rows,
       search: trimmedSearch.length > 0 ? trimmedSearch : undefined,
       filters: filterPayload,
-    }).subscribe({
-      next: res => {
-        const data = [...res.proxies];
-        this.page.set(page);
-        this.pageSize.set(rows);
-        const sorted = this.applySort(data, normalizedSortField, normalizedSortOrder);
-        this.dataSource.set(sorted);
-        this.totalItems.set(res.total ?? sorted.length);
-        this.pruneSelection();
-        this.isLoading.set(false);
-        this.hasLoaded.set(true);
-        this.showAddProxiesMessage.emit(this.totalItems() === 0 && this.hasLoaded());
-        this.restoreScrollPosition();
-      },
-      error: err => {
-        this.notification.showError('Could not get proxy page: ' + err.error.message);
-        this.isLoading.set(false);
-        this.hasLoaded.set(true);
-      }
-    });
+    })
+      .pipe(
+        takeUntil(this.navigationStart$),
+        finalize(() => this.isLoading.set(false))
+      )
+      .subscribe({
+        next: res => {
+          if (this.isNavigatingAway) {
+            return;
+          }
+          const data = [...res.proxies];
+          this.page.set(page);
+          this.pageSize.set(rows);
+          const sorted = this.applySort(data, normalizedSortField, normalizedSortOrder);
+          this.dataSource.set(sorted);
+          this.totalItems.set(res.total ?? sorted.length);
+          this.pruneSelection();
+          this.hasLoaded.set(true);
+          this.showAddProxiesMessage.emit(this.totalItems() === 0 && this.hasLoaded());
+          this.restoreScrollPosition();
+        },
+        error: err => {
+          if (this.isNavigatingAway) {
+            return;
+          }
+          const message = err?.error?.message ?? err?.message ?? 'Unknown error';
+          this.notification.showError('Could not get proxy page: ' + message);
+          this.hasLoaded.set(true);
+        }
+      });
   }
 
   ngOnDestroy(): void {
     this.proxyListSubscription?.unsubscribe();
+    this.navigationSubscription?.unsubscribe();
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
@@ -195,8 +221,10 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     const previousSortField = this.sortField();
     const previousSortOrder = this.sortOrder();
 
-    const newPage = Math.floor(event.first! / event.rows!) + 1;
-    const newPageSize = event.rows ?? this.pageSize();
+    const requestedRows = event.rows ?? this.pageSize();
+    const newPageSize = Number.isFinite(requestedRows) && requestedRows > 0 ? requestedRows : this.pageSize();
+    const first = event.first ?? 0;
+    const newPage = Math.floor(first / newPageSize) + 1;
 
     const normalizedSortOrder = event.sortOrder && event.sortOrder !== 0 ? event.sortOrder : null;
     const normalizedSortField = normalizedSortOrder ? this.resolveSortField(event.sortField) : null;
@@ -204,6 +232,10 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     const sortChanged = normalizedSortField !== previousSortField || normalizedSortOrder !== previousSortOrder;
     const pageChanged = newPage !== this.page();
     const pageSizeChanged = newPageSize !== this.pageSize();
+
+    if (!Number.isFinite(newPage) || newPage < 1) {
+      return;
+    }
 
     this.page.set(newPage);
     this.pageSize.set(newPageSize);

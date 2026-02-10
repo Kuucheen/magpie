@@ -29,6 +29,11 @@ $border-color: rgba(255, 255, 255, 0.1);
 
 :host ::ng-deep .scrape-source-table .p-datatable-tbody > tr > td {
   border-color: rgba(148, 163, 184, 0.12);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+:host ::ng-deep .scrape-source-table .p-datatable-tbody > tr:not(.p-highlight):hover > td {
+  background: rgba(148, 163, 184, 0.06);
 }
 
 :host ::ng-deep .scrape-source-table .p-datatable-tbody > tr.p-highlight {

@@ -126,3 +126,11 @@
     font-size: 0.8rem;
   }
 }
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr > td {
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr:not(.p-highlight):hover > td {
+  background: rgba(148, 163, 184, 0.06);
+}

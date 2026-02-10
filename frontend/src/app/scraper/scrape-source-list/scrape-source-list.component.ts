@@ -277,6 +277,20 @@ export class ScrapeSourceListComponent implements OnInit {
       return { head: safeUrl, tail: '' };
     }
 
+    const queryIndex = safeUrl.indexOf('?');
+    if (queryIndex >= 0 && queryIndex < safeUrl.length - 1) {
+      const base = safeUrl.slice(0, queryIndex);
+      const query = safeUrl.slice(queryIndex + 1);
+      const queryTailLength = 24;
+
+      if (query.length > queryTailLength) {
+        return {
+          head: `${base}?${query.slice(0, query.length - queryTailLength)}`,
+          tail: query.slice(-queryTailLength)
+        };
+      }
+    }
+
     const trimmed = safeUrl.endsWith('/') ? safeUrl.slice(0, -1) : safeUrl;
     const schemeIndex = trimmed.indexOf('://');
     const hostStart = schemeIndex >= 0 ? schemeIndex + 3 : 0;

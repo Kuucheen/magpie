@@ -4,6 +4,8 @@ import {SelectionModel} from '@angular/cdk/collections';
 import {TableLazyLoadEvent, TableModule} from 'primeng/table';
 import {SkeletonModule} from 'primeng/skeleton';
 import {Tooltip} from 'primeng/tooltip';
+import {CheckboxModule} from 'primeng/checkbox';
+import {FormsModule} from '@angular/forms';
 import {ProxyInfo} from '../../models/ProxyInfo';
 import {ProxyReputation} from '../../models/ProxyReputation';
 
@@ -22,7 +24,9 @@ type ProxyRow = ProxyInfo & { __meta?: ProxyRowMeta };
   standalone: true,
   imports: [
     NgClass,
+    FormsModule,
     TableModule,
+    CheckboxModule,
     SkeletonModule,
     Tooltip,
   ],
@@ -105,6 +109,14 @@ export class ProxyTableComponent implements OnChanges {
       return;
     }
     this.masterToggle.emit();
+  }
+
+  isSomeSelected(): boolean {
+    if (!this.selectionEnabled || !this.selectionModel) {
+      return false;
+    }
+    const count = this.selectionModel.selected.length;
+    return count > 0 && !this.isAllSelected;
   }
 
   onToggleSelection(proxy: ProxyInfo): void {

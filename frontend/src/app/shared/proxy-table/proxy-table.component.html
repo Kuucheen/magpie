@@ -26,13 +26,12 @@
     <tr>
       @if (selectionEnabled) {
         <th style="width: 3rem">
-          <input
-            type="checkbox"
-            class="proxy-checkbox"
-            [checked]="isAllSelected"
-            (click)="$event.stopPropagation()"
-            (change)="onMasterToggle()"
-          />
+          <p-checkbox
+            [binary]="true"
+            (onChange)="onMasterToggle()"
+            [ngModel]="isAllSelected"
+            [indeterminate]="isSomeSelected()"
+          ></p-checkbox>
         </th>
       }
 
@@ -125,14 +124,12 @@
   <ng-template pTemplate="body" let-proxy>
     @if (selectionEnabled) {
       <tr (click)="onToggleSelection(proxy)" [pSelectableRow]="proxy">
-        <td>
-          <input
-            type="checkbox"
-            class="proxy-checkbox"
-            [checked]="selectionModel?.isSelected(proxy)"
-            (click)="$event.stopPropagation()"
-            (change)="onToggleSelection(proxy)"
-          />
+        <td (click)="$event.stopPropagation()">
+          <p-checkbox
+            [binary]="true"
+            (onChange)="onToggleSelection(proxy)"
+            [ngModel]="selectionModel?.isSelected(proxy)"
+          ></p-checkbox>
         </td>
         <td>
           <div class="status-dot" [ngClass]="proxy.alive ? 'alive' : 'dead'"></div>

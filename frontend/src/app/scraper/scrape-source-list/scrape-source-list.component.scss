@@ -54,7 +54,7 @@ $border-color: rgba(255, 255, 255, 0.1);
 }
 
 .scrape-url {
-  color: $text-color;
+  color: rgba(var(--theme-primary-500-rgb, 59, 130, 246), 1);
   text-decoration: none;
   display: inline-flex;
   align-items: baseline;
@@ -62,7 +62,7 @@ $border-color: rgba(255, 255, 255, 0.1);
   vertical-align: middle;
 
   &:hover {
-    color: color.scale($text-color, $lightness: 30%);
+    color: rgba(var(--theme-primary-500-rgb, 59, 130, 246), 1);
   }
 }
 

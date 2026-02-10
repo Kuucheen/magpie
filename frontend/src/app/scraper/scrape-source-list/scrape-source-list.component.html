@@ -128,20 +128,34 @@
             <span class="scrape-url-start">{{ source.urlHead }}</span><span class="scrape-url-end">{{ source.urlTail }}</span>
           </a>
         </td>
-        <td class="text-center">
+        <td class="text-center health-td">
           {{ source.proxy_count }}
         </td>
         <td class="text-center">
           <div class="health-cell">
-            <div class="status-pill" [ngClass]="source.health.pillClass">
-              <span class="status-dot" [ngClass]="source.health.dotClass"></span>
-              {{ source.health.label }}
-            </div>
             <div class="health-sub">{{ source.health.ratioLabel }}</div>
             <div class="health-bar" aria-hidden="true">
               <span class="health-bar__segment health-bar__segment--alive" [style.width.%]="source.health.alivePercent"></span>
               <span class="health-bar__segment health-bar__segment--dead" [style.width.%]="source.health.deadPercent"></span>
               <span class="health-bar__segment health-bar__segment--unknown" [style.width.%]="source.health.unknownPercent"></span>
+            </div>
+            <div class="health-hover">
+              <div
+                class="status-pill"
+                [ngClass]="{
+                  'status-pill--mixed': source.health.tone === 'mixed',
+                  'status-pill--dead': source.health.tone === 'unhealthy',
+                  'status-pill--unknown': source.health.tone === 'empty'
+                }"
+              >
+                <span class="status-dot" [ngClass]="source.health.dotClass"></span>
+                {{ source.health.label }}
+              </div>
+              <div class="health-counts">
+                <span class="health-count health-count--alive">Alive {{ source.health.aliveCount }}</span>
+                <span class="health-count health-count--dead">Dead {{ source.health.deadCount }}</span>
+                <span class="health-count health-count--unknown">Unknown {{ source.health.unknownCount }}</span>
+              </div>
             </div>
           </div>
         </td>

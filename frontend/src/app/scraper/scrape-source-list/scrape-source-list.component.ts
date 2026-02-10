@@ -22,8 +22,10 @@ interface ScrapeSourceHealthView {
   tone: HealthTone;
   label: string;
   ratioLabel: string;
-  pillClass: string;
   dotClass: Record<string, boolean>;
+  aliveCount: number;
+  deadCount: number;
+  unknownCount: number;
   alivePercent: number;
   deadPercent: number;
   unknownPercent: number;
@@ -354,14 +356,6 @@ export class ScrapeSourceListComponent implements OnInit {
 
     const ratioLabel = total > 0 ? `${Math.round((alive / total) * 100)}% alive` : 'No data';
 
-    const pillClass = tone === 'mixed'
-      ? 'status-pill--mixed'
-      : tone === 'unhealthy'
-        ? 'status-pill--dead'
-        : tone === 'empty'
-          ? 'status-pill--unknown'
-          : '';
-
     const dotClass = {
       alive: tone === 'healthy',
       mixed: tone === 'mixed',
@@ -377,8 +371,10 @@ export class ScrapeSourceListComponent implements OnInit {
       tone,
       label,
       ratioLabel,
-      pillClass,
       dotClass,
+      aliveCount: alive,
+      deadCount: dead,
+      unknownCount: unknown,
       alivePercent,
       deadPercent,
       unknownPercent,

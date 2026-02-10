@@ -134,3 +134,35 @@
 :host ::ng-deep .p-datatable .p-datatable-tbody > tr:not(.p-highlight):hover > td {
   background: rgba(148, 163, 184, 0.06);
 }
+
+:host ::ng-deep .p-datatable {
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-wrapper {
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 0.5rem;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-thead > tr > th:first-child {
+  border-top-left-radius: 0.5rem;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-thead > tr > th:last-child {
+  border-top-right-radius: 0.5rem;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr:last-child > td:first-child {
+  border-bottom-left-radius: 0.5rem;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr:last-child > td:last-child {
+  border-bottom-right-radius: 0.5rem;
+}

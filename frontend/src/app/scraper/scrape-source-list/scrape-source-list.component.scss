@@ -21,10 +21,37 @@ $border-color: rgba(255, 255, 255, 0.1);
 
 :host ::ng-deep .scrape-source-table {
   border: none;
-  border-radius: 0;
+  border-radius: 0.5rem;
   overflow: hidden;
   background: transparent;
   box-shadow: none;
+}
+
+:host ::ng-deep .scrape-source-table .p-datatable-wrapper {
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+:host ::ng-deep .scrape-source-table .p-datatable-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 0.5rem;
+}
+
+:host ::ng-deep .scrape-source-table .p-datatable-thead > tr > th:first-child {
+  border-top-left-radius: 0.5rem;
+}
+
+:host ::ng-deep .scrape-source-table .p-datatable-thead > tr > th:last-child {
+  border-top-right-radius: 0.5rem;
+}
+
+:host ::ng-deep .scrape-source-table .p-datatable-tbody > tr:last-child > td:first-child {
+  border-bottom-left-radius: 0.5rem;
+}
+
+:host ::ng-deep .scrape-source-table .p-datatable-tbody > tr:last-child > td:last-child {
+  border-bottom-right-radius: 0.5rem;
 }
 
 :host ::ng-deep .scrape-source-table .p-datatable-tbody > tr > td {

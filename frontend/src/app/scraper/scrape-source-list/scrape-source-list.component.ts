@@ -266,11 +266,11 @@ export class ScrapeSourceListComponent implements OnInit {
     }
     const bar = target.querySelector<HTMLElement>('.health-bar');
     const rect = (bar ?? target).getBoundingClientRect();
-    const spacing = 10;
+    const spacing = 8;
     this.hoveredHealth = {
       source,
-      x: rect.left - spacing,
-      y: rect.top + rect.height / 2,
+      x: rect.left + rect.width / 2,
+      y: rect.top - spacing,
     };
   }
 

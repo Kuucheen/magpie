@@ -559,7 +559,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     const effectiveLimit = typeof limit === 'number' && Number.isFinite(limit) && limit >= 0 ? limit : null;
 
-    const labelFormatter = new Intl.DateTimeFormat(this.localeId, {
+    const labelFormatter = new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: '2-digit',
       hour: '2-digit',
@@ -705,20 +705,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return Number.isNaN(parsed) ? value : this.numberFormatter.format(parsed);
   }
 
-  private resolveProxyLineI18n(localeId: string): ProxyLineI18n {
-    if (localeId.toLowerCase().startsWith('de')) {
-      return {
-        title: 'Proxies pro Stunde (letzte 7 Tage)',
-        proxiesLabel: 'Proxies',
-        limitLabel: 'Proxy-Limit',
-        noDataLabel: 'Keine Daten',
-        tooltipProxiesLabel: 'Proxies',
-        tooltipGainedLabel: 'Hinzugefügt',
-        tooltipLostLabel: 'Verloren',
-        tooltipLimitLabel: 'Limit'
-      };
-    }
-
+  private resolveProxyLineI18n(_localeId: string): ProxyLineI18n {
     return {
       title: 'Proxies per Hour (Last 7 Days)',
       proxiesLabel: 'Proxies',

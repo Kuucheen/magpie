@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -52,6 +53,11 @@ func insertAndAssociateProxies(proxies []domain.Proxy, userIDs []uint) ([]domain
 		return nil, nil
 	}
 
+	userIDs = normalizeUserIDs(userIDs)
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+
 	uniqueProxies := deduplicateProxies(proxies)
 	if len(uniqueProxies) == 0 {
 		return nil, nil
@@ -70,6 +76,11 @@ func insertAndAssociateProxies(proxies []domain.Proxy, userIDs []uint) ([]domain
 	allowedHashes := make(map[string]struct{})
 
 	for _, userID := range userIDs {
+		if err := lockUserForProxyLimit(tx, userID, limitCfg); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+
 		hashes, err := filterHashesForUser(tx, uniqueProxies, userID, batchSize, limitCfg)
 		if err != nil {
 			tx.Rollback()
@@ -136,6 +147,56 @@ func insertAndAssociateProxies(proxies []domain.Proxy, userIDs []uint) ([]domain
 }
 
 // Helper functions
+func normalizeUserIDs(userIDs []uint) []uint {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	normalized := append([]uint(nil), userIDs...)
+	sort.Slice(normalized, func(i, j int) bool {
+		return normalized[i] < normalized[j]
+	})
+
+	out := normalized[:0]
+	var previous uint
+	hasPrevious := false
+	for _, userID := range normalized {
+		if hasPrevious && userID == previous {
+			continue
+		}
+		out = append(out, userID)
+		previous = userID
+		hasPrevious = true
+	}
+
+	return out
+}
+
+func lockUserForProxyLimit(tx *gorm.DB, userID uint, limitCfg config.ProxyLimitConfig) error {
+	if tx == nil || !limitCfg.Enabled {
+		return nil
+	}
+	// PostgreSQL needs explicit row locks to serialize count-and-insert across
+	// concurrent transactions for the same user. Other dialects are left as-is.
+	if tx.Dialector.Name() != "postgres" {
+		return nil
+	}
+
+	var userIDRow uint
+	if err := tx.Model(&domain.User{}).
+		Select("id").
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ?", userID).
+		Take(&userIDRow).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("proxy limit lock: user %d not found", userID)
+		}
+		return err
+	}
+
+	return nil
+}
+
 func deduplicateProxies(proxies []domain.Proxy) []domain.Proxy {
 	seen := make(map[string]struct{}, len(proxies))
 	unique := make([]domain.Proxy, 0, len(proxies))
@@ -1223,6 +1284,97 @@ func CleanupAutoRemovalViolations(ctx context.Context) (int64, []domain.Proxy, e
 	}
 
 	return total, orphanList, nil
+}
+
+func CleanupProxyLimitViolations(ctx context.Context) (int64, []domain.Proxy, error) {
+	limitCfg := config.GetConfig().ProxyLimits
+	return cleanupProxyLimitViolationsWithConfig(ctx, limitCfg)
+}
+
+func cleanupProxyLimitViolationsWithConfig(ctx context.Context, limitCfg config.ProxyLimitConfig) (int64, []domain.Proxy, error) {
+	if !limitCfg.Enabled {
+		return 0, nil, nil
+	}
+
+	if DB == nil {
+		return 0, nil, fmt.Errorf("database not initialised")
+	}
+
+	db := DB
+	if ctx != nil {
+		db = db.WithContext(ctx)
+	}
+
+	maxPerUser := int64(limitCfg.MaxPerUser)
+
+	query := db.Table("user_proxies up").
+		Select("up.user_id").
+		Group("up.user_id").
+		Having("COUNT(*) > ?", maxPerUser)
+	if limitCfg.ExcludeAdmins {
+		query = query.Joins("JOIN users u ON u.id = up.user_id").
+			Where("u.role <> ?", "admin")
+	}
+
+	var userIDs []uint
+	if err := query.Pluck("up.user_id", &userIDs).Error; err != nil {
+		return 0, nil, err
+	}
+	userIDs = normalizeUserIDs(userIDs)
+	if len(userIDs) == 0 {
+		return 0, nil, nil
+	}
+
+	totalRemoved := int64(0)
+	orphaned := make(map[uint64]domain.Proxy)
+
+	for _, userID := range userIDs {
+		var currentCount int64
+		if err := db.Table("user_proxies").
+			Where("user_id = ?", userID).
+			Count(&currentCount).Error; err != nil {
+			return 0, nil, err
+		}
+
+		overflow := currentCount - maxPerUser
+		if overflow <= 0 {
+			continue
+		}
+
+		var toRemove []uint64
+		if err := db.Table("user_proxies").
+			Select("proxy_id").
+			Where("user_id = ?", userID).
+			Order("created_at DESC, proxy_id DESC").
+			Limit(int(overflow)).
+			Pluck("proxy_id", &toRemove).Error; err != nil {
+			return 0, nil, err
+		}
+		if len(toRemove) == 0 {
+			continue
+		}
+
+		proxyIDs := make([]int, 0, len(toRemove))
+		for _, proxyID := range toRemove {
+			proxyIDs = append(proxyIDs, int(proxyID))
+		}
+
+		removed, orphanList, err := DeleteProxyRelation(userID, proxyIDs)
+		if err != nil {
+			return 0, nil, err
+		}
+		totalRemoved += removed
+		for _, proxy := range orphanList {
+			orphaned[proxy.ID] = proxy
+		}
+	}
+
+	orphanList := make([]domain.Proxy, 0, len(orphaned))
+	for _, proxy := range orphaned {
+		orphanList = append(orphanList, proxy)
+	}
+
+	return totalRemoved, orphanList, nil
 }
 
 func collectOrphanProxyIDs(candidateIDs []int) ([]uint64, error) {

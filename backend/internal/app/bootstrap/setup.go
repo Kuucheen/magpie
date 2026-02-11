@@ -66,6 +66,22 @@ func Setup() {
 		}
 	}
 
+	limitCleanedRelations, limitOrphanedProxies, limitCleanupErr := database.CleanupProxyLimitViolations(context.Background())
+	if limitCleanupErr != nil {
+		log.Error("proxy-limit cleanup failed", "error", limitCleanupErr)
+	} else if limitCleanedRelations > 0 {
+		log.Info(
+			"Proxy-limit cleanup completed",
+			"relations_removed", limitCleanedRelations,
+			"orphaned_proxies", len(limitOrphanedProxies),
+		)
+		if len(limitOrphanedProxies) > 0 {
+			if err := proxyqueue.PublicProxyQueue.RemoveFromQueue(limitOrphanedProxies); err != nil {
+				log.Warn("failed to purge proxy-limit orphans from queue", "error", err)
+			}
+		}
+	}
+
 	go func() {
 		cfg := config.GetConfig()
 

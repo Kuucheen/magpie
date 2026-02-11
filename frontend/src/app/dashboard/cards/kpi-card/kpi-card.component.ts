@@ -1,4 +1,4 @@
-import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
+import {Component, Inject, Input, LOCALE_ID, OnChanges, SimpleChanges} from '@angular/core';
 import {Card} from 'primeng/card';
 import {Chip} from 'primeng/chip';
 import {NgClass} from '@angular/common';
@@ -22,6 +22,18 @@ export class KpiCardComponent implements OnChanges {
 
   sparklineData: any = {};
   resolvedChange = 0;
+  private readonly numberFormatter: Intl.NumberFormat;
+  private readonly percentFormatter: Intl.NumberFormat;
+
+  constructor(@Inject(LOCALE_ID) localeId: string) {
+    const normalizedLocale = localeId || 'en-US';
+    this.numberFormatter = new Intl.NumberFormat(normalizedLocale);
+    this.percentFormatter = new Intl.NumberFormat(normalizedLocale, {
+      style: 'percent',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    });
+  }
 
   sparklineOptions = {
     responsive: true,
@@ -32,7 +44,7 @@ export class KpiCardComponent implements OnChanges {
       },
       tooltip: {
         callbacks: {
-          label: (context: any) => `${context.parsed.y}`,
+          label: (context: any) => this.formatNumber(context?.parsed?.y),
           title: () => []
         },
         displayColors: false
@@ -81,8 +93,20 @@ export class KpiCardComponent implements OnChanges {
     return change > 0 ? 'pi-arrow-up' : change == 0 ? 'pi-arrows-v' : 'pi-arrow-down';
   }
 
+  formatChange(change: number): string {
+    if (!Number.isFinite(change)) {
+      return this.changeSuffix === '%' ? this.percentFormatter.format(0) : `0${this.changeSuffix}`;
+    }
+
+    if (this.changeSuffix === '%') {
+      return this.percentFormatter.format(change / 100);
+    }
+
+    return `${this.numberFormatter.format(change)}${this.changeSuffix}`;
+  }
+
   private buildSparklineData(): any {
-    const currentValue = this.coerceNumericValue(this.displayValue ?? this.value);
+    const currentValue = this.coerceNumericValue(this.value);
     const history = [...this.sanitiseHistory(this.chartValues)];
 
     const trimmed = history.slice(-4);
@@ -121,7 +145,7 @@ export class KpiCardComponent implements OnChanges {
       return this.change;
     }
 
-    const current = this.coerceNumericValue(this.displayValue ?? this.value);
+    const current = this.coerceNumericValue(this.value);
     const history = this.sanitiseHistory(this.chartValues);
     if (!history.length) {
       return 0;
@@ -152,6 +176,19 @@ export class KpiCardComponent implements OnChanges {
     }
 
     return 0;
+  }
+
+  private formatNumber(value: number | string | null | undefined): string {
+    if (typeof value === 'number') {
+      return this.numberFormatter.format(value);
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      return Number.isNaN(parsed) ? value : this.numberFormatter.format(parsed);
+    }
+
+    return this.numberFormatter.format(0);
   }
 
   private getTrendColor(change: number): string {

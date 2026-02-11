@@ -129,7 +129,7 @@
           </a>
         </td>
         <td class="text-center">
-          {{ source.proxy_count }}
+          {{ source.proxy_count | number }}
         </td>
         <td class="text-center health-td">
           <div
@@ -192,9 +192,9 @@
         {{ hoveredHealth.source.health.label }}
       </div>
       <div class="health-counts">
-        <span class="health-count health-count--alive">Alive {{ hoveredHealth.source.health.aliveCount }}</span>
-        <span class="health-count health-count--dead">Dead {{ hoveredHealth.source.health.deadCount }}</span>
-        <span class="health-count health-count--unknown">Unknown {{ hoveredHealth.source.health.unknownCount }}</span>
+      <span class="health-count health-count--alive">Alive {{ hoveredHealth.source.health.aliveCount | number }}</span>
+      <span class="health-count health-count--dead">Dead {{ hoveredHealth.source.health.deadCount | number }}</span>
+      <span class="health-count health-count--unknown">Unknown {{ hoveredHealth.source.health.unknownCount | number }}</span>
       </div>
     </div>
   }

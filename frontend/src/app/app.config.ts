@@ -1,5 +1,7 @@
 import {
-  ApplicationConfig, provideBrowserGlobalErrorListeners,
+  ApplicationConfig,
+  LOCALE_ID,
+  provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
@@ -127,6 +129,7 @@ const CustomTheme = definePreset(Aura, {
 
 export const appConfig: ApplicationConfig = {
   providers: [
+    { provide: LOCALE_ID, useValue: 'de-DE' },
     MessageService,
     provideAnimationsAsync(),
     providePrimeNG({

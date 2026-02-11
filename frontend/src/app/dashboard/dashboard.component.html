@@ -106,6 +106,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
       <div class="lg:col-span-2">
         <app-proxies-per-hour-card
+          [title]="proxiesPerHourTitle"
           [chartData]="proxiesLineData()"
           [chartOptions]="proxiesLineOptions()">
         </app-proxies-per-hour-card>

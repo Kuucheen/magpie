@@ -1,4 +1,5 @@
 import {AfterViewInit, Component, Input, OnChanges, SimpleChanges, ViewChild} from '@angular/core';
+import {DecimalPipe} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {Card} from 'primeng/card';
 import {PrimeTemplate} from 'primeng/api';
@@ -144,6 +145,7 @@ const COUNTRY_CODE_OVERRIDES: Record<string, string> = {
   selector: 'app-proxies-per-country-card',
   standalone: true,
   imports: [Card, PrimeTemplate, UIChart, Dialog, FormsModule],
+  providers: [DecimalPipe],
   templateUrl: './proxies-per-country-card.component.html',
   styleUrl: './proxies-per-country-card.component.scss'
 })
@@ -162,9 +164,13 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
   showAllCountries = false;
   searchTerm = '';
   private refreshQueued = false;
-  private readonly tooltipNumber = new Intl.NumberFormat('en-US');
+  private readonly decimalPipe: DecimalPipe;
 
   @ViewChild('mapChart') mapChart?: UIChart;
+
+  constructor(decimalPipe: DecimalPipe) {
+    this.decimalPipe = decimalPipe;
+  }
 
   private readonly regionNames = typeof Intl.DisplayNames !== 'undefined'
     ? new Intl.DisplayNames(['en'], { type: 'region' })
@@ -527,7 +533,7 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
               const feature = raw?.feature as CountryFeature | undefined;
               const label = feature?.properties?.name ?? context.label ?? 'Unknown';
               const value = typeof raw?.value === 'number' ? raw.value : 0;
-              return `${label}: ${this.tooltipNumber.format(value)}`;
+              return `${label}: ${this.formatNumber(value)}`;
             }
           },
           backgroundColor: '#0b1220',
@@ -567,6 +573,10 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
         }
       }
     };
+  }
+
+  private formatNumber(value: number): string {
+    return this.decimalPipe.transform(value, '1.0-0') ?? '0';
   }
 
   private interpolateColor(value: number): string {

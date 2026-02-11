@@ -8,7 +8,7 @@
         </span>
         <p-chip [ngClass]="getChipClass(resolvedChange)">
           <i class="pi" [ngClass]="getChangeIcon(resolvedChange)"></i>
-          {{ resolvedChange }}{{ changeSuffix }}
+          {{ formatChange(resolvedChange) }}
         </p-chip>
       </div>
     </div>

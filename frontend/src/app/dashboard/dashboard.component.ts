@@ -1,4 +1,4 @@
-import {Component, OnDestroy, OnInit, signal} from '@angular/core';
+import {Component, Inject, LOCALE_ID, OnDestroy, OnInit, signal} from '@angular/core';
 import {DecimalPipe} from '@angular/common';
 import {Subject} from 'rxjs';
 import {finalize, takeUntil} from 'rxjs/operators';
@@ -34,6 +34,17 @@ interface DashboardStatus {
   loading: boolean;
   loaded: boolean;
   error?: string;
+}
+
+interface ProxyLineI18n {
+  title: string;
+  proxiesLabel: string;
+  limitLabel: string;
+  noDataLabel: string;
+  tooltipProxiesLabel: string;
+  tooltipGainedLabel: string;
+  tooltipLostLabel: string;
+  tooltipLimitLabel: string;
 }
 
 @Component({
@@ -80,7 +91,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   reputationChartData = signal<any>({});
   reputationChartOptions = signal<any>({});
 
-  private readonly numberFormatter = new Intl.NumberFormat('de-DE');
+  readonly proxiesPerHourTitle: string;
+  private readonly localeId: string;
+  private readonly numberFormatter: Intl.NumberFormat;
+  private readonly proxyLineI18n: ProxyLineI18n;
 
   judgeTrafficData = signal<Record<string, number>>({});
   judgePeriodOptions = ['Yearly', 'Monthly', 'Weekly'];
@@ -92,7 +106,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   readonly countrySkeletons = Array.from({ length: 5 });
   readonly reputationSkeletons = Array.from({ length: 4 });
 
-  constructor(private graphqlService: GraphqlService) {}
+  constructor(
+    private graphqlService: GraphqlService,
+    @Inject(LOCALE_ID) localeId: string
+  ) {
+    this.localeId = localeId || 'en-US';
+    this.numberFormatter = new Intl.NumberFormat(this.localeId);
+    this.proxyLineI18n = this.resolveProxyLineI18n(this.localeId);
+    this.proxiesPerHourTitle = this.proxyLineI18n.title;
+  }
 
   ngOnInit(): void {
     this.loadDashboard();
@@ -537,7 +559,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     const effectiveLimit = typeof limit === 'number' && Number.isFinite(limit) && limit >= 0 ? limit : null;
 
-    const labelFormatter = new Intl.DateTimeFormat(undefined, {
+    const labelFormatter = new Intl.DateTimeFormat(this.localeId, {
       month: 'short',
       day: '2-digit',
       hour: '2-digit',
@@ -549,7 +571,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       const diffRef = this.proxiesLineDiff;
       const datasets: Array<Record<string, unknown>> = [
         {
-          label: 'Proxies',
+          label: this.proxyLineI18n.proxiesLabel,
           data: [0],
           borderColor: '#3b82f6',
           backgroundColor: 'rgba(59, 130, 246, 0.2)',
@@ -562,7 +584,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
       if (effectiveLimit !== null) {
         datasets.push({
-          label: 'Proxy Limit',
+          label: this.proxyLineI18n.limitLabel,
           data: [effectiveLimit],
           borderColor: '#f59e0b',
           borderDash: [5, 5],
@@ -572,7 +594,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
 
       this.proxiesLineData.set({
-        labels: ['No Data'],
+        labels: [this.proxyLineI18n.noDataLabel],
         datasets
       });
       this.proxiesLineOptions.set(this.createProxyLineOptions(diffRef));
@@ -588,7 +610,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     const datasets: Array<Record<string, unknown>> = [
       {
-        label: 'Proxies',
+        label: this.proxyLineI18n.proxiesLabel,
         data: values,
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59, 130, 246, 0.2)',
@@ -601,7 +623,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     if (effectiveLimit !== null) {
       datasets.push({
-        label: 'Proxy Limit',
+        label: this.proxyLineI18n.limitLabel,
         data: values.map(() => effectiveLimit),
         borderColor: '#f59e0b',
         borderDash: [5, 5],
@@ -630,12 +652,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
             label: (context: any) => {
               const index = context.dataIndex;
               const value = context.dataset.data[index];
-              if (context.dataset.label === 'Proxies') {
+              if (context.datasetIndex === 0) {
                 const gainedValue = diffRef.gained[index] ?? 0;
                 const lostValue = diffRef.lost[index] ?? 0;
-                return `Proxies: ${value} (Gained: ${Math.max(gainedValue, 0)}, Lost: ${lostValue})`;
+                return `${this.proxyLineI18n.tooltipProxiesLabel}: ${this.formatChartValue(value)} (${this.proxyLineI18n.tooltipGainedLabel}: ${this.formatChartValue(Math.max(gainedValue, 0))}, ${this.proxyLineI18n.tooltipLostLabel}: ${this.formatChartValue(lostValue)})`;
               }
-              return `Limit: ${value}`;
+              return `${this.proxyLineI18n.tooltipLimitLabel}: ${this.formatChartValue(value)}`;
             }
           }
         },
@@ -649,7 +671,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
           grid: { color: '#374151' }
         },
         y: {
-          ticks: { color: '#9ca3af' },
+          ticks: {
+            color: '#9ca3af',
+            callback: (value: string | number) => this.formatChartValue(value)
+          },
           grid: { color: '#374151' }
         }
       }
@@ -665,9 +690,44 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private toTimeLabel(date: Date): string {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(this.localeId, {
       hour: '2-digit',
       minute: '2-digit'
     }).format(date);
+  }
+
+  private formatChartValue(value: string | number): string {
+    if (typeof value === 'number') {
+      return this.numberFormatter.format(value);
+    }
+
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? value : this.numberFormatter.format(parsed);
+  }
+
+  private resolveProxyLineI18n(localeId: string): ProxyLineI18n {
+    if (localeId.toLowerCase().startsWith('de')) {
+      return {
+        title: 'Proxies pro Stunde (letzte 7 Tage)',
+        proxiesLabel: 'Proxies',
+        limitLabel: 'Proxy-Limit',
+        noDataLabel: 'Keine Daten',
+        tooltipProxiesLabel: 'Proxies',
+        tooltipGainedLabel: 'Hinzugefügt',
+        tooltipLostLabel: 'Verloren',
+        tooltipLimitLabel: 'Limit'
+      };
+    }
+
+    return {
+      title: 'Proxies per Hour (Last 7 Days)',
+      proxiesLabel: 'Proxies',
+      limitLabel: 'Proxy Limit',
+      noDataLabel: 'No Data',
+      tooltipProxiesLabel: 'Proxies',
+      tooltipGainedLabel: 'Gained',
+      tooltipLostLabel: 'Lost',
+      tooltipLimitLabel: 'Limit'
+    };
   }
 }

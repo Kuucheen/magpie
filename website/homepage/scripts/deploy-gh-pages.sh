@@ -21,8 +21,8 @@ else
   git worktree add -B "$BRANCH" "$WORKTREE"
 fi
 
-rm -rf "$WORKTREE"/*
-cp -R "$DIST_DIR"/. "$WORKTREE"
+# Sync homepage files to gh-pages root while preserving the docs subtree.
+rsync -a --delete --exclude 'docs' "$DIST_DIR"/ "$WORKTREE"/
 
 cd "$WORKTREE"
 

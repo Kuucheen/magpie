@@ -253,9 +253,16 @@ export default function Hero() {
                 size="lg" 
                 variant="outline" 
                 className="border-[#2a2a2a] bg-[#1a1a1a]/50 text-white hover:bg-[#1a1a1a] hover:border-[#3fa37a]/50 px-8 py-6 text-base font-medium transition-all duration-300"
+                asChild
               >
-                <Github className="w-4 h-4 mr-2" />
-                View on GitHub
+                <a
+                  href="https://github.com/Kuucheen/magpie"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Github className="w-4 h-4 mr-2" />
+                  View on GitHub
+                </a>
               </Button>
             </div>
 

@@ -1,5 +1,6 @@
 /backend/.idea/.gitignore
 /backend/.idea/backend.iml
+**/.idea/*.xml
 /.idea/data_source_mapping.xml
 /.idea/dataSources.xml
 /backend/.idea/dataSources.xml

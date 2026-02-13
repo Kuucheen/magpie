@@ -38,8 +38,8 @@ find "$WORKTREE" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'docs' -exec rm 
 cp -R "$DIST_DIR"/. "$WORKTREE"
 
 # Sanity check: ensure index.html references existing asset files.
-main_js="$(sed -n 's/.*<script type=\"module\" crossorigin src=\"\\(\\/assets\\/[^\" ]*\\.js\\)\".*/\\1/p' "$WORKTREE/index.html" | head -n 1)"
-main_css="$(sed -n 's/.*<link rel=\"stylesheet\" crossorigin href=\"\\(\\/assets\\/[^\" ]*\\.css\\)\".*/\\1/p' "$WORKTREE/index.html" | head -n 1)"
+main_js="$(awk -F'"' '/<script type="module" crossorigin src="\/assets\/.*\.js"/ { print $4; exit }' "$WORKTREE/index.html")"
+main_css="$(awk -F'"' '/<link rel="stylesheet" crossorigin href="\/assets\/.*\.css"/ { print $4; exit }' "$WORKTREE/index.html")"
 if [ -n "$main_js" ] && [ ! -f "$WORKTREE/${main_js#/}" ]; then
   echo "Deploy aborted: missing referenced JS asset $main_js"
   exit 1

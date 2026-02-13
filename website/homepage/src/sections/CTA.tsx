@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Github, ExternalLink, Heart } from 'lucide-react';
+import { BookOpen, Github, Heart } from 'lucide-react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -84,7 +84,7 @@ export default function CTA() {
               asChild
             >
               <a href="/docs">
-                <ExternalLink className="w-5 h-5 mr-2" />
+                <BookOpen className="w-5 h-5 mr-2" />
                 Read the Docs
               </a>
             </Button>

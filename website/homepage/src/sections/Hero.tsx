@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Github, ArrowRight, Shield, Sparkles } from 'lucide-react';
+import { BookOpen, Github, ArrowRight, Shield, Sparkles } from 'lucide-react';
 import gsap from 'gsap';
 
 interface Particle {
@@ -249,9 +249,9 @@ export default function Hero() {
                 Get Started
                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button 
-                size="lg" 
-                variant="outline" 
+              <Button
+                size="lg"
+                variant="outline"
                 className="border-[#2a2a2a] bg-[#1a1a1a]/50 text-white hover:bg-[#1a1a1a] hover:border-[#3fa37a]/50 px-8 py-6 text-base font-medium transition-all duration-300"
                 asChild
               >
@@ -262,6 +262,17 @@ export default function Hero() {
                 >
                   <Github className="w-4 h-4 mr-2" />
                   View on GitHub
+                </a>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-[#2a2a2a] bg-[#1a1a1a]/50 text-white hover:bg-[#1a1a1a] hover:border-[#3fa37a]/50 px-8 py-6 text-base font-medium transition-all duration-300"
+                asChild
+              >
+                <a href="/docs">
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  Read the Docs
                 </a>
               </Button>
             </div>

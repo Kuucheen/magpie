@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 DOCS_DIR="$ROOT/website/docs"
 BUILD_DIR="$DOCS_DIR/build"
-WORKTREE="$ROOT/.gh-pages-docs"
+WORKTREE="$ROOT/.gh-pages-docs-worktree"
 BRANCH="gh-pages"
 TARGET_DIR="$WORKTREE/docs"
 

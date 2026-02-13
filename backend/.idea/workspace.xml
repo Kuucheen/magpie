@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3c0935fd-99c2-4b27-8a6f-60bcc4c389b7" name="Changes" comment="also get regex of response" />
+    <list default="true" id="3c0935fd-99c2-4b27-8a6f-60bcc4c389b7" name="Changes" comment="Extra proxies per user lock">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/geolite/GeoLite2-ASN.mmdb" beforeDir="false" afterPath="$PROJECT_DIR$/data/geolite/GeoLite2-ASN.mmdb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/geolite/GeoLite2-Country.mmdb" beforeDir="false" afterPath="$PROJECT_DIR$/data/geolite/GeoLite2-Country.mmdb" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -21,7 +25,7 @@
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$/.." value="6a8ac1950cf48383e764bd4d23c351f2dd64acc5" />
+        <entry key="$PROJECT_DIR$/.." value="master" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
@@ -35,7 +39,7 @@
     <setting file="file://$USER_HOME$/sdk/go1.25.1/src/crypto/rand/rand.go" root0="SKIP_INSPECTION" />
   </component>
   <component name="ProblemsViewState">
-    <option name="selectedTabId" value="CurrentFile" />
+    <option name="selectedTabId" value="ProjectErrors" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 1
@@ -51,27 +55,33 @@
     &quot;Go Build.go build magpie.executor&quot;: &quot;Run&quot;,
     &quot;Go Build.go build magpie/cmd/magpie.executor&quot;: &quot;Run&quot;,
     &quot;Go Build.go build magpie/internal/database/debug.executor&quot;: &quot;Run&quot;,
+    &quot;Go Build.go build main.go.executor&quot;: &quot;Run&quot;,
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.GoLinterPluginOnboarding&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.GoLinterPluginOnboardingV2&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.GoLinterPluginStorageMigration&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.analysis.ui.options.defaults&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
     &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;/home/kuchen/IdeaProjects/KC-Checker&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
     &quot;run.configurations.included.in.services&quot;: &quot;true&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;preferences.editor&quot;,
     &quot;ts.external.directory.path&quot;: &quot;/home/kuchen/.local/share/JetBrains/Toolbox/apps/goland/plugins/javascript-plugin/jsLanguageServicesImpl/external&quot;
   },
   &quot;keyToStringList&quot;: {
     &quot;DatabaseDriversLRU&quot;: [
+      &quot;redis&quot;,
       &quot;postgresql&quot;
     ]
   }
@@ -82,7 +92,17 @@
       <recent name="$PROJECT_DIR$/internal/jobs" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Build.go build magpie/cmd/magpie">
+  <component name="RunManager" selected="Go Build.go build main.go">
+    <configuration name="go build magpie" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="backend" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="magpie" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/main.go" />
+      <pty_enabled value="true" />
+      <method v="2" />
+    </configuration>
     <configuration name="go build magpie/cmd/magpie" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="backend" />
       <working_directory value="$PROJECT_DIR$" />
@@ -102,6 +122,16 @@
       <filePath value="$PROJECT_DIR$/internal/database/debug/main.go" />
       <method v="2" />
     </configuration>
+    <configuration name="go build main.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="backend" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="FILE" />
+      <package value="magpie" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/cmd/magpie/main.go" />
+      <pty_enabled value="true" />
+      <method v="2" />
+    </configuration>
     <configuration name="go build proxy_queue.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="backend" />
       <working_directory value="$PROJECT_DIR$" />
@@ -113,19 +143,19 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Go Build.go build magpie/cmd/magpie" />
+        <item itemvalue="Go Build.go build main.go" />
         <item itemvalue="Go Build.go build proxy_queue.go" />
         <item itemvalue="Go Build.go build magpie/internal/database/debug" />
         <item itemvalue="Go Build.go build magpie/cmd/magpie" />
-        <item itemvalue="Go Build.go build magpie/internal/database/debug" />
+        <item itemvalue="Go Build.go build magpie" />
       </list>
     </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-gosdk-f466f9b0953e-3d2cccfc42a2-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-252.26199.158" />
-        <option value="bundled-js-predefined-d6986cc7102b-9c94529fcfe0-JavaScript-GO-252.26199.158" />
+        <option value="bundled-gosdk-72a9cf600ed8-dfa3e7267ae0-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-253.30387.193" />
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-GO-253.30387.193" />
       </set>
     </attachedChunks>
   </component>
@@ -154,20 +184,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Refactoring" />
-    <MESSAGE value="add geo refresher" />
-    <MESSAGE value="refactoring" />
-    <MESSAGE value="make georefresh have a setting" />
-    <MESSAGE value="add graphql and make the endpoints /api" />
-    <MESSAGE value="add frontend dashboard info and configuration sync" />
-    <MESSAGE value="add tests before its too late" />
-    <MESSAGE value="fixed country pie chart and countries are now safed in full english name" />
-    <MESSAGE value="auth proxies passwords are now encrypted" />
-    <MESSAGE value="make proxy history table and job" />
-    <MESSAGE value="make things more consistent" />
-    <MESSAGE value="frontend gets its own docker container now" />
-    <MESSAGE value="remove estimated type and country from proxy statistic" />
-    <MESSAGE value="fix dynamic threads with no proxies" />
     <MESSAGE value="make inserting proxies a lot faster" />
     <MESSAGE value="encrypt ip in the db" />
     <MESSAGE value="use proxy history in the frontend" />
@@ -179,9 +195,20 @@
     <MESSAGE value="save request body of response" />
     <MESSAGE value="also get regex of response" />
     <MESSAGE value="add auto geolite db updater" />
-    <option name="LAST_COMMIT_MESSAGE" value="add auto geolite db updater" />
-  </component>
-  <component name="VgoProject">
-    <settings-migrated>true</settings-migrated>
+    <MESSAGE value="additional info for proxy insertion" />
+    <MESSAGE value="fix blacklist ranges not correctly inserting" />
+    <MESSAGE value="add udp/quic/http3 support" />
+    <MESSAGE value="make quic work" />
+    <MESSAGE value="add blacklist sync" />
+    <MESSAGE value="proxy alive counter is now consistent" />
+    <MESSAGE value="add backend for account deletion" />
+    <MESSAGE value="add filters for proxy list" />
+    <MESSAGE value="add endpoints for scrape source details" />
+    <MESSAGE value="you can disable migrations with env DB_AUTO_MIGRATE now" />
+    <MESSAGE value="update dependencies" />
+    <MESSAGE value="add backend for new health column" />
+    <MESSAGE value="fix backend" />
+    <MESSAGE value="Extra proxies per user lock" />
+    <option name="LAST_COMMIT_MESSAGE" value="Extra proxies per user lock" />
   </component>
 </project>

@@ -1,14 +1,24 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import Navigation from './sections/Navigation';
 import Hero from './sections/Hero';
-import Features from './sections/Features';
-import HowItWorks from './sections/HowItWorks';
-import DashboardPreview from './sections/DashboardPreview';
-import TechStack from './sections/TechStack';
-import Installation from './sections/Installation';
-import FAQ from './sections/FAQ';
-import CTA from './sections/CTA';
 import Footer from './sections/Footer';
+import DeferredSection from './components/DeferredSection';
+
+const Features = lazy(() => import('./sections/Features'));
+const HowItWorks = lazy(() => import('./sections/HowItWorks'));
+const DashboardPreview = lazy(() => import('./sections/DashboardPreview'));
+const TechStack = lazy(() => import('./sections/TechStack'));
+const Installation = lazy(() => import('./sections/Installation'));
+const FAQ = lazy(() => import('./sections/FAQ'));
+const CTA = lazy(() => import('./sections/CTA'));
+
+interface SectionFallbackProps {
+  minHeight: number;
+}
+
+function SectionFallback({ minHeight }: SectionFallbackProps) {
+  return <div style={{ minHeight }} aria-hidden="true" />;
+}
 
 function App() {
   // Smooth scroll behavior
@@ -39,35 +49,53 @@ function App() {
         <Hero />
 
         {/* Features Section */}
-        <section id="features">
-          <Features />
-        </section>
+        <DeferredSection id="features" minHeight={760}>
+          <Suspense fallback={<SectionFallback minHeight={760} />}>
+            <Features />
+          </Suspense>
+        </DeferredSection>
 
         {/* How It Works Section */}
-        <section id="how-it-works">
-          <HowItWorks />
-        </section>
+        <DeferredSection id="how-it-works" minHeight={640}>
+          <Suspense fallback={<SectionFallback minHeight={640} />}>
+            <HowItWorks />
+          </Suspense>
+        </DeferredSection>
 
         {/* Dashboard Preview Section */}
-        <section id="dashboard">
-          <DashboardPreview />
-        </section>
+        <DeferredSection id="dashboard" minHeight={820}>
+          <Suspense fallback={<SectionFallback minHeight={820} />}>
+            <DashboardPreview />
+          </Suspense>
+        </DeferredSection>
 
         {/* Tech Stack Section */}
-        <TechStack />
+        <DeferredSection minHeight={700}>
+          <Suspense fallback={<SectionFallback minHeight={700} />}>
+            <TechStack />
+          </Suspense>
+        </DeferredSection>
 
         {/* Installation Section */}
-        <section id="install">
-          <Installation />
-        </section>
+        <DeferredSection id="install" minHeight={780}>
+          <Suspense fallback={<SectionFallback minHeight={780} />}>
+            <Installation />
+          </Suspense>
+        </DeferredSection>
 
         {/* CTA Section */}
-        <CTA />
+        <DeferredSection minHeight={380}>
+          <Suspense fallback={<SectionFallback minHeight={380} />}>
+            <CTA />
+          </Suspense>
+        </DeferredSection>
 
         {/* FAQ Section */}
-        <section id="faq">
-          <FAQ />
-        </section>
+        <DeferredSection id="faq" minHeight={820}>
+          <Suspense fallback={<SectionFallback minHeight={820} />}>
+            <FAQ />
+          </Suspense>
+        </DeferredSection>
       </main>
 
       {/* Footer */}

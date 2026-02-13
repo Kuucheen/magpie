@@ -129,13 +129,28 @@ export default function DashboardPreview() {
           
           {/* Image container */}
           <div className="relative overflow-hidden bg-[#151515]">
-            <img 
-              ref={imageRef}
-              src="/dashboard-hero.png"
-              alt="Magpie dashboard full preview with proxy statistics and charts"
-              className="w-full h-auto"
-              loading="lazy"
-            />
+            <picture>
+              <source
+                type="image/webp"
+                srcSet="/dashboard-hero-640.webp 640w, /dashboard-hero-960.webp 960w, /dashboard-hero-1600.webp 1600w"
+                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 85vw, 1200px"
+              />
+              <source
+                type="image/jpeg"
+                srcSet="/dashboard-hero-960.jpg 960w, /dashboard-hero-1600.jpg 1600w"
+                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 85vw, 1200px"
+              />
+              <img 
+                ref={imageRef}
+                src="/dashboard-hero-1600.jpg"
+                alt="Magpie dashboard full preview with proxy statistics and charts"
+                className="w-full h-auto"
+                loading="lazy"
+                decoding="async"
+                width={1600}
+                height={791}
+              />
+            </picture>
             
             {/* Bottom gradient overlay */}
             <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#151515] to-transparent" />

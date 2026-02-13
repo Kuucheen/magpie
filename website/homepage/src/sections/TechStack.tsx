@@ -13,11 +13,18 @@ interface TechItem {
 
 // Go Logo
 const GoLogo = () => (
-  <img
-    src="/go-logo.png"
-    alt="Go"
-    className="w-8 h-8 object-contain"
-  />
+  <picture>
+    <source srcSet="/go-logo.webp" type="image/webp" />
+    <img
+      src="/go-logo.png"
+      alt="Go"
+      className="w-8 h-8 object-contain"
+      width={32}
+      height={32}
+      loading="lazy"
+      decoding="async"
+    />
+  </picture>
 );
 
 // TypeScript Logo SVG

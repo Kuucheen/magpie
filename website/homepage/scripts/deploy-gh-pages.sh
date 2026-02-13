@@ -33,8 +33,21 @@ else
   git worktree add -f -B "$BRANCH" "$WORKTREE"
 fi
 
-# Sync homepage files to gh-pages root while preserving docs and the worktree git marker.
-rsync -a --delete --exclude '.git' --exclude 'docs' "$DIST_DIR"/ "$WORKTREE"/
+# Replace the gh-pages root content with homepage build output while preserving docs and worktree metadata.
+find "$WORKTREE" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'docs' -exec rm -rf {} +
+cp -R "$DIST_DIR"/. "$WORKTREE"
+
+# Sanity check: ensure index.html references existing asset files.
+main_js="$(sed -n 's/.*<script type=\"module\" crossorigin src=\"\\(\\/assets\\/[^\" ]*\\.js\\)\".*/\\1/p' "$WORKTREE/index.html" | head -n 1)"
+main_css="$(sed -n 's/.*<link rel=\"stylesheet\" crossorigin href=\"\\(\\/assets\\/[^\" ]*\\.css\\)\".*/\\1/p' "$WORKTREE/index.html" | head -n 1)"
+if [ -n "$main_js" ] && [ ! -f "$WORKTREE/${main_js#/}" ]; then
+  echo "Deploy aborted: missing referenced JS asset $main_js"
+  exit 1
+fi
+if [ -n "$main_css" ] && [ ! -f "$WORKTREE/${main_css#/}" ]; then
+  echo "Deploy aborted: missing referenced CSS asset $main_css"
+  exit 1
+fi
 
 cd "$WORKTREE"
 

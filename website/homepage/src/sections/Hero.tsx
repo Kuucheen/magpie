@@ -305,12 +305,23 @@ export default function Hero() {
               
               {/* Dashboard image */}
               <div className="relative rounded-xl overflow-hidden border border-[#2a2a2a] shadow-2xl bg-[#151515]">
-                <img 
-                  src="/dashboard-hero.png" 
-                  alt="Magpie dashboard preview showing proxy stats and charts"
-                  className="w-full h-auto"
-                  loading="eager"
-                />
+                <picture>
+                  <source
+                    type="image/webp"
+                    srcSet="/dashboard-hero-640.webp 640w, /dashboard-hero-960.webp 960w"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 800px"
+                  />
+                  <img
+                    src="/dashboard-hero-960.jpg"
+                    alt="Magpie dashboard preview showing proxy stats and charts"
+                    className="w-full h-auto"
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    width={960}
+                    height={475}
+                  />
+                </picture>
                 
                 {/* Overlay gradient */}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#151515]/50 to-transparent pointer-events-none" />

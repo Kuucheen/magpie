@@ -542,6 +542,7 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 	rows := make([]dto.ProxyInfoRow, 0)
 	normalizedSearch := strings.TrimSpace(search)
 	lowerSearch := strings.ToLower(normalizedSearch)
+	searchPattern := "%" + lowerSearch + "%"
 
 	if normalizedSearch == "" {
 		offset := (page - 1) * pageSize
@@ -561,6 +562,37 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		if err := filterQuery.Distinct("proxies.id").Count(&total).Error; err != nil {
 			return proxies, 0
 		}
+		return proxies, total
+	}
+
+	if !isLikelyProxyIPSearch(lowerSearch) {
+		filteredQuery := applyProxySearchQuery(query, searchPattern)
+
+		var total int64
+		if err := filteredQuery.
+			Session(&gorm.Session{}).
+			Limit(-1).
+			Offset(-1).
+			Order("").
+			Distinct("proxies.id").
+			Count(&total).Error; err != nil {
+			return []dto.ProxyInfo{}, 0
+		}
+
+		if total == 0 {
+			return []dto.ProxyInfo{}, 0
+		}
+
+		offset := (page - 1) * pageSize
+		if err := filteredQuery.
+			Offset(offset).
+			Limit(pageSize).
+			Scan(&rows).Error; err != nil {
+			return []dto.ProxyInfo{}, 0
+		}
+
+		proxies := proxyInfoRowsToDTO(rows)
+		attachReputationsToProxyInfos(proxies)
 		return proxies, total
 	}
 
@@ -587,6 +619,54 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 
 	pageSlice := filtered[start:end]
 	return pageSlice, total
+}
+
+func isLikelyProxyIPSearch(search string) bool {
+	if search == "" {
+		return false
+	}
+
+	for _, r := range search {
+		if (r >= '0' && r <= '9') || r == '.' {
+			continue
+		}
+		return false
+	}
+
+	return strings.Contains(search, ".")
+}
+
+func applyProxySearchQuery(query *gorm.DB, pattern string) *gorm.DB {
+	return query.Where(
+		`(
+			CAST(proxies.port AS TEXT) ILIKE ? OR
+			CAST(COALESCE(ps.response_time, 0) AS TEXT) ILIKE ? OR
+			LOWER(COALESCE(NULLIF(proxies.estimated_type, ''), 'n/a')) ILIKE ? OR
+			LOWER(COALESCE(NULLIF(proxies.country, ''), 'n/a')) ILIKE ? OR
+			LOWER(COALESCE(al.name, 'n/a')) ILIKE ? OR
+			LOWER(CASE WHEN COALESCE(pos.overall_alive, false) THEN 'alive' ELSE 'dead' END) ILIKE ? OR
+			CAST(COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS TEXT) ILIKE ? OR
+			EXISTS (
+				SELECT 1
+				FROM proxy_reputations pr
+				WHERE pr.proxy_id = proxies.id AND (
+					LOWER(COALESCE(pr.kind, '')) ILIKE ? OR
+					LOWER(COALESCE(pr.label, '')) ILIKE ? OR
+					CAST(pr.score AS TEXT) ILIKE ?
+				)
+			)
+		)`,
+		pattern,
+		pattern,
+		pattern,
+		pattern,
+		pattern,
+		pattern,
+		pattern,
+		pattern,
+		pattern,
+		pattern,
+	)
 }
 
 func buildProxyListFilterQuery(userId uint, filters dto.ProxyListFilters) *gorm.DB {

@@ -588,8 +588,6 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 	}
 
 	pageSlice := filtered[start:end]
-	attachReputationsToProxyInfos(pageSlice)
-
 	return pageSlice, total
 }
 

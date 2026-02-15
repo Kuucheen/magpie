@@ -22,16 +22,17 @@ const scrapeSitesPerPage = 20
 
 // GetScrapingSourcesOfUsers returns all URLs associated with the given user.
 func GetScrapingSourcesOfUsers(userID uint) []string {
-	var user domain.User
-	if err := DB.Preload("ScrapeSites").First(&user, userID).Error; err != nil {
+	var sources []string
+	if err := DB.Table("scrape_sites").
+		Select("scrape_sites.url").
+		Joins("JOIN user_scrape_site uss ON uss.scrape_site_id = scrape_sites.id").
+		Where("uss.user_id = ?", userID).
+		Order("uss.created_at DESC").
+		Scan(&sources).Error; err != nil {
 		return nil
 	}
 
-	out := make([]string, 0, len(user.ScrapeSites))
-	for _, s := range user.ScrapeSites {
-		out = append(out, s.URL)
-	}
-	return out
+	return sources
 }
 
 // SaveScrapingSourcesOfUsers appends new sources to the user without removing existing ones.
@@ -111,10 +112,16 @@ func GetAllScrapeSites() ([]domain.ScrapeSite, error) {
 
 	collectedProxies := make([]domain.ScrapeSite, 0)
 
-	err := DB.Preload("Users").Order("id").FindInBatches(&allProxies, batchSize, func(tx *gorm.DB, batch int) error {
-		collectedProxies = append(collectedProxies, allProxies...)
-		return nil
-	})
+	err := DB.
+		Model(&domain.ScrapeSite{}).
+		Distinct("scrape_sites.*").
+		Joins("JOIN user_scrape_site uss ON uss.scrape_site_id = scrape_sites.id").
+		Preload("Users").
+		Order("scrape_sites.id").
+		FindInBatches(&allProxies, batchSize, func(tx *gorm.DB, batch int) error {
+			collectedProxies = append(collectedProxies, allProxies...)
+			return nil
+		})
 
 	if err.Error != nil {
 		return nil, err.Error

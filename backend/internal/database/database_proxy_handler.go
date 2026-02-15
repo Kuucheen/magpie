@@ -481,24 +481,22 @@ func GetAllProxies() ([]domain.Proxy, error) {
 
 	collectedProxies := make([]domain.Proxy, 0)
 
-	err := DB.Preload("Users").Order("id").FindInBatches(&allProxies, batchSize, func(tx *gorm.DB, batch int) error {
-		collectedProxies = append(collectedProxies, allProxies...)
-		return nil
-	})
+	err := DB.
+		Model(&domain.Proxy{}).
+		Distinct("proxies.*").
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id").
+		Preload("Users").
+		Order("proxies.id").
+		FindInBatches(&allProxies, batchSize, func(tx *gorm.DB, batch int) error {
+			collectedProxies = append(collectedProxies, allProxies...)
+			return nil
+		})
 
 	if err.Error != nil {
 		return nil, err.Error
 	}
 
-	filtered := make([]domain.Proxy, 0, len(collectedProxies))
-	for _, proxy := range collectedProxies {
-		if len(proxy.Users) == 0 {
-			continue
-		}
-		filtered = append(filtered, proxy)
-	}
-
-	return filtered, nil
+	return collectedProxies, nil
 }
 
 func GetProxyInfoPage(userId uint, page int) []dto.ProxyInfo {

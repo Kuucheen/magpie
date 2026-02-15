@@ -154,7 +154,6 @@ func Setup() {
 	go jobruntime.StartGeoLiteUpdateRoutine(context.Background())
 	go blacklist.StartRefreshRoutine(context.Background())
 	go checker.ThreadDispatcher()
-	go scraper.ManagePagePool()
 	go scraper.ThreadDispatcher()
 }
 

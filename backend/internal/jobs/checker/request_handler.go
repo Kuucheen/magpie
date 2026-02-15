@@ -10,7 +10,25 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
+)
+
+type cachedRegex struct {
+	re        *regexp.Regexp
+	ok        bool
+	expiresAt time.Time
+}
+
+const (
+	regexCacheTTL             = 5 * time.Minute
+	regexCacheCleanupInterval = 1 * time.Minute
+)
+
+var (
+	regexCacheMu          sync.Mutex
+	regexCacheByKey       = make(map[string]cachedRegex)
+	nextRegexCacheCleanup = time.Now().Add(regexCacheCleanupInterval)
 )
 
 // ProxyCheckRequest makes a request to the provided siteUrl with the provided proxy
@@ -73,12 +91,68 @@ func CheckForValidResponse(html string, regex string) bool {
 		return true
 	}
 
-	re, err := regexp.Compile(regex)
-	if err != nil {
+	re, ok := getCachedRegex(regex)
+	if !ok {
 		return false
 	}
 
 	return re.MatchString(html)
+}
+
+func getCachedRegex(pattern string) (*regexp.Regexp, bool) {
+	now := time.Now()
+
+	regexCacheMu.Lock()
+	if now.After(nextRegexCacheCleanup) {
+		evictExpiredRegexEntriesLocked(now)
+		nextRegexCacheCleanup = now.Add(regexCacheCleanupInterval)
+	}
+
+	if entry, ok := regexCacheByKey[pattern]; ok {
+		if !entry.expiresAt.After(now) {
+			delete(regexCacheByKey, pattern)
+			regexCacheMu.Unlock()
+			return compileAndStoreRegex(pattern)
+		}
+
+		valid := entry.ok && entry.re != nil
+		re := entry.re
+		regexCacheMu.Unlock()
+		if !valid {
+			return nil, false
+		}
+		return re, true
+	}
+	regexCacheMu.Unlock()
+
+	return compileAndStoreRegex(pattern)
+}
+
+func compileAndStoreRegex(pattern string) (*regexp.Regexp, bool) {
+	re, err := regexp.Compile(pattern)
+	compiledOK := err == nil && re != nil
+
+	now := time.Now()
+	regexCacheMu.Lock()
+	regexCacheByKey[pattern] = cachedRegex{
+		re:        re,
+		ok:        compiledOK,
+		expiresAt: now.Add(regexCacheTTL),
+	}
+	regexCacheMu.Unlock()
+
+	if !compiledOK {
+		return nil, false
+	}
+	return re, true
+}
+
+func evictExpiredRegexEntriesLocked(now time.Time) {
+	for pattern, entry := range regexCacheByKey {
+		if !entry.expiresAt.After(now) {
+			delete(regexCacheByKey, pattern)
+		}
+	}
 }
 
 func DefaultRequest(siteName string) (string, error) {

@@ -45,19 +45,7 @@ func GetUsersByIDsForChecker(ids []uint) (map[uint]domain.User, error) {
 
 	var users []domain.User
 	if err := DB.Model(&domain.User{}).
-		Select(
-			"id",
-			"http_protocol",
-			"http_s_protocol",
-			"socks4_protocol",
-			"socks5_protocol",
-			"timeout",
-			"retries",
-			"use_https_for_socks",
-			"transport_protocol",
-			"auto_remove_failing_proxies",
-			"auto_remove_failure_threshold",
-		).
+		Select(checkerUserSelectColumns).
 		Where("id IN ?", filtered).
 		Find(&users).Error; err != nil {
 		return nil, err

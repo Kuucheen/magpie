@@ -441,7 +441,8 @@ func fetchProxiesWithUsers(tx *gorm.DB, proxies []domain.Proxy) ([]domain.Proxy,
 		}
 
 		var batch []domain.Proxy
-		err := tx.Preload("Users").
+		err := tx.
+			Preload("Users", preloadCheckerUsers).
 			Where("id IN ?", ids[i:end]).
 			Find(&batch).Error
 		if err != nil {
@@ -485,7 +486,7 @@ func GetAllProxies() ([]domain.Proxy, error) {
 		Model(&domain.Proxy{}).
 		Distinct("proxies.*").
 		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id").
-		Preload("Users").
+		Preload("Users", preloadCheckerUsers).
 		Order("proxies.id").
 		FindInBatches(&allProxies, batchSize, func(tx *gorm.DB, batch int) error {
 			collectedProxies = append(collectedProxies, allProxies...)

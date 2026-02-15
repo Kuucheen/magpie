@@ -92,7 +92,8 @@ func SaveScrapingSourcesOfUsers(userID uint, sources []string) ([]domain.ScrapeS
 
 			// Reload newly touched sites with Users preloaded
 			var loaded []domain.ScrapeSite
-			if err := tx.Preload("Users").
+			if err := tx.
+				Preload("Users", preloadUserIDsOnly).
 				Where("id IN ?", siteIDs).
 				Find(&loaded).Error; err != nil {
 				return err
@@ -116,7 +117,7 @@ func GetAllScrapeSites() ([]domain.ScrapeSite, error) {
 		Model(&domain.ScrapeSite{}).
 		Distinct("scrape_sites.*").
 		Joins("JOIN user_scrape_site uss ON uss.scrape_site_id = scrape_sites.id").
-		Preload("Users").
+		Preload("Users", preloadUserIDsOnly).
 		Order("scrape_sites.id").
 		FindInBatches(&allProxies, batchSize, func(tx *gorm.DB, batch int) error {
 			collectedProxies = append(collectedProxies, allProxies...)

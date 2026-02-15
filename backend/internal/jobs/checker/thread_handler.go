@@ -321,6 +321,8 @@ func determineJudgeScheme(protocol string, protocolID int, useHTTPSForSocks bool
 func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*requestAssignment, userSuccess map[uint]bool, maxTimeout uint16, maxRetries uint8) {
 	for _, item := range assignments {
 		html, err, responseTime, attempt := CheckProxyWithRetries(proxy, item.judge, item.proxyProtocol, item.transportProtocol, maxTimeout, maxRetries)
+		truncatedBody := truncateResponseBody(html)
+		responseValidByRegex := make(map[string]bool, len(item.checks))
 
 		for _, check := range item.checks {
 			statistic := domain.ProxyStatistic{
@@ -330,11 +332,16 @@ func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*request
 				ProxyID:      proxy.ID,
 				ProtocolID:   check.protocolID,
 				JudgeID:      item.judge.ID,
-				ResponseBody: truncateResponseBody(html),
+				ResponseBody: truncatedBody,
 				CreatedAt:    time.Now().UTC(),
 			}
 
-			if err == nil && CheckForValidResponse(html, check.regex) {
+			validResponse, ok := responseValidByRegex[check.regex]
+			if !ok {
+				validResponse = err == nil && CheckForValidResponse(html, check.regex)
+				responseValidByRegex[check.regex] = validResponse
+			}
+			if validResponse {
 				lvl := support.GetProxyLevel(html)
 				statistic.LevelID = &lvl
 				statistic.Alive = true

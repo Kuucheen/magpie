@@ -21,7 +21,7 @@ func GetUserFromId(id uint) domain.User {
 	return users
 }
 
-func GetUsersByIDs(ids []uint) (map[uint]domain.User, error) {
+func GetUsersByIDsForChecker(ids []uint) (map[uint]domain.User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -44,7 +44,22 @@ func GetUsersByIDs(ids []uint) (map[uint]domain.User, error) {
 	}
 
 	var users []domain.User
-	if err := DB.Where("id IN ?", filtered).Find(&users).Error; err != nil {
+	if err := DB.Model(&domain.User{}).
+		Select(
+			"id",
+			"http_protocol",
+			"http_s_protocol",
+			"socks4_protocol",
+			"socks5_protocol",
+			"timeout",
+			"retries",
+			"use_https_for_socks",
+			"transport_protocol",
+			"auto_remove_failing_proxies",
+			"auto_remove_failure_threshold",
+		).
+		Where("id IN ?", filtered).
+		Find(&users).Error; err != nil {
 		return nil, err
 	}
 

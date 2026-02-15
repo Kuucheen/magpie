@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -23,9 +24,18 @@ import (
 var (
 	currentThreads atomic.Uint32
 	stopChannel    = make(chan struct{}) // Signal to stop threads
+	userCache      sync.Map
 )
 
-const maxResponseBodyLength = 4096
+const (
+	maxResponseBodyLength = 4096
+	userCacheTTL          = 5 * time.Second
+)
+
+type cachedUser struct {
+	user      domain.User
+	expiresAt time.Time
+}
 
 type userCheck struct {
 	userID     uint
@@ -196,11 +206,41 @@ func refreshProxyUsers(proxy domain.Proxy) domain.Proxy {
 		ids = append(ids, user.ID)
 	}
 
-	refreshedUsers, err := database.GetUsersByIDs(ids)
-	if err != nil {
-		log.Error("refresh proxy users", "error", err)
-		return proxy
+	now := time.Now()
+	refreshedUsers := make(map[uint]domain.User, len(ids))
+	missing := make([]uint, 0, len(ids))
+
+	for _, id := range ids {
+		if cached, ok := userCache.Load(id); ok {
+			entry, ok := cached.(cachedUser)
+			if ok && entry.expiresAt.After(now) {
+				refreshedUsers[id] = entry.user
+				continue
+			}
+			userCache.Delete(id)
+		}
+		missing = append(missing, id)
 	}
+
+	if len(missing) > 0 {
+		dbUsers, err := database.GetUsersByIDsForChecker(missing)
+		if err != nil {
+			log.Error("refresh proxy users", "error", err)
+			if len(refreshedUsers) == 0 {
+				return proxy
+			}
+		} else {
+			expiry := now.Add(userCacheTTL)
+			for id, user := range dbUsers {
+				refreshedUsers[id] = user
+				userCache.Store(id, cachedUser{
+					user:      user,
+					expiresAt: expiry,
+				})
+			}
+		}
+	}
+
 	if len(refreshedUsers) == 0 {
 		return proxy
 	}

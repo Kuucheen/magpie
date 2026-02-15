@@ -1,6 +1,7 @@
 package database
 
 import (
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -150,42 +151,109 @@ func UpdateUserSettings(userID uint, settings dto.UserSettings) error {
 			return err
 		}
 
-		keepIDs := make([]uint, 0, len(settings.SimpleUserJudges))
-
+		desiredByURL := make(map[string]string, len(settings.SimpleUserJudges))
+		orderedURLs := make([]string, 0, len(settings.SimpleUserJudges))
 		for _, s := range settings.SimpleUserJudges {
-			if config.IsWebsiteBlocked(s.Url) {
+			url := strings.TrimSpace(s.Url)
+			if url == "" {
+				continue
+			}
+			if config.IsWebsiteBlocked(url) {
 				log.Info("Skipped blocked judge for user", "user_id", userID, "url", s.Url)
 				continue
 			}
+			if _, exists := desiredByURL[url]; !exists {
+				orderedURLs = append(orderedURLs, url)
+			}
+			// Preserve legacy behavior where the last repeated URL wins for regex.
+			desiredByURL[url] = s.Regex
+		}
 
-			judge := domain.Judge{FullString: s.Url}
-			if err := tx.
-				Clauses(clause.OnConflict{DoNothing: true}).
-				FirstOrCreate(&judge, judge).Error; err != nil {
+		if len(orderedURLs) == 0 {
+			if err := tx.Where("user_id = ?", userID).Delete(&domain.UserJudge{}).Error; err != nil {
 				return err
 			}
+			return nil
+		}
 
-			keepIDs = append(keepIDs, judge.ID)
+		var existingJudges []domain.Judge
+		if err := tx.
+			Select("id", "full_string").
+			Where("full_string IN ?", orderedURLs).
+			Find(&existingJudges).Error; err != nil {
+			return err
+		}
 
-			uj := domain.UserJudge{
-				UserID:  userID,
-				JudgeID: judge.ID,
-				Regex:   s.Regex,
+		existingByURL := make(map[string]uint, len(existingJudges))
+		for _, judge := range existingJudges {
+			existingByURL[judge.FullString] = judge.ID
+		}
+
+		missingJudges := make([]domain.Judge, 0)
+		for _, url := range orderedURLs {
+			if _, exists := existingByURL[url]; exists {
+				continue
 			}
+			missingJudges = append(missingJudges, domain.Judge{FullString: url})
+		}
+
+		if len(missingJudges) > 0 {
+			if err := tx.
+				Clauses(clause.OnConflict{DoNothing: true}).
+				Create(&missingJudges).Error; err != nil {
+				return err
+			}
+		}
+
+		var resolvedJudges []domain.Judge
+		if err := tx.
+			Select("id", "full_string").
+			Where("full_string IN ?", orderedURLs).
+			Find(&resolvedJudges).Error; err != nil {
+			return err
+		}
+
+		judgeIDsByURL := make(map[string]uint, len(resolvedJudges))
+		for _, judge := range resolvedJudges {
+			judgeIDsByURL[judge.FullString] = judge.ID
+		}
+
+		keepIDs := make([]uint, 0, len(orderedURLs))
+		userJudges := make([]domain.UserJudge, 0, len(orderedURLs))
+		for _, url := range orderedURLs {
+			judgeID, ok := judgeIDsByURL[url]
+			if !ok || judgeID == 0 {
+				continue
+			}
+			keepIDs = append(keepIDs, judgeID)
+			userJudges = append(userJudges, domain.UserJudge{
+				UserID:  userID,
+				JudgeID: judgeID,
+				Regex:   desiredByURL[url],
+			})
+		}
+
+		if len(userJudges) > 0 {
 			if err := tx.
 				Clauses(clause.OnConflict{
 					Columns:   []clause.Column{{Name: "user_id"}, {Name: "judge_id"}},
 					DoUpdates: clause.AssignmentColumns([]string{"regex"}),
 				}).
-				Create(&uj).Error; err != nil {
+				CreateInBatches(&userJudges, 200).Error; err != nil {
 				return err
 			}
 		}
 
-		if err := tx.
-			Where("user_id = ? AND judge_id NOT IN ?", userID, keepIDs).
-			Delete(&domain.UserJudge{}).Error; err != nil {
-			return err
+		if len(keepIDs) == 0 {
+			if err := tx.Where("user_id = ?", userID).Delete(&domain.UserJudge{}).Error; err != nil {
+				return err
+			}
+		} else {
+			if err := tx.
+				Where("user_id = ? AND judge_id NOT IN ?", userID, keepIDs).
+				Delete(&domain.UserJudge{}).Error; err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -206,34 +274,80 @@ func GetUserJudges(userid uint) []dto.SimpleUserJudge {
 	return results
 }
 
+func GetUserJudgesWithRegex(userid uint) ([]domain.JudgeWithRegex, error) {
+	var rows []struct {
+		ID         uint      `gorm:"column:id"`
+		FullString string    `gorm:"column:full_string"`
+		CreatedAt  time.Time `gorm:"column:created_at"`
+		Regex      string    `gorm:"column:regex"`
+	}
+
+	if err := DB.Table("user_judges").
+		Select("judges.id, judges.full_string, judges.created_at, user_judges.regex").
+		Joins("JOIN judges ON user_judges.judge_id = judges.id").
+		Where("user_judges.user_id = ?", userid).
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]domain.JudgeWithRegex, 0, len(rows))
+	for _, row := range rows {
+		judge := &domain.Judge{
+			ID:         row.ID,
+			FullString: row.FullString,
+			CreatedAt:  row.CreatedAt,
+		}
+		judge.SetUp()
+		judge.UpdateIp()
+		result = append(result, domain.JudgeWithRegex{
+			Judge: judge,
+			Regex: row.Regex,
+		})
+	}
+
+	return result, nil
+}
+
 func GetDashboardInfo(userid uint) dto.DashboardInfo {
 	var info dto.DashboardInfo
 	// cut‑off for “this week”
 	weekAgo := time.Now().AddDate(0, 0, -7)
 
-	// 1) TotalChecks
+	type checkCounts struct {
+		TotalChecks     int64 `gorm:"column:total_checks"`
+		TotalChecksWeek int64 `gorm:"column:total_checks_week"`
+	}
+
+	var checks checkCounts
 	DB.Model(&domain.ProxyStatistic{}).
+		Select(
+			"COUNT(*) AS total_checks, "+
+				"COALESCE(SUM(CASE WHEN proxy_statistics.created_at >= ? THEN 1 ELSE 0 END), 0) AS total_checks_week",
+			weekAgo,
+		).
 		Joins("JOIN user_proxies up ON up.proxy_id = proxy_statistics.proxy_id").
 		Where("up.user_id = ?", userid).
-		Count(&info.TotalChecks)
+		Scan(&checks)
+	info.TotalChecks = checks.TotalChecks
+	info.TotalChecksWeek = checks.TotalChecksWeek
 
-	// 2) TotalChecksWeek
-	DB.Model(&domain.ProxyStatistic{}).
-		Joins("JOIN user_proxies up ON up.proxy_id = proxy_statistics.proxy_id").
-		Where("up.user_id = ? AND proxy_statistics.created_at >= ?", userid, weekAgo).
-		Count(&info.TotalChecksWeek)
+	type scrapeCounts struct {
+		TotalScraped     int64 `gorm:"column:total_scraped"`
+		TotalScrapedWeek int64 `gorm:"column:total_scraped_week"`
+	}
 
-	// 3) TotalScraped
+	var scraped scrapeCounts
 	DB.Table("proxy_scrape_site AS ps").
+		Select(
+			"COUNT(*) AS total_scraped, "+
+				"COALESCE(SUM(CASE WHEN ps.created_at >= ? THEN 1 ELSE 0 END), 0) AS total_scraped_week",
+			weekAgo,
+		).
 		Joins("JOIN user_proxies up ON up.proxy_id = ps.proxy_id").
 		Where("up.user_id = ?", userid).
-		Count(&info.TotalScraped)
-
-	// 4) TotalScrapedWeek
-	DB.Table("proxy_scrape_site AS ps").
-		Joins("JOIN user_proxies up ON up.proxy_id = ps.proxy_id").
-		Where("up.user_id = ? AND ps.created_at >= ?", userid, weekAgo).
-		Count(&info.TotalScrapedWeek)
+		Scan(&scraped)
+	info.TotalScraped = scraped.TotalScraped
+	info.TotalScrapedWeek = scraped.TotalScrapedWeek
 
 	// 5) Country breakdown – latest known country per proxy assigned to the user
 	type countryCount struct {

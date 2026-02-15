@@ -277,23 +277,13 @@ func saveUserSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 
-	var jwrList []domain.JudgeWithRegex
-	for _, uj := range userSettings.SimpleUserJudges {
-		judgeModel := database.GetJudgeFromString(uj.Url)
-		if judgeModel == nil {
-			log.Warnf("cannot load judge %s for user %d", uj.Url, userID)
-			continue
-		}
-		judgeModel.SetUp()
-		judgeModel.UpdateIp()
-		jwrList = append(jwrList, domain.JudgeWithRegex{
-			Judge: judgeModel,
-			Regex: uj.Regex,
-		})
+	jwrList, err := database.GetUserJudgesWithRegex(userID)
+	if err != nil {
+		log.Warn("failed to refresh user judge cache after settings update", "user_id", userID, "error", err)
+	} else {
+		// atomically replace this user's judges in the global map
+		judges.SetUserJudges(userID, jwrList)
 	}
-
-	// atomically replace this user's judges in the global map
-	judges.SetUserJudges(userID, jwrList)
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "Settings saved successfully"})
 }

@@ -407,13 +407,13 @@ func CheckProxyWithRetries(proxy domain.Proxy, judge *domain.Judge, protocol str
 		responseTime int64
 	)
 
-	for i := uint8(0); i < retries; i++ {
+	for i := uint16(0); i <= uint16(retries); i++ {
 		timeStart := time.Now()
 		html, err = ProxyCheckRequest(proxy, judge, protocol, transportProtocol, timeout)
 		responseTime = time.Since(timeStart).Milliseconds()
 
 		if err == nil {
-			return html, err, responseTime, i
+			return html, err, responseTime, uint8(i)
 		}
 	}
 

@@ -32,6 +32,30 @@ type RedisProxyQueue struct {
 	popScript *redis.Script
 }
 
+type queuedProxyUser struct {
+	ID                         uint
+	HTTPProtocol               bool
+	HTTPSProtocol              bool
+	SOCKS4Protocol             bool
+	SOCKS5Protocol             bool
+	Timeout                    uint16
+	Retries                    uint8
+	UseHttpsForSocks           bool
+	TransportProtocol          string
+	AutoRemoveFailingProxies   bool
+	AutoRemoveFailureThreshold uint8
+}
+
+type queuedProxy struct {
+	ID       uint64
+	IP       string
+	Port     uint16
+	Username string
+	Password string
+	Hash     []byte
+	Users    []queuedProxyUser
+}
+
 var PublicProxyQueue RedisProxyQueue
 
 func init() {
@@ -60,6 +84,10 @@ func NewRedisProxyQueue(client *redis.Client) *RedisProxyQueue {
 }
 
 func (rpq *RedisProxyQueue) AddToQueue(proxies []domain.Proxy) error {
+	if len(proxies) == 0 {
+		return nil
+	}
+
 	pipe := rpq.client.Pipeline()
 	interval := config.GetTimeBetweenChecks()
 	now := time.Now()
@@ -72,7 +100,7 @@ func (rpq *RedisProxyQueue) AddToQueue(proxies []domain.Proxy) error {
 		hashKey := string(proxy.Hash)
 		proxyKey := proxyKeyPrefix + hashKey
 
-		proxyJSON, err := json.Marshal(proxy)
+		proxyJSON, err := marshalQueuedProxy(proxy)
 		if err != nil {
 			return fmt.Errorf("failed to marshal proxy: %w", err)
 		}
@@ -183,10 +211,11 @@ func (rpq *RedisProxyQueue) GetNextProxyContext(ctx context.Context) (domain.Pro
 		proxyJSON := resSlice[1].(string)
 		score := resSlice[2].(int64)
 
-		var proxy domain.Proxy
-		if err := json.Unmarshal([]byte(proxyJSON), &proxy); err != nil {
+		var payload queuedProxy
+		if err := json.Unmarshal([]byte(proxyJSON), &payload); err != nil {
 			return domain.Proxy{}, time.Time{}, fmt.Errorf("failed to unmarshal proxy: %w", err)
 		}
+		proxy := payload.toDomainProxy()
 
 		return proxy, time.Unix(score, 0), nil
 	}
@@ -203,7 +232,7 @@ func (rpq *RedisProxyQueue) RequeueProxy(proxy domain.Proxy, lastCheckTime time.
 	hashKey := string(proxy.Hash)
 	proxyKey := proxyKeyPrefix + hashKey
 
-	proxyJSON, err := json.Marshal(proxy)
+	proxyJSON, err := marshalQueuedProxy(proxy)
 	if err != nil {
 		return fmt.Errorf("failed to marshal proxy: %w", err)
 	}
@@ -217,6 +246,68 @@ func (rpq *RedisProxyQueue) RequeueProxy(proxy domain.Proxy, lastCheckTime time.
 
 	_, err = pipe.Exec(rpq.ctx)
 	return err
+}
+
+func marshalQueuedProxy(proxy domain.Proxy) ([]byte, error) {
+	return json.Marshal(newQueuedProxy(proxy))
+}
+
+func newQueuedProxy(proxy domain.Proxy) queuedProxy {
+	users := make([]queuedProxyUser, 0, len(proxy.Users))
+	for _, user := range proxy.Users {
+		users = append(users, queuedProxyUser{
+			ID:                         user.ID,
+			HTTPProtocol:               user.HTTPProtocol,
+			HTTPSProtocol:              user.HTTPSProtocol,
+			SOCKS4Protocol:             user.SOCKS4Protocol,
+			SOCKS5Protocol:             user.SOCKS5Protocol,
+			Timeout:                    user.Timeout,
+			Retries:                    user.Retries,
+			UseHttpsForSocks:           user.UseHttpsForSocks,
+			TransportProtocol:          user.TransportProtocol,
+			AutoRemoveFailingProxies:   user.AutoRemoveFailingProxies,
+			AutoRemoveFailureThreshold: user.AutoRemoveFailureThreshold,
+		})
+	}
+
+	return queuedProxy{
+		ID:       proxy.ID,
+		IP:       proxy.GetIp(),
+		Port:     proxy.Port,
+		Username: proxy.Username,
+		Password: proxy.Password,
+		Hash:     proxy.Hash,
+		Users:    users,
+	}
+}
+
+func (qp queuedProxy) toDomainProxy() domain.Proxy {
+	users := make([]domain.User, 0, len(qp.Users))
+	for _, user := range qp.Users {
+		users = append(users, domain.User{
+			ID:                         user.ID,
+			HTTPProtocol:               user.HTTPProtocol,
+			HTTPSProtocol:              user.HTTPSProtocol,
+			SOCKS4Protocol:             user.SOCKS4Protocol,
+			SOCKS5Protocol:             user.SOCKS5Protocol,
+			Timeout:                    user.Timeout,
+			Retries:                    user.Retries,
+			UseHttpsForSocks:           user.UseHttpsForSocks,
+			TransportProtocol:          user.TransportProtocol,
+			AutoRemoveFailingProxies:   user.AutoRemoveFailingProxies,
+			AutoRemoveFailureThreshold: user.AutoRemoveFailureThreshold,
+		})
+	}
+
+	return domain.Proxy{
+		ID:       qp.ID,
+		IP:       qp.IP,
+		Port:     qp.Port,
+		Username: qp.Username,
+		Password: qp.Password,
+		Hash:     qp.Hash,
+		Users:    users,
+	}
 }
 
 func (rpq *RedisProxyQueue) GetProxyCount() (int64, error) {

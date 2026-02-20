@@ -675,6 +675,8 @@ func buildProxyListFilterQuery(userId uint, filters dto.ProxyListFilters) *gorm.
 		return nil
 	}
 
+	selectedProtocols := normalizeProtocolFilters(filters.Protocols)
+
 	query := DB.Model(&domain.Proxy{}).
 		Select("proxies.id").
 		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId)
@@ -717,20 +719,49 @@ func buildProxyListFilterQuery(userId uint, filters dto.ProxyListFilters) *gorm.
 		}
 	}
 
-	if len(filters.Protocols) > 0 {
+	if len(selectedProtocols) > 0 {
 		protocolStats := DB.Model(&domain.ProxyStatistic{}).
 			Select("DISTINCT ON (proxy_id, protocol_id) proxy_id, protocol_id, alive").
 			Order("proxy_id, protocol_id, created_at DESC, id DESC")
-		query = query.Joins("JOIN (?) AS ps_proto ON ps_proto.proxy_id = proxies.id", protocolStats).
+
+		aliveOnAllSelectedProtocols := DB.
+			Table("(?) AS ps_proto", protocolStats).
+			Select("ps_proto.proxy_id").
 			Joins("JOIN protocols proto ON proto.id = ps_proto.protocol_id").
-			Where("ps_proto.alive = ? AND LOWER(proto.name) IN ?", true, filters.Protocols)
+			Where("ps_proto.alive = ? AND LOWER(proto.name) IN ?", true, selectedProtocols).
+			Group("ps_proto.proxy_id").
+			Having("COUNT(DISTINCT LOWER(proto.name)) = ?", len(selectedProtocols))
+
+		query = query.Where("proxies.id IN (?)", aliveOnAllSelectedProtocols)
 	}
 
 	if len(filters.ReputationLabels) > 0 {
-		query = applyListReputationFilters(query, filters.ReputationLabels, filters.Protocols)
+		query = applyListReputationFilters(query, filters.ReputationLabels, selectedProtocols)
 	}
 
 	return query
+}
+
+func normalizeProtocolFilters(protocols []string) []string {
+	if len(protocols) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(protocols))
+	out := make([]string, 0, len(protocols))
+	for _, protocol := range protocols {
+		normalized := strings.ToLower(strings.TrimSpace(protocol))
+		if normalized == "" {
+			continue
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+
+	return out
 }
 
 func hasProxyListFilters(filters dto.ProxyListFilters) bool {

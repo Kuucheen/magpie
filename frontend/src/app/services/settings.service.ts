@@ -1,11 +1,12 @@
 import { Injectable } from '@angular/core';
-import { Observable, BehaviorSubject } from 'rxjs';
-import { filter, map } from 'rxjs/operators';
+import { Observable, BehaviorSubject, of } from 'rxjs';
+import { filter, map, switchMap, tap } from 'rxjs/operators';
 import { GlobalSettings } from '../models/GlobalSettings';
 import { HttpService } from './http.service';
 import {UserSettings} from '../models/UserSettings';
 import {UserService} from './authorization/user.service';
 import {NotificationService} from './notification-service.service';
+import {DEFAULT_PROXY_TABLE_COLUMNS, normalizeProxyTableColumns} from '../shared/proxy-table/proxy-table-columns';
 
 @Injectable({
   providedIn: 'root'
@@ -120,6 +121,28 @@ export class SettingsService {
     return this.http.saveUserSettings(payload);
   }
 
+  saveProxyListColumns(columns: string[]): Observable<any> {
+    const normalizedColumns = normalizeProxyTableColumns(columns);
+    const source$ = this.userSettings
+      ? of(this.userSettings)
+      : this.http.getUserSettings().pipe(
+          tap(settings => {
+            this.userSettings = settings;
+            this.userSettingsSubject.next(settings);
+          })
+        );
+
+    return source$.pipe(
+      map(current => this.buildUserSettingsPayload(current, { proxy_list_columns: normalizedColumns })),
+      switchMap(payload => this.http.saveUserSettings(payload).pipe(
+        tap(() => {
+          this.userSettings = payload;
+          this.userSettingsSubject.next(this.userSettings);
+        })
+      ))
+    );
+  }
+
   saveUserScrapingSources(sources: string[]): Observable<any> {
     if (this.userSettings) {
       this.userSettings.scraping_sources = sources
@@ -129,25 +152,43 @@ export class SettingsService {
   }
 
   private transformUserSettings(formData: any): UserSettings {
+    return this.buildUserSettingsPayload(this.userSettings, formData);
+  }
+
+  private buildUserSettingsPayload(current: UserSettings | undefined, formData: any): UserSettings {
     const transportProtocol =
       formData.TransportProtocol ??
       formData.transport_protocol ??
-      this.userSettings?.transport_protocol ??
+      current?.transport_protocol ??
       'tcp';
 
     return {
-      http_protocol: formData.HTTPProtocol,
-      https_protocol: formData.HTTPSProtocol,
-      socks4_protocol: formData.SOCKS4Protocol,
-      socks5_protocol: formData.SOCKS5Protocol,
-      timeout: formData.Timeout,
-      retries: formData.Retries,
-      UseHttpsForSocks: formData.UseHttpsForSocks,
+      http_protocol: formData.HTTPProtocol ?? formData.http_protocol ?? current?.http_protocol ?? false,
+      https_protocol: formData.HTTPSProtocol ?? formData.https_protocol ?? current?.https_protocol ?? true,
+      socks4_protocol: formData.SOCKS4Protocol ?? formData.socks4_protocol ?? current?.socks4_protocol ?? false,
+      socks5_protocol: formData.SOCKS5Protocol ?? formData.socks5_protocol ?? current?.socks5_protocol ?? false,
+      timeout: formData.Timeout ?? formData.timeout ?? current?.timeout ?? 7500,
+      retries: formData.Retries ?? formData.retries ?? current?.retries ?? 2,
+      UseHttpsForSocks: formData.UseHttpsForSocks ?? formData.use_https_for_socks ?? current?.UseHttpsForSocks ?? true,
       transport_protocol: transportProtocol,
-      auto_remove_failing_proxies: formData.AutoRemoveFailingProxies,
-      auto_remove_failure_threshold: formData.AutoRemoveFailureThreshold,
-      judges: formData.judges,
-      scraping_sources: [] // Not needed here
+      auto_remove_failing_proxies:
+        formData.AutoRemoveFailingProxies ??
+        formData.auto_remove_failing_proxies ??
+        current?.auto_remove_failing_proxies ??
+        false,
+      auto_remove_failure_threshold:
+        formData.AutoRemoveFailureThreshold ??
+        formData.auto_remove_failure_threshold ??
+        current?.auto_remove_failure_threshold ??
+        3,
+      judges: formData.judges ?? current?.judges ?? [],
+      scraping_sources: formData.scraping_sources ?? current?.scraping_sources ?? [],
+      proxy_list_columns: normalizeProxyTableColumns(
+        formData.proxy_list_columns ??
+        formData.ProxyListColumns ??
+        current?.proxy_list_columns ??
+        DEFAULT_PROXY_TABLE_COLUMNS
+      ),
     };
   }
 

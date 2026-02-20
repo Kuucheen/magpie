@@ -1,5 +1,6 @@
 import {AfterViewInit, Component, EventEmitter, OnDestroy, OnInit, Output, signal} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
+import {CdkDragDrop, DragDropModule, moveItemInArray} from '@angular/cdk/drag-drop';
 import {HttpService} from '../../services/http.service';
 import {ProxyInfo} from '../../models/ProxyInfo';
 import {SelectionModel} from '@angular/cdk/collections';
@@ -17,8 +18,18 @@ import {MultiSelectModule} from 'primeng/multiselect';
 import {ProxyListFilters} from '../../models/ProxyListFilters';
 import {ProxyFilterOptions} from '../../models/ProxyFilterOptions';
 import {ProxyReputation} from '../../models/ProxyReputation';
+import {UserSettings} from '../../models/UserSettings';
 import {ProxyFilterPanelComponent} from '../../shared/proxy-filter-panel/proxy-filter-panel.component';
 import {ProxyTableComponent} from '../../shared/proxy-table/proxy-table.component';
+import {
+  DEFAULT_PROXY_TABLE_COLUMNS,
+  PROXY_TABLE_COLUMN_DEFINITIONS,
+  ProxyTableColumnDefinition,
+  ProxyTableColumnId,
+  getProxyTableColumnDefinition,
+  normalizeProxyTableColumns,
+} from '../../shared/proxy-table/proxy-table-columns';
+import {SettingsService} from '../../services/settings.service';
 import {
   ProxyFilterOption,
   ProxyListAppliedFilters,
@@ -46,6 +57,7 @@ import {
     ButtonModule,
     InputNumberModule,
     MultiSelectModule,
+    DragDropModule,
     AddProxiesComponent,
     ExportProxiesComponent,
     DeleteProxiesComponent,
@@ -76,9 +88,14 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   typeOptions = signal<ProxyFilterOption[]>([]);
   anonymityOptions = signal<ProxyFilterOption[]>([]);
   appliedFilters = signal<ProxyListAppliedFilters>(createDefaultProxyListAppliedFilters());
+  displayedColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
+  columnPanelOpen = signal(false);
+  columnEditorColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
+  isSavingColumnPreferences = signal(false);
   filterForm: FormGroup;
   readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
   readonly proxyReputationOptions = PROXY_REPUTATION_OPTIONS;
+  readonly proxyTableColumnDefinitions = PROXY_TABLE_COLUMN_DEFINITIONS;
   private readonly defaultFilterValues: ProxyListFilterFormValues = createDefaultProxyFilterValues();
   private searchDebounceHandle?: ReturnType<typeof setTimeout>;
   private readonly pageSizeStorageKey = 'magpie-proxy-list-page-size';
@@ -95,12 +112,14 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private proxyListSubscription?: Subscription;
   private navigationSubscription?: Subscription;
+  private userSettingsSubscription?: Subscription;
 
   constructor(
     private http: HttpService,
     private router: Router,
     private fb: FormBuilder,
-    private notification: NotificationService
+    private notification: NotificationService,
+    private settingsService: SettingsService
   ) {
     this.navigationStart$ = this.router.events.pipe(
       filter((event): event is NavigationStart => event instanceof NavigationStart)
@@ -129,6 +148,11 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.syncColumnsFromSettings(this.settingsService.getUserSettings());
+    this.userSettingsSubscription = this.settingsService.userSettings$
+      .pipe(filter((settings): settings is UserSettings => !!settings))
+      .subscribe(settings => this.syncColumnsFromSettings(settings));
+
     const storedPageSize = this.getStoredPageSize();
     if (storedPageSize !== null) {
       this.pageSize.set(storedPageSize);
@@ -212,6 +236,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.proxyListSubscription?.unsubscribe();
     this.navigationSubscription?.unsubscribe();
+    this.userSettingsSubscription?.unsubscribe();
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
@@ -302,6 +327,74 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       this.ensureFilterOptionsLoaded();
     }
     this.filterPanelOpen.set(nextState);
+  }
+
+  openColumnPanel(): void {
+    this.columnEditorColumns.set([...this.displayedColumns()]);
+    this.columnPanelOpen.set(true);
+  }
+
+  closeColumnPanel(): void {
+    this.columnEditorColumns.set([...this.displayedColumns()]);
+    this.columnPanelOpen.set(false);
+  }
+
+  resetColumnEditor(): void {
+    this.columnEditorColumns.set([...DEFAULT_PROXY_TABLE_COLUMNS]);
+  }
+
+  onColumnDrop(event: CdkDragDrop<ProxyTableColumnDefinition[]>): void {
+    if (event.previousIndex === event.currentIndex) {
+      return;
+    }
+    const columns = [...this.columnEditorColumns()];
+    moveItemInArray(columns, event.previousIndex, event.currentIndex);
+    this.columnEditorColumns.set(columns);
+  }
+
+  hideColumn(id: ProxyTableColumnId): void {
+    const current = this.columnEditorColumns();
+    if (current.length <= 1) {
+      this.notification.showError('At least one column must stay visible.');
+      return;
+    }
+    this.columnEditorColumns.set(current.filter(column => column !== id));
+  }
+
+  showColumn(id: ProxyTableColumnId): void {
+    const current = this.columnEditorColumns();
+    if (current.includes(id)) {
+      return;
+    }
+    this.columnEditorColumns.set([...current, id]);
+  }
+
+  saveColumnPreferences(): void {
+    const previous = this.displayedColumns();
+    const next = normalizeProxyTableColumns(this.columnEditorColumns());
+
+    this.displayedColumns.set(next);
+    this.columnPanelOpen.set(false);
+    this.isSavingColumnPreferences.set(true);
+
+    this.settingsService.saveProxyListColumns(next)
+      .pipe(finalize(() => this.isSavingColumnPreferences.set(false)))
+      .subscribe({
+        error: err => {
+          this.displayedColumns.set(previous);
+          const message = err?.error?.message ?? err?.message ?? 'Unknown error';
+          this.notification.showError('Could not save column settings: ' + message);
+        }
+      });
+  }
+
+  columnPanelVisible(): ProxyTableColumnDefinition[] {
+    return this.columnEditorColumns().map(column => getProxyTableColumnDefinition(column));
+  }
+
+  columnPanelHidden(): ProxyTableColumnDefinition[] {
+    const selected = new Set(this.columnEditorColumns());
+    return this.proxyTableColumnDefinitions.filter(column => !selected.has(column.id));
   }
 
   applyFilters(): void {
@@ -453,6 +546,11 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (field === 'reputation') {
       return this.getPrimaryReputation(proxy)?.score ?? null;
+    }
+    if (field === 'ip_port') {
+      const ip = proxy.ip ?? '';
+      const port = Number.isFinite(proxy.port) ? proxy.port : 0;
+      return `${ip}:${port.toString().padStart(5, '0')}`;
     }
 
     if (Object.prototype.hasOwnProperty.call(proxy, field)) {
@@ -790,5 +888,13 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       anonymityLevels: normalizeSelection(anonymityRaw.map(item => `${item}`)),
       reputationLabels: filteredReputation,
     };
+  }
+
+  private syncColumnsFromSettings(settings: UserSettings | undefined): void {
+    const normalized = normalizeProxyTableColumns(settings?.proxy_list_columns ?? DEFAULT_PROXY_TABLE_COLUMNS);
+    this.displayedColumns.set(normalized);
+    if (!this.columnPanelOpen()) {
+      this.columnEditorColumns.set([...normalized]);
+    }
   }
 }

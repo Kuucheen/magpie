@@ -35,45 +35,28 @@
         </th>
       }
 
-      @if (sortable) {
-        <th pSortableColumn="alive">
-          Status <p-sortIcon field="alive"></p-sortIcon>
-        </th>
-        <th pSortableColumn="ip">
-          IP Address <p-sortIcon field="ip"></p-sortIcon>
-        </th>
-        <th pSortableColumn="port">
-          Port <p-sortIcon field="port"></p-sortIcon>
-        </th>
-        <th pSortableColumn="response_time" pTooltip="Response Time" tooltipPosition="top">
-          Time <p-sortIcon field="response_time"></p-sortIcon>
-        </th>
-        <th pSortableColumn="estimated_type" pTooltip="Estimated Type" tooltipPosition="top">
-          Type <p-sortIcon field="estimated_type"></p-sortIcon>
-        </th>
-        <th pSortableColumn="country">
-          Country <p-sortIcon field="country"></p-sortIcon>
-        </th>
-        <th pSortableColumn="reputation">
-          Reputation <p-sortIcon field="reputation"></p-sortIcon>
-        </th>
-        <th pSortableColumn="latest_check">
-          Last Check <p-sortIcon field="latest_check"></p-sortIcon>
-        </th>
-        <th>
-          Actions
-        </th>
-      } @else {
-        <th>Status</th>
-        <th>IP Address</th>
-        <th>Port</th>
-        <th>Time</th>
-        <th>Type</th>
-        <th>Country</th>
-        <th>Reputation</th>
-        <th>Last Check</th>
-        <th>Actions</th>
+      @for (column of visibleColumns; track trackByColumn($index, column)) {
+        @if (sortable) {
+          <th
+            [pSortableColumn]="column.sortField"
+            [pTooltip]="column.tooltip ?? undefined"
+            [tooltipDisabled]="!column.tooltip"
+            tooltipPosition="top"
+          >
+            {{ column.label }} <p-sortIcon [field]="column.sortField"></p-sortIcon>
+          </th>
+        } @else {
+          <th
+            [pTooltip]="column.tooltip ?? undefined"
+            [tooltipDisabled]="!column.tooltip"
+            tooltipPosition="top"
+          >
+            {{ column.label }}
+          </th>
+        }
       }
+
+      <th>Actions</th>
     </tr>
   </ng-template>
 
@@ -86,33 +69,22 @@
               <p-skeleton width="1.25rem" height="1.25rem" shape="circle"></p-skeleton>
             </td>
           }
-          <td>
-            <p-skeleton width="0.9rem" height="0.9rem" shape="circle"></p-skeleton>
-          </td>
-          <td>
-            <p-skeleton width="7rem" height="0.75rem"></p-skeleton>
-          </td>
-          <td>
-            <p-skeleton width="3rem" height="0.75rem"></p-skeleton>
-          </td>
-          <td>
-            <p-skeleton width="4rem" height="0.75rem"></p-skeleton>
-          </td>
-          <td>
-            <p-skeleton width="5rem" height="0.75rem"></p-skeleton>
-          </td>
-          <td>
-            <p-skeleton width="6rem" height="0.75rem"></p-skeleton>
-          </td>
-          <td>
-            <div class="skeleton-badge">
-              <p-skeleton width="3.5rem" height="0.75rem"></p-skeleton>
-              <p-skeleton width="1.5rem" height="0.75rem"></p-skeleton>
-            </div>
-          </td>
-          <td>
-            <p-skeleton width="6rem" height="0.75rem"></p-skeleton>
-          </td>
+
+          @for (column of visibleColumns; track trackByColumn($index, column)) {
+            <td>
+              @if (column.id === 'alive') {
+                <p-skeleton width="0.9rem" height="0.9rem" shape="circle"></p-skeleton>
+              } @else if (column.id === 'reputation') {
+                <div class="skeleton-badge">
+                  <p-skeleton width="3.5rem" height="0.75rem"></p-skeleton>
+                  <p-skeleton width="1.5rem" height="0.75rem"></p-skeleton>
+                </div>
+              } @else {
+                <p-skeleton [width]="skeletonWidth(column)" height="0.75rem"></p-skeleton>
+              }
+            </td>
+          }
+
           <td>
             <p-skeleton width="4.5rem" height="1.5rem"></p-skeleton>
           </td>
@@ -122,8 +94,8 @@
   </ng-template>
 
   <ng-template pTemplate="body" let-proxy>
-    @if (selectionEnabled) {
-      <tr (click)="onToggleSelection(proxy)" [pSelectableRow]="proxy">
+    <tr (click)="selectionEnabled ? onToggleSelection(proxy) : null" [pSelectableRow]="selectionEnabled ? proxy : undefined">
+      @if (selectionEnabled) {
         <td (click)="$event.stopPropagation()">
           <p-checkbox
             [binary]="true"
@@ -131,65 +103,60 @@
             [ngModel]="selectionModel?.isSelected(proxy)"
           ></p-checkbox>
         </td>
-        <td>
-          <div class="status-dot" [ngClass]="proxy.alive ? 'alive' : 'dead'"></div>
-        </td>
-        <td>{{ proxy.ip }}</td>
-        <td>{{ proxy.port }}</td>
-        <td>{{ proxy.response_time }} ms</td>
-        <td>{{ proxy.estimated_type }}</td>
-        <td>{{ proxy.country }}</td>
-        <td class="reputation-cell">
-          @if (proxy.__meta?.hasReputation) {
-            <span [ngClass]="proxy.__meta?.reputationBadgeClass">
-              <span>{{ proxy.__meta?.reputationLabel }}</span>
-              <span class="reputation-badge__score">{{ proxy.__meta?.reputationScore }}</span>
-            </span>
-          } @else {
-            {{ emptyReputationLabel }}
+      }
+
+      @for (column of visibleColumns; track trackByColumn($index, column)) {
+        @switch (column.id) {
+          @case ('alive') {
+            <td>
+              <div class="status-dot" [ngClass]="proxy.alive ? 'alive' : 'dead'"></div>
+            </td>
           }
-        </td>
-        <td class="w-[170px]">
-          {{ proxy.__meta?.latestCheckLabel ?? '—' }}
-        </td>
-        <td>
-          <button type="button" class="proxy-details-button" (click)="onViewProxy($event, proxy)">
-            <i class="pi pi-external-link" aria-hidden="true"></i>
-            <span>Details</span>
-          </button>
-        </td>
-      </tr>
-    } @else {
-      <tr>
-        <td>
-          <div class="status-dot" [ngClass]="proxy.alive ? 'alive' : 'dead'"></div>
-        </td>
-        <td>{{ proxy.ip }}</td>
-        <td>{{ proxy.port }}</td>
-        <td>{{ proxy.response_time }} ms</td>
-        <td>{{ proxy.estimated_type }}</td>
-        <td>{{ proxy.country }}</td>
-        <td class="reputation-cell">
-          @if (proxy.__meta?.hasReputation) {
-            <span [ngClass]="proxy.__meta?.reputationBadgeClass">
-              <span>{{ proxy.__meta?.reputationLabel }}</span>
-              <span class="reputation-badge__score">{{ proxy.__meta?.reputationScore }}</span>
-            </span>
-          } @else {
-            {{ emptyReputationLabel }}
+          @case ('ip') {
+            <td>{{ proxy.ip }}</td>
           }
-        </td>
-        <td class="w-[170px]">
-          {{ proxy.__meta?.latestCheckLabel ?? '—' }}
-        </td>
-        <td>
-          <button type="button" class="proxy-details-button" (click)="onViewProxy($event, proxy)">
-            <i class="pi pi-external-link" aria-hidden="true"></i>
-            <span>Details</span>
-          </button>
-        </td>
-      </tr>
-    }
+          @case ('ip_port') {
+            <td>{{ proxy.ip }}:{{ proxy.port }}</td>
+          }
+          @case ('port') {
+            <td>{{ proxy.port }}</td>
+          }
+          @case ('response_time') {
+            <td>{{ proxy.response_time }} ms</td>
+          }
+          @case ('estimated_type') {
+            <td>{{ proxy.estimated_type }}</td>
+          }
+          @case ('country') {
+            <td>{{ proxy.country }}</td>
+          }
+          @case ('reputation') {
+            <td class="reputation-cell">
+              @if (proxy.__meta?.hasReputation) {
+                <span [ngClass]="proxy.__meta?.reputationBadgeClass">
+                  <span>{{ proxy.__meta?.reputationLabel }}</span>
+                  <span class="reputation-badge__score">{{ proxy.__meta?.reputationScore }}</span>
+                </span>
+              } @else {
+                {{ emptyReputationLabel }}
+              }
+            </td>
+          }
+          @case ('latest_check') {
+            <td class="w-[170px]">
+              {{ proxy.__meta?.latestCheckLabel ?? '—' }}
+            </td>
+          }
+        }
+      }
+
+      <td>
+        <button type="button" class="proxy-details-button" (click)="onViewProxy($event, proxy)">
+          <i class="pi pi-external-link" aria-hidden="true"></i>
+          <span>Details</span>
+        </button>
+      </td>
+    </tr>
   </ng-template>
 
   <ng-template pTemplate="emptyMessage">

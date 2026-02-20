@@ -8,6 +8,13 @@ import {CheckboxModule} from 'primeng/checkbox';
 import {FormsModule} from '@angular/forms';
 import {ProxyInfo} from '../../models/ProxyInfo';
 import {ProxyReputation} from '../../models/ProxyReputation';
+import {
+  DEFAULT_PROXY_TABLE_COLUMNS,
+  ProxyTableColumnDefinition,
+  ProxyTableColumnId,
+  getProxyTableColumnDefinition,
+  normalizeProxyTableColumns,
+} from './proxy-table-columns';
 
 interface ProxyRowMeta {
   hasReputation: boolean;
@@ -36,6 +43,7 @@ type ProxyRow = ProxyInfo & { __meta?: ProxyRowMeta };
 })
 export class ProxyTableComponent implements OnChanges {
   private _proxies: ProxyRow[] = [];
+  private _columns: ProxyTableColumnId[] = [...DEFAULT_PROXY_TABLE_COLUMNS];
   private readonly dateFormatter = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'short',
     timeStyle: 'short',
@@ -48,6 +56,13 @@ export class ProxyTableComponent implements OnChanges {
   }
   get proxies(): ProxyRow[] {
     return this._proxies;
+  }
+  @Input()
+  set columns(value: ProxyTableColumnId[]) {
+    this._columns = normalizeProxyTableColumns(value);
+  }
+  get columns(): ProxyTableColumnId[] {
+    return this._columns;
   }
   @Input() loading = false;
   @Input() hasLoaded = false;
@@ -86,7 +101,11 @@ export class ProxyTableComponent implements OnChanges {
   }
 
   get columnCount(): number {
-    return this.selectionEnabled ? 10 : 9;
+    return this.visibleColumns.length + (this.selectionEnabled ? 2 : 1);
+  }
+
+  get visibleColumns(): ProxyTableColumnDefinition[] {
+    return this.columns.map(column => getProxyTableColumnDefinition(column));
   }
 
   get scoreFallback(): string {
@@ -131,6 +150,14 @@ export class ProxyTableComponent implements OnChanges {
       return;
     }
     this.sort.emit(event);
+  }
+
+  trackByColumn(_index: number, column: ProxyTableColumnDefinition): ProxyTableColumnId {
+    return column.id;
+  }
+
+  skeletonWidth(column: ProxyTableColumnDefinition): string {
+    return column.skeletonWidth ?? '6rem';
   }
 
   onViewProxy(event: Event | { originalEvent?: Event }, proxy: ProxyInfo): void {

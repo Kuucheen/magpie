@@ -10,10 +10,11 @@ export interface UserSettings {
   auto_remove_failing_proxies: boolean
   auto_remove_failure_threshold: number
 
-  judges: [{
+  judges: Array<{
     url: string
     regex: string
-  }]
+  }>
 
   scraping_sources: string[]
+  proxy_list_columns?: string[]
 }

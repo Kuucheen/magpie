@@ -147,6 +147,7 @@ func UpdateUserSettings(userID uint, settings dto.UserSettings) error {
 			"TransportProtocol":          transportProtocol,
 			"AutoRemoveFailingProxies":   settings.AutoRemoveFailingProxies,
 			"AutoRemoveFailureThreshold": settings.AutoRemoveFailureThreshold,
+			"ProxyListColumns":           domain.StringList(domain.NormalizeProxyListColumns(settings.ProxyListColumns)),
 		}
 		if err := tx.Model(&domain.User{}).
 			Where("id = ?", userID).

@@ -5,6 +5,29 @@ import (
 	"time"
 )
 
+var defaultProxyListColumns = []string{
+	"alive",
+	"ip",
+	"port",
+	"response_time",
+	"estimated_type",
+	"country",
+	"reputation",
+	"latest_check",
+}
+
+var validProxyListColumns = map[string]struct{}{
+	"alive":          {},
+	"ip":             {},
+	"ip_port":        {},
+	"port":           {},
+	"response_time":  {},
+	"estimated_type": {},
+	"country":        {},
+	"reputation":     {},
+	"latest_check":   {},
+}
+
 type User struct {
 	ID       uint   `gorm:"primaryKey;autoIncrement"`
 	Email    string `gorm:"uniqueIndex;not null;size:255"`
@@ -12,16 +35,17 @@ type User struct {
 	Role     string `gorm:"not null;default:'user';check:role IN ('user', 'admin')"`
 
 	//Settings
-	HTTPProtocol               bool   `gorm:"not null;default:false"`
-	HTTPSProtocol              bool   `gorm:"not null;default:true"`
-	SOCKS4Protocol             bool   `gorm:"not null;default:false"`
-	SOCKS5Protocol             bool   `gorm:"not null;default:false"`
-	Timeout                    uint16 `gorm:"not null;default:7500"`
-	Retries                    uint8  `gorm:"not null;default:2"`
-	UseHttpsForSocks           bool   `gorm:"not null;default:true"`
-	TransportProtocol          string `gorm:"not null;default:'tcp'"`
-	AutoRemoveFailingProxies   bool   `gorm:"not null;default:false"`
-	AutoRemoveFailureThreshold uint8  `gorm:"not null;default:3"`
+	HTTPProtocol               bool       `gorm:"not null;default:false"`
+	HTTPSProtocol              bool       `gorm:"not null;default:true"`
+	SOCKS4Protocol             bool       `gorm:"not null;default:false"`
+	SOCKS5Protocol             bool       `gorm:"not null;default:false"`
+	Timeout                    uint16     `gorm:"not null;default:7500"`
+	Retries                    uint8      `gorm:"not null;default:2"`
+	UseHttpsForSocks           bool       `gorm:"not null;default:true"`
+	TransportProtocol          string     `gorm:"not null;default:'tcp'"`
+	AutoRemoveFailingProxies   bool       `gorm:"not null;default:false"`
+	AutoRemoveFailureThreshold uint8      `gorm:"not null;default:3"`
+	ProxyListColumns           StringList `gorm:"type:jsonb;default:'[]'"`
 
 	//Relations
 	Judges       []Judge        `gorm:"many2many:user_judges;"`
@@ -45,7 +69,33 @@ func (u *User) ToUserSettings(simpleUserJudges []dto.SimpleUserJudge, scrapingSo
 		AutoRemoveFailureThreshold: u.AutoRemoveFailureThreshold,
 		SimpleUserJudges:           simpleUserJudges,
 		ScrapingSources:            scrapingSources,
+		ProxyListColumns:           NormalizeProxyListColumns(u.ProxyListColumns.Clone()),
 	}
+}
+
+func NormalizeProxyListColumns(columns []string) []string {
+	if len(columns) == 0 {
+		return append([]string(nil), defaultProxyListColumns...)
+	}
+
+	seen := make(map[string]struct{}, len(columns))
+	normalized := make([]string, 0, len(columns))
+	for _, column := range columns {
+		if _, exists := validProxyListColumns[column]; !exists {
+			continue
+		}
+		if _, duplicate := seen[column]; duplicate {
+			continue
+		}
+		seen[column] = struct{}{}
+		normalized = append(normalized, column)
+	}
+
+	if len(normalized) == 0 {
+		return append([]string(nil), defaultProxyListColumns...)
+	}
+
+	return normalized
 }
 
 func (u *User) GetProtocolMap() map[string]int {

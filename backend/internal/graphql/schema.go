@@ -42,6 +42,7 @@ func NewSchema() (gql.Schema, error) {
 			"autoRemoveFailureThreshold": &gql.Field{Type: gql.NewNonNull(gql.Int)},
 			"judges":                     &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(simpleJudgeType)))},
 			"scrapingSources":            &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(gql.String)))},
+			"proxyListColumns":           &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(gql.String)))},
 		},
 	})
 
@@ -395,6 +396,9 @@ func NewSchema() (gql.Schema, error) {
 			"scrapingSources": &gql.InputObjectFieldConfig{
 				Type: gql.NewList(gql.NewNonNull(gql.String)),
 			},
+			"proxyListColumns": &gql.InputObjectFieldConfig{
+				Type: gql.NewList(gql.NewNonNull(gql.String)),
+			},
 		},
 	})
 
@@ -475,6 +479,7 @@ func buildUserSettings(user domain.User, judges []dto.SimpleUserJudge, sources [
 		"autoRemoveFailureThreshold": int(dtoSettings.AutoRemoveFailureThreshold),
 		"judges":                     judgeList,
 		"scrapingSources":            dtoSettings.ScrapingSources,
+		"proxyListColumns":           dtoSettings.ProxyListColumns,
 	}
 }
 
@@ -739,6 +744,15 @@ func applyUserSettings(ctx context.Context, input map[string]interface{}) error 
 			}
 		}
 		settings.ScrapingSources = sources
+	}
+	if rawColumns, ok := input["proxyListColumns"].([]interface{}); ok {
+		columns := make([]string, 0, len(rawColumns))
+		for _, raw := range rawColumns {
+			if column, ok := raw.(string); ok {
+				columns = append(columns, column)
+			}
+		}
+		settings.ProxyListColumns = columns
 	}
 
 	if err := database.UpdateUserSettings(userID, settings); err != nil {

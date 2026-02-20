@@ -14,5 +14,6 @@ type UserSettings struct {
 
 	SimpleUserJudges []SimpleUserJudge `json:"judges"`
 
-	ScrapingSources []string `json:"scraping_sources"`
+	ScrapingSources  []string `json:"scraping_sources"`
+	ProxyListColumns []string `json:"proxy_list_columns"`
 }

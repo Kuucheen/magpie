@@ -1,4 +1,15 @@
-import {AfterViewInit, Component, EventEmitter, OnDestroy, OnInit, Output, signal} from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  EventEmitter,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  Output,
+  ViewChild,
+  signal
+} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {CdkDragDrop, DragDropModule, moveItemInArray} from '@angular/cdk/drag-drop';
 import {HttpService} from '../../services/http.service';
@@ -69,6 +80,10 @@ import {
 })
 export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   @Output() showAddProxiesMessage = new EventEmitter<boolean>();
+  @ViewChild('filterToggleAnchor') private filterToggleAnchor?: ElementRef<HTMLElement>;
+  @ViewChild('filterPanelRef') private filterPanelRef?: ElementRef<HTMLElement>;
+  @ViewChild('columnToggleAnchor') private columnToggleAnchor?: ElementRef<HTMLElement>;
+  @ViewChild('columnPanelRef') private columnPanelRef?: ElementRef<HTMLElement>;
 
   dataSource = signal<ProxyInfo[]>([]);
   selection = new SelectionModel<ProxyInfo>(true, []);
@@ -239,6 +254,28 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.userSettingsSubscription?.unsubscribe();
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
+    }
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as Node | null;
+    if (!target) {
+      return;
+    }
+
+    if (
+      this.filterPanelOpen() &&
+      !this.isTargetWithin(target, this.filterToggleAnchor, this.filterPanelRef)
+    ) {
+      this.filterPanelOpen.set(false);
+    }
+
+    if (
+      this.columnPanelOpen() &&
+      !this.isTargetWithin(target, this.columnToggleAnchor, this.columnPanelRef)
+    ) {
+      this.columnPanelOpen.set(false);
     }
   }
 
@@ -896,5 +933,15 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!this.columnPanelOpen()) {
       this.columnEditorColumns.set([...normalized]);
     }
+  }
+
+  private isTargetWithin(target: Node, ...elements: Array<ElementRef<HTMLElement> | undefined>): boolean {
+    for (const elementRef of elements) {
+      const element = elementRef?.nativeElement;
+      if (element && element.contains(target)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

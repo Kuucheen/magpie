@@ -24,20 +24,24 @@
           (onClick)="refreshList()"
         ></p-button>
 
-        <p-button
-          [label]="filterButtonLabel()"
-          icon="pi pi-filter"
-          [styleClass]="filterToggleClass()"
-          (onClick)="toggleFilterPanel()"
-        ></p-button>
+        <div #filterToggleAnchor>
+          <p-button
+            [label]="filterButtonLabel()"
+            icon="pi pi-filter"
+            [styleClass]="filterToggleClass()"
+            (onClick)="toggleFilterPanel()"
+          ></p-button>
+        </div>
 
-        <p-button
-          label="Columns"
-          icon="pi pi-table"
-          styleClass="p-button-outlined"
-          [disabled]="isSavingColumnPreferences()"
-          (onClick)="openColumnPanel()"
-        ></p-button>
+        <div #columnToggleAnchor>
+          <p-button
+            label="Columns"
+            icon="pi pi-table"
+            styleClass="p-button-outlined"
+            [disabled]="isSavingColumnPreferences()"
+            (onClick)="openColumnPanel()"
+          ></p-button>
+        </div>
 
         <input
           type="search"
@@ -56,21 +60,23 @@
     </div>
 
     @if (filterPanelOpen()) {
-      <app-proxy-filter-panel
-        [form]="filterForm"
-        [countryOptions]="countryOptions()"
-        [typeOptions]="typeOptions()"
-        [anonymityOptions]="anonymityOptions()"
-        [proxyStatusOptions]="proxyStatusOptions"
-        [proxyReputationOptions]="proxyReputationOptions"
-        [floating]="true"
-        (clear)="clearFilters()"
-        (apply)="applyFilters()"
-      ></app-proxy-filter-panel>
+      <div #filterPanelRef>
+        <app-proxy-filter-panel
+          [form]="filterForm"
+          [countryOptions]="countryOptions()"
+          [typeOptions]="typeOptions()"
+          [anonymityOptions]="anonymityOptions()"
+          [proxyStatusOptions]="proxyStatusOptions"
+          [proxyReputationOptions]="proxyReputationOptions"
+          [floating]="true"
+          (clear)="clearFilters()"
+          (apply)="applyFilters()"
+        ></app-proxy-filter-panel>
+      </div>
     }
 
     @if (columnPanelOpen()) {
-      <div class="column-panel">
+      <div class="column-panel" #columnPanelRef>
         <div class="column-panel__header">
           <h3>Table Columns</h3>
           <p-button

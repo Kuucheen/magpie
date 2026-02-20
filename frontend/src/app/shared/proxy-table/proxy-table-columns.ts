@@ -7,12 +7,13 @@ export type ProxyTableColumnId =
   | 'estimated_type'
   | 'country'
   | 'reputation'
-  | 'latest_check';
+  | 'latest_check'
+  | 'actions';
 
 export interface ProxyTableColumnDefinition {
   id: ProxyTableColumnId;
   label: string;
-  sortField: string;
+  sortField?: string;
   tooltip?: string;
   example?: string;
   skeletonWidth?: string;
@@ -84,11 +85,24 @@ export const PROXY_TABLE_COLUMN_DEFINITIONS: readonly ProxyTableColumnDefinition
     example: '2026-02-20 10:30',
     skeletonWidth: '6rem',
   },
+  {
+    id: 'actions',
+    label: 'Actions',
+    example: 'Details',
+    skeletonWidth: '4.5rem',
+  },
 ];
 
-export const DEFAULT_PROXY_TABLE_COLUMNS: readonly ProxyTableColumnId[] = PROXY_TABLE_COLUMN_DEFINITIONS.map(
-  column => column.id
-);
+export const DEFAULT_PROXY_TABLE_COLUMNS: readonly ProxyTableColumnId[] = [
+  'alive',
+  'ip_port',
+  'response_time',
+  'estimated_type',
+  'country',
+  'reputation',
+  'latest_check',
+  'actions',
+];
 
 const proxyColumnById = new Map<ProxyTableColumnId, ProxyTableColumnDefinition>(
   PROXY_TABLE_COLUMN_DEFINITIONS.map(column => [column.id, column] as const)

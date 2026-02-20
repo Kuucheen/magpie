@@ -36,7 +36,7 @@
       }
 
       @for (column of visibleColumns; track trackByColumn($index, column)) {
-        @if (sortable) {
+        @if (sortable && column.sortField) {
           <th
             [pSortableColumn]="column.sortField"
             [pTooltip]="column.tooltip ?? undefined"
@@ -55,8 +55,6 @@
           </th>
         }
       }
-
-      <th>Actions</th>
     </tr>
   </ng-template>
 
@@ -79,15 +77,13 @@
                   <p-skeleton width="3.5rem" height="0.75rem"></p-skeleton>
                   <p-skeleton width="1.5rem" height="0.75rem"></p-skeleton>
                 </div>
+              } @else if (column.id === 'actions') {
+                <p-skeleton width="4.5rem" height="1.5rem"></p-skeleton>
               } @else {
                 <p-skeleton [width]="skeletonWidth(column)" height="0.75rem"></p-skeleton>
               }
             </td>
           }
-
-          <td>
-            <p-skeleton width="4.5rem" height="1.5rem"></p-skeleton>
-          </td>
         </tr>
       }
     }
@@ -147,15 +143,16 @@
               {{ proxy.__meta?.latestCheckLabel ?? '—' }}
             </td>
           }
+          @case ('actions') {
+            <td>
+              <button type="button" class="proxy-details-button" (click)="onViewProxy($event, proxy)">
+                <i class="pi pi-external-link" aria-hidden="true"></i>
+                <span>Details</span>
+              </button>
+            </td>
+          }
         }
       }
-
-      <td>
-        <button type="button" class="proxy-details-button" (click)="onViewProxy($event, proxy)">
-          <i class="pi pi-external-link" aria-hidden="true"></i>
-          <span>Details</span>
-        </button>
-      </td>
     </tr>
   </ng-template>
 

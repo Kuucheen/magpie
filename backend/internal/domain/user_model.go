@@ -7,13 +7,13 @@ import (
 
 var defaultProxyListColumns = []string{
 	"alive",
-	"ip",
-	"port",
+	"ip_port",
 	"response_time",
 	"estimated_type",
 	"country",
 	"reputation",
 	"latest_check",
+	"actions",
 }
 
 var validProxyListColumns = map[string]struct{}{
@@ -26,6 +26,7 @@ var validProxyListColumns = map[string]struct{}{
 	"country":        {},
 	"reputation":     {},
 	"latest_check":   {},
+	"actions":        {},
 }
 
 type User struct {

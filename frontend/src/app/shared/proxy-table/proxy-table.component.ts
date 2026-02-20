@@ -101,7 +101,7 @@ export class ProxyTableComponent implements OnChanges {
   }
 
   get columnCount(): number {
-    return this.visibleColumns.length + (this.selectionEnabled ? 2 : 1);
+    return this.visibleColumns.length + (this.selectionEnabled ? 1 : 0);
   }
 
   get visibleColumns(): ProxyTableColumnDefinition[] {

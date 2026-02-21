@@ -79,8 +79,8 @@
   max-width: 100%;
   padding: 0.2rem 0.45rem;
   border-radius: 0.45rem;
-  border: 1px dashed rgba(148, 163, 184, 0.45);
-  background: rgba(148, 163, 184, 0.1);
+  border: 1px dashed transparent;
+  background: transparent;
   color: rgba(226, 232, 240, 0.9);
   font: inherit;
   line-height: 1.2;
@@ -90,16 +90,19 @@
   .pi {
     font-size: 0.7rem;
     color: rgba(148, 163, 184, 0.85);
-    transition: color 0.2s ease;
+    opacity: 0;
+    transition: color 0.2s ease, opacity 0.15s ease;
   }
 
-  &:hover {
-    border-color: rgba(var(--proxy-accent-rgb), 0.6);
-    background: rgba(var(--proxy-accent-rgb), 0.14);
-    color: #bbf7d0;
+  &:not(.copy-value--copied):hover,
+  &:not(.copy-value--copied):focus-visible {
+    border-color: rgba(148, 163, 184, 0.45);
+    background: rgba(148, 163, 184, 0.1);
+    color: rgba(226, 232, 240, 0.9);
 
     .pi {
-      color: rgba(var(--proxy-accent-rgb), 0.95);
+      color: rgba(148, 163, 184, 0.85);
+      opacity: 1;
     }
   }
 
@@ -116,6 +119,7 @@
 
     .pi {
       color: rgba(var(--proxy-accent-rgb), 1);
+      opacity: 1;
     }
   }
 }

@@ -217,11 +217,9 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
     if (!value) {
       return;
     }
-    const copied = await this.clipboardService.copyText(value);
-    if (!copied) {
-      return;
-    }
-    this.showCopyFeedback(this.getCopyValueKey(proxy, field));
+    const key = this.getCopyValueKey(proxy, field);
+    this.showCopyFeedback(key);
+    await this.clipboardService.copyText(value);
   }
 
   private decorateProxies(): void {

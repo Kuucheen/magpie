@@ -81,6 +81,13 @@ $border-color: rgba(255, 255, 255, 0.1);
   color: rgba(var(--scrape-accent-rgb), 0.7);
 }
 
+:host ::ng-deep .scrape-source-table .p-datatable-thead > tr > th,
+:host ::ng-deep .scrape-source-table .p-datatable-thead > tr > th.p-sortable-column,
+:host ::ng-deep .scrape-source-table .p-datatable-tbody > tr,
+:host ::ng-deep .scrape-source-table .p-datatable-tbody > tr > td {
+  cursor: default !important;
+}
+
 .url-cell {
   overflow: hidden;
   min-width: 0;

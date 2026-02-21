@@ -7,6 +7,11 @@ import (
 
 var defaultProxyListColumns = []string{
 	"alive",
+	"health_overall",
+	"health_http",
+	"health_https",
+	"health_socks4",
+	"health_socks5",
 	"ip_port",
 	"response_time",
 	"estimated_type",
@@ -18,6 +23,11 @@ var defaultProxyListColumns = []string{
 
 var defaultScrapeSourceProxyColumns = []string{
 	"alive",
+	"health_overall",
+	"health_http",
+	"health_https",
+	"health_socks4",
+	"health_socks5",
 	"ip_port",
 	"response_time",
 	"estimated_type",
@@ -37,6 +47,11 @@ var defaultScrapeSourceListColumns = []string{
 
 var validProxyListColumns = map[string]struct{}{
 	"alive":          {},
+	"health_overall": {},
+	"health_http":    {},
+	"health_https":   {},
+	"health_socks4":  {},
+	"health_socks5":  {},
 	"ip":             {},
 	"ip_port":        {},
 	"port":           {},
@@ -113,14 +128,15 @@ func NormalizeProxyListColumns(columns []string) []string {
 	seen := make(map[string]struct{}, len(columns))
 	normalized := make([]string, 0, len(columns))
 	for _, column := range columns {
-		if _, exists := validProxyListColumns[column]; !exists {
+		canonical := canonicalProxyListColumn(column)
+		if _, exists := validProxyListColumns[canonical]; !exists {
 			continue
 		}
-		if _, duplicate := seen[column]; duplicate {
+		if _, duplicate := seen[canonical]; duplicate {
 			continue
 		}
-		seen[column] = struct{}{}
-		normalized = append(normalized, column)
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
 	}
 
 	if len(normalized) == 0 {
@@ -138,14 +154,15 @@ func NormalizeScrapeSourceProxyColumns(columns []string) []string {
 	seen := make(map[string]struct{}, len(columns))
 	normalized := make([]string, 0, len(columns))
 	for _, column := range columns {
-		if _, exists := validProxyListColumns[column]; !exists {
+		canonical := canonicalProxyListColumn(column)
+		if _, exists := validProxyListColumns[canonical]; !exists {
 			continue
 		}
-		if _, duplicate := seen[column]; duplicate {
+		if _, duplicate := seen[canonical]; duplicate {
 			continue
 		}
-		seen[column] = struct{}{}
-		normalized = append(normalized, column)
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
 	}
 
 	if len(normalized) == 0 {
@@ -186,6 +203,23 @@ func canonicalScrapeSourceListColumn(column string) string {
 		return "actions"
 	}
 	return column
+}
+
+func canonicalProxyListColumn(column string) string {
+	switch column {
+	case "alive_ratio_overall":
+		return "health_overall"
+	case "alive_ratio_http":
+		return "health_http"
+	case "alive_ratio_https":
+		return "health_https"
+	case "alive_ratio_socks4":
+		return "health_socks4"
+	case "alive_ratio_socks5":
+		return "health_socks5"
+	default:
+		return column
+	}
 }
 
 func (u *User) GetProtocolMap() map[string]int {

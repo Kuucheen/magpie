@@ -11,8 +11,17 @@ type ProxyInfo struct {
 	Country        string                  `json:"country"`
 	AnonymityLevel string                  `json:"anonymity_level"`
 	Alive          bool                    `json:"alive"`
+	Health         *ProxyHealthSummary     `json:"health,omitempty"`
 	LatestCheck    time.Time               `json:"latest_check"`
 	Reputation     *ProxyReputationSummary `json:"reputation,omitempty"`
+}
+
+type ProxyHealthSummary struct {
+	Overall *float32 `json:"overall,omitempty"`
+	HTTP    *float32 `json:"http,omitempty"`
+	HTTPS   *float32 `json:"https,omitempty"`
+	SOCKS4  *float32 `json:"socks4,omitempty"`
+	SOCKS5  *float32 `json:"socks5,omitempty"`
 }
 
 type ProxyPage struct {

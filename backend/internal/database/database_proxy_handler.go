@@ -505,6 +505,21 @@ func GetProxyInfoPage(userId uint, page int) []dto.ProxyInfo {
 	return proxies
 }
 
+func buildProxyHealthSubQuery(userId uint) *gorm.DB {
+	return DB.Table("proxy_statistics psr").
+		Select(
+			"psr.proxy_id AS proxy_id, "+
+				"ROUND(100.0 * SUM(CASE WHEN psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(COUNT(*), 0), 1) AS health_overall, "+
+				"ROUND(100.0 * SUM(CASE WHEN proto.name = 'http' AND psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(SUM(CASE WHEN proto.name = 'http' THEN 1 ELSE 0 END), 0), 1) AS health_http, "+
+				"ROUND(100.0 * SUM(CASE WHEN proto.name = 'https' AND psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(SUM(CASE WHEN proto.name = 'https' THEN 1 ELSE 0 END), 0), 1) AS health_https, "+
+				"ROUND(100.0 * SUM(CASE WHEN proto.name = 'socks4' AND psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(SUM(CASE WHEN proto.name = 'socks4' THEN 1 ELSE 0 END), 0), 1) AS health_socks4, "+
+				"ROUND(100.0 * SUM(CASE WHEN proto.name = 'socks5' AND psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(SUM(CASE WHEN proto.name = 'socks5' THEN 1 ELSE 0 END), 0), 1) AS health_socks5",
+		).
+		Joins("JOIN protocols proto ON proto.id = psr.protocol_id").
+		Where("EXISTS (SELECT 1 FROM user_proxies up WHERE up.proxy_id = psr.proxy_id AND up.user_id = ?)", userId).
+		Group("psr.proxy_id")
+}
+
 func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search string, filters dto.ProxyListFilters) ([]dto.ProxyInfo, int64) {
 	if page < 1 {
 		page = 1
@@ -516,6 +531,7 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 	subQuery := DB.Model(&domain.ProxyStatistic{}).
 		Select("DISTINCT ON (proxy_id) *").
 		Order("proxy_id, created_at DESC, id DESC")
+	healthSubQuery := buildProxyHealthSubQuery(userId)
 
 	query := DB.Model(&domain.Proxy{}).
 		Select(
@@ -527,11 +543,17 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 				"COALESCE(NULLIF(proxies.country, ''), 'N/A') AS country, "+
 				"COALESCE(al.name, 'N/A') AS anonymity_level, "+
 				"COALESCE(pos.overall_alive, false) AS alive, "+
+				"stats.health_overall AS health_overall, "+
+				"stats.health_http AS health_http, "+
+				"stats.health_https AS health_https, "+
+				"stats.health_socks4 AS health_socks4, "+
+				"stats.health_socks5 AS health_socks5, "+
 				"COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS latest_check",
 		).
 		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
 		Joins("LEFT JOIN (?) AS ps ON ps.proxy_id = proxies.id", subQuery).
 		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
+		Joins("LEFT JOIN (?) AS stats ON stats.proxy_id = proxies.id", healthSubQuery).
 		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
 		Order("alive DESC, latest_check DESC")
 
@@ -869,11 +891,37 @@ func proxyInfoRowsToDTO(rows []dto.ProxyInfoRow) []dto.ProxyInfo {
 			Country:        row.Country,
 			AnonymityLevel: row.AnonymityLevel,
 			Alive:          row.Alive,
+			Health:         buildHealthSummary(row),
 			LatestCheck:    row.LatestCheck,
 		})
 	}
 
 	return results
+}
+
+func nullFloat32Pointer(value sql.NullFloat64) *float32 {
+	if !value.Valid {
+		return nil
+	}
+
+	asFloat32 := float32(value.Float64)
+	return &asFloat32
+}
+
+func buildHealthSummary(row dto.ProxyInfoRow) *dto.ProxyHealthSummary {
+	summary := &dto.ProxyHealthSummary{
+		Overall: nullFloat32Pointer(row.HealthOverall),
+		HTTP:    nullFloat32Pointer(row.HealthHTTP),
+		HTTPS:   nullFloat32Pointer(row.HealthHTTPS),
+		SOCKS4:  nullFloat32Pointer(row.HealthSOCKS4),
+		SOCKS5:  nullFloat32Pointer(row.HealthSOCKS5),
+	}
+
+	if summary.Overall == nil && summary.HTTP == nil && summary.HTTPS == nil && summary.SOCKS4 == nil && summary.SOCKS5 == nil {
+		return nil
+	}
+
+	return summary
 }
 
 func filterProxiesBySearch(proxies []dto.ProxyInfo, search string) []dto.ProxyInfo {

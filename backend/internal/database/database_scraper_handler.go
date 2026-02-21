@@ -381,6 +381,7 @@ func GetScrapeSiteProxyPage(userId uint, scrapeSiteId uint64, page int, pageSize
 	subQuery := DB.Model(&domain.ProxyStatistic{}).
 		Select("DISTINCT ON (proxy_id) *").
 		Order("proxy_id, created_at DESC, id DESC")
+	healthSubQuery := buildProxyHealthSubQuery(userId)
 
 	query := DB.Model(&domain.Proxy{}).
 		Select(
@@ -392,6 +393,11 @@ func GetScrapeSiteProxyPage(userId uint, scrapeSiteId uint64, page int, pageSize
 				"COALESCE(NULLIF(proxies.country, ''), 'N/A') AS country, "+
 				"COALESCE(al.name, 'N/A') AS anonymity_level, "+
 				"COALESCE(pos.overall_alive, false) AS alive, "+
+				"stats.health_overall AS health_overall, "+
+				"stats.health_http AS health_http, "+
+				"stats.health_https AS health_https, "+
+				"stats.health_socks4 AS health_socks4, "+
+				"stats.health_socks5 AS health_socks5, "+
 				"COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS latest_check",
 		).
 		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
@@ -399,6 +405,7 @@ func GetScrapeSiteProxyPage(userId uint, scrapeSiteId uint64, page int, pageSize
 		Joins("JOIN user_scrape_site uss ON uss.scrape_site_id = pss.scrape_site_id AND uss.user_id = ?", userId).
 		Joins("LEFT JOIN (?) AS ps ON ps.proxy_id = proxies.id", subQuery).
 		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
+		Joins("LEFT JOIN (?) AS stats ON stats.proxy_id = proxies.id", healthSubQuery).
 		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
 		Order("alive DESC, latest_check DESC")
 

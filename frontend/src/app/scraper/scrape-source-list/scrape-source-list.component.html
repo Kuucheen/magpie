@@ -42,83 +42,18 @@
     </div>
 
     @if (columnPanelOpen) {
-      <div class="column-panel" #columnPanelRef>
-        <div class="column-panel__header">
-          <h3>Table Columns</h3>
-          <p-button
-            label="Reset"
-            icon="pi pi-refresh"
-            styleClass="p-button-text p-button-sm"
-            (onClick)="resetColumnEditor()"
-          ></p-button>
-        </div>
-
-        <div class="column-panel__section">
-          <div class="column-panel__title">Visible</div>
-          <div cdkDropList [cdkDropListData]="columnPanelVisible()" (cdkDropListDropped)="onColumnDrop($event)">
-            @for (column of columnPanelVisible(); track column.id) {
-              <div class="column-panel__row" cdkDrag (cdkDragStarted)="onColumnDragStart()" (cdkDragEnded)="onColumnDragEnd()">
-                <div class="column-panel__row-main">
-                  <span class="column-panel__drag-handle" cdkDragHandle>
-                    <i class="pi pi-bars" aria-hidden="true"></i>
-                  </span>
-                  <div class="column-panel__label-wrap">
-                    <span class="column-panel__label">{{ column.label }}</span>
-                    @if (column.example) {
-                      <span class="column-panel__example">{{ column.example }}</span>
-                    }
-                  </div>
-                </div>
-                <div class="column-panel__controls">
-                  <p-button
-                    icon="pi pi-eye-slash"
-                    styleClass="p-button-text p-button-sm"
-                    [disabled]="columnPanelVisible().length <= 1"
-                    (onClick)="hideColumn(column.id)"
-                  ></p-button>
-                </div>
-              </div>
-            }
-          </div>
-        </div>
-
-        <div class="column-panel__section">
-          <div class="column-panel__title">Hidden</div>
-          @if (columnPanelHidden().length === 0) {
-            <div class="column-panel__empty">No hidden columns.</div>
-          } @else {
-            @for (column of columnPanelHidden(); track column.id) {
-              <div class="column-panel__row">
-                <div class="column-panel__label-wrap">
-                  <span class="column-panel__label">{{ column.label }}</span>
-                  @if (column.example) {
-                    <span class="column-panel__example">{{ column.example }}</span>
-                  }
-                </div>
-                <p-button
-                  icon="pi pi-eye"
-                  styleClass="p-button-text p-button-sm"
-                  (onClick)="showColumn(column.id)"
-                ></p-button>
-              </div>
-            }
-          }
-        </div>
-
-        <div class="column-panel__footer">
-          <p-button
-            label="Cancel"
-            styleClass="p-button-text"
-            (onClick)="closeColumnPanel()"
-          ></p-button>
-          <p-button
-            label="Save"
-            icon="pi pi-check"
-            [loading]="isSavingColumnPreferences()"
-            (onClick)="saveColumnPreferences()"
-          ></p-button>
-        </div>
-      </div>
+      <app-column-picker-panel
+        #columnPanelRef
+        class="column-panel"
+        [columns]="scrapeSourceColumnDefinitions"
+        [selectedColumnIds]="displayedColumns"
+        [defaultColumnIds]="defaultScrapeSourceColumns"
+        [saving]="isSavingColumnPreferences()"
+        (cancel)="closeColumnPanel()"
+        (save)="saveColumnPreferences($event)"
+        (dragStarted)="onColumnEditorDragStart()"
+        (dragEnded)="onColumnEditorDragEnd()"
+      ></app-column-picker-panel>
     }
   </div>
 

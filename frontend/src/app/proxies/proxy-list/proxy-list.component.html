@@ -76,139 +76,18 @@
     }
 
     @if (columnPanelOpen()) {
-      <div class="column-panel" #columnPanelRef>
-        <div class="column-panel__header">
-          <div class="column-panel__header-copy">
-            <h3>Table Columns</h3>
-            <p>Choose what is shown. Drag visible items to reorder.</p>
-          </div>
-          <p-button
-            label="Reset"
-            icon="pi pi-refresh"
-            styleClass="p-button-text p-button-sm"
-            (onClick)="resetColumnEditor()"
-          ></p-button>
-        </div>
-
-        <div class="column-panel__toolbar">
-          <input
-            type="search"
-            class="column-panel__search"
-            placeholder="Find columns"
-            [ngModel]="columnEditorSearch()"
-            (ngModelChange)="onColumnEditorSearchChange($event)"
-            aria-label="Find columns"
-          />
-          @if (columnSearchActive()) {
-            <span class="column-panel__search-hint">Reordering is disabled while filtering.</span>
-          }
-        </div>
-
-        <div class="column-panel__content">
-          <div class="column-panel__section">
-            <div class="column-panel__section-header">
-              <div class="column-panel__title">Visible ({{ visibleColumnCount() }})</div>
-              <p-button
-                label="Hide all"
-                icon="pi pi-eye-slash"
-                styleClass="p-button-text p-button-sm"
-                [disabled]="visibleColumnCount() <= 1"
-                (onClick)="hideAllColumns()"
-              ></p-button>
-            </div>
-            <div
-              class="column-panel__list"
-              cdkDropList
-              [cdkDropListData]="columnPanelVisibleFiltered()"
-              (cdkDropListDropped)="onColumnDrop($event)"
-            >
-              @if (columnPanelVisibleFiltered().length === 0) {
-                <div class="column-panel__empty">No matching visible columns.</div>
-              } @else {
-                @for (column of columnPanelVisibleFiltered(); track column.id) {
-                  <div
-                    class="column-panel__row"
-                    cdkDrag
-                    [cdkDragDisabled]="columnSearchActive()"
-                    (cdkDragStarted)="onColumnDragStart()"
-                    (cdkDragEnded)="onColumnDragEnd()"
-                  >
-                    <div class="column-panel__row-main">
-                      <span class="column-panel__drag-handle" cdkDragHandle>
-                        <i class="pi pi-bars" aria-hidden="true"></i>
-                      </span>
-                      <div class="column-panel__label-wrap">
-                        <span class="column-panel__label">{{ column.label }}</span>
-                        @if (column.example) {
-                          <span class="column-panel__example">{{ column.example }}</span>
-                        }
-                      </div>
-                    </div>
-                    <div class="column-panel__controls">
-                      <p-button
-                        icon="pi pi-eye-slash"
-                        styleClass="p-button-text p-button-sm"
-                        [disabled]="visibleColumnCount() <= 1"
-                        (onClick)="hideColumn(column.id)"
-                      ></p-button>
-                    </div>
-                  </div>
-                }
-              }
-            </div>
-          </div>
-
-          <div class="column-panel__section">
-            <div class="column-panel__section-header">
-              <div class="column-panel__title">Hidden ({{ hiddenColumnCount() }})</div>
-              <p-button
-                label="Show all"
-                icon="pi pi-eye"
-                styleClass="p-button-text p-button-sm"
-                [disabled]="hiddenColumnCount() === 0"
-                (onClick)="showAllColumns()"
-              ></p-button>
-            </div>
-            <div class="column-panel__list">
-              @if (columnPanelHiddenFiltered().length === 0) {
-                <div class="column-panel__empty">
-                  {{ hiddenColumnCount() === 0 ? 'No hidden columns.' : 'No matching hidden columns.' }}
-                </div>
-              } @else {
-                @for (column of columnPanelHiddenFiltered(); track column.id) {
-                  <div class="column-panel__row">
-                    <div class="column-panel__label-wrap">
-                      <span class="column-panel__label">{{ column.label }}</span>
-                      @if (column.example) {
-                        <span class="column-panel__example">{{ column.example }}</span>
-                      }
-                    </div>
-                    <p-button
-                      icon="pi pi-eye"
-                      styleClass="p-button-text p-button-sm"
-                      (onClick)="showColumn(column.id)"
-                    ></p-button>
-                  </div>
-                }
-              }
-            </div>
-          </div>
-        </div>
-
-        <div class="column-panel__footer">
-          <p-button
-            label="Cancel"
-            styleClass="p-button-text"
-            (onClick)="closeColumnPanel()"
-          ></p-button>
-          <p-button
-            label="Save"
-            icon="pi pi-check"
-            [loading]="isSavingColumnPreferences()"
-            (onClick)="saveColumnPreferences()"
-          ></p-button>
-        </div>
-      </div>
+      <app-column-picker-panel
+        #columnPanelRef
+        class="column-panel"
+        [columns]="proxyTableColumnDefinitions"
+        [selectedColumnIds]="displayedColumns()"
+        [defaultColumnIds]="defaultProxyTableColumns"
+        [saving]="isSavingColumnPreferences()"
+        (cancel)="closeColumnPanel()"
+        (save)="saveColumnPreferences($event)"
+        (dragStarted)="onColumnEditorDragStart()"
+        (dragEnded)="onColumnEditorDragEnd()"
+      ></app-column-picker-panel>
     }
   </div>
 

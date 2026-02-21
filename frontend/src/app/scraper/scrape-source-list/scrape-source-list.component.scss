@@ -134,106 +134,7 @@ $border-color: rgba(255, 255, 255, 0.1);
   position: absolute;
   right: 0;
   top: calc(100% + 0.75rem);
-  width: min(460px, 96vw);
-  background: #141414;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0.75rem;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
-  padding: 0.9rem;
   z-index: 8;
-}
-
-.column-panel__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-
-  h3 {
-    margin: 0;
-    font-size: 0.95rem;
-    color: #f3f4f6;
-  }
-}
-
-.column-panel__section {
-  padding: 0.65rem 0.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.column-panel__title {
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #9ca3af;
-  margin-bottom: 0.35rem;
-}
-
-.column-panel__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 2.3rem;
-}
-
-.column-panel__row-main {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.column-panel__drag-handle {
-  color: #9ca3af;
-  cursor: move;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.column-panel__label-wrap {
-  display: grid;
-  grid-template-columns: 9.75rem auto;
-  align-items: baseline;
-  column-gap: 0.45rem;
-}
-
-.column-panel__label {
-  color: #e5e7eb;
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
-
-.column-panel__example {
-  color: rgba(156, 163, 175, 0.56);
-  font-size: 0.72rem;
-  letter-spacing: 0.01em;
-}
-
-.column-panel__controls {
-  display: flex;
-  align-items: center;
-  gap: 0.1rem;
-}
-
-.column-panel__empty {
-  color: #9ca3af;
-  font-size: 0.85rem;
-  min-height: 2.3rem;
-  display: flex;
-  align-items: center;
-}
-
-.column-panel__footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  margin-top: 0.35rem;
-  padding-top: 0.85rem;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
 }
 
 .health-td {
@@ -250,15 +151,4 @@ $border-color: rgba(255, 255, 255, 0.1);
 
 .scrape-skeleton-row td {
   padding: 0.75rem 1rem;
-}
-
-.cdk-drag-preview {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 0.6rem;
-  background: #181818;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-.cdk-drag-placeholder {
-  opacity: 0.25;
 }

@@ -11,7 +11,6 @@ import {
   signal
 } from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
-import {CdkDragDrop, DragDropModule, moveItemInArray} from '@angular/cdk/drag-drop';
 import {HttpService} from '../../services/http.service';
 import {ProxyInfo} from '../../models/ProxyInfo';
 import {SelectionModel} from '@angular/cdk/collections';
@@ -35,12 +34,11 @@ import {ProxyTableComponent} from '../../shared/proxy-table/proxy-table.componen
 import {
   DEFAULT_PROXY_TABLE_COLUMNS,
   PROXY_TABLE_COLUMN_DEFINITIONS,
-  ProxyTableColumnDefinition,
   ProxyTableColumnId,
-  getProxyTableColumnDefinition,
   normalizeProxyTableColumns,
 } from '../../shared/proxy-table/proxy-table-columns';
 import {SettingsService} from '../../services/settings.service';
+import {ColumnPickerPanelComponent} from '../../shared/column-picker-panel/column-picker-panel.component';
 import {
   ProxyFilterOption,
   ProxyListAppliedFilters,
@@ -68,12 +66,12 @@ import {
     ButtonModule,
     InputNumberModule,
     MultiSelectModule,
-    DragDropModule,
     AddProxiesComponent,
     ExportProxiesComponent,
     DeleteProxiesComponent,
     ProxyFilterPanelComponent,
     ProxyTableComponent,
+    ColumnPickerPanelComponent,
   ],
   templateUrl: './proxy-list.component.html',
   styleUrls: ['./proxy-list.component.scss']
@@ -83,7 +81,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('filterToggleAnchor') private filterToggleAnchor?: ElementRef<HTMLElement>;
   @ViewChild('filterPanelRef') private filterPanelRef?: ElementRef<HTMLElement>;
   @ViewChild('columnToggleAnchor') private columnToggleAnchor?: ElementRef<HTMLElement>;
-  @ViewChild('columnPanelRef') private columnPanelRef?: ElementRef<HTMLElement>;
+  @ViewChild('columnPanelRef', { read: ElementRef }) private columnPanelRef?: ElementRef<HTMLElement>;
 
   dataSource = signal<ProxyInfo[]>([]);
   selection = new SelectionModel<ProxyInfo>(true, []);
@@ -105,12 +103,11 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   appliedFilters = signal<ProxyListAppliedFilters>(createDefaultProxyListAppliedFilters());
   displayedColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
   columnPanelOpen = signal(false);
-  columnEditorColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
-  columnEditorSearch = signal('');
   isSavingColumnPreferences = signal(false);
   filterForm: FormGroup;
   readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
   readonly proxyReputationOptions = PROXY_REPUTATION_OPTIONS;
+  readonly defaultProxyTableColumns = DEFAULT_PROXY_TABLE_COLUMNS;
   readonly proxyTableColumnDefinitions = PROXY_TABLE_COLUMN_DEFINITIONS;
   private readonly defaultFilterValues: ProxyListFilterFormValues = createDefaultProxyFilterValues();
   private searchDebounceHandle?: ReturnType<typeof setTimeout>;
@@ -378,84 +375,29 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.stopTriggerEvent(event);
     if (this.columnPanelOpen()) {
       this.columnPanelOpen.set(false);
-      this.columnEditorSearch.set('');
       return;
     }
-    this.columnEditorColumns.set([...this.displayedColumns()]);
-    this.columnEditorSearch.set('');
     this.suppressOutsideCloseUntil = Date.now() + 180;
     this.columnPanelOpen.set(true);
   }
 
   closeColumnPanel(): void {
-    this.columnEditorColumns.set([...this.displayedColumns()]);
-    this.columnEditorSearch.set('');
     this.columnPanelOpen.set(false);
   }
 
-  resetColumnEditor(): void {
-    this.columnEditorColumns.set([...DEFAULT_PROXY_TABLE_COLUMNS]);
-  }
-
-  onColumnDrop(event: CdkDragDrop<ProxyTableColumnDefinition[]>): void {
-    if (this.columnSearchActive()) {
-      return;
-    }
-    if (event.previousIndex === event.currentIndex) {
-      return;
-    }
-    const columns = [...this.columnEditorColumns()];
-    moveItemInArray(columns, event.previousIndex, event.currentIndex);
-    this.columnEditorColumns.set(columns);
-  }
-
-  onColumnDragStart(): void {
+  onColumnEditorDragStart(): void {
     this.suppressOutsideCloseUntil = Date.now() + 60_000;
   }
 
-  onColumnDragEnd(): void {
+  onColumnEditorDragEnd(): void {
     this.suppressOutsideCloseUntil = Date.now() + 240;
   }
 
-  hideColumn(id: ProxyTableColumnId): void {
-    const current = this.columnEditorColumns();
-    if (current.length <= 1) {
-      this.notification.showError('At least one column must stay visible.');
-      return;
-    }
-    this.columnEditorColumns.set(current.filter(column => column !== id));
-  }
-
-  showColumn(id: ProxyTableColumnId): void {
-    const current = this.columnEditorColumns();
-    if (current.includes(id)) {
-      return;
-    }
-    this.columnEditorColumns.set([...current, id]);
-  }
-
-  hideAllColumns(): void {
-    const current = this.columnEditorColumns();
-    if (current.length <= 1) {
-      return;
-    }
-    this.columnEditorColumns.set([current[0]]);
-  }
-
-  showAllColumns(): void {
-    this.columnEditorColumns.set(this.proxyTableColumnDefinitions.map(column => column.id));
-  }
-
-  onColumnEditorSearchChange(value: string): void {
-    this.columnEditorSearch.set(value);
-  }
-
-  saveColumnPreferences(): void {
+  saveColumnPreferences(nextColumns: string[]): void {
     const previous = this.displayedColumns();
-    const next = normalizeProxyTableColumns(this.columnEditorColumns());
+    const next = normalizeProxyTableColumns(nextColumns);
 
     this.displayedColumns.set(next);
-    this.columnEditorSearch.set('');
     this.columnPanelOpen.set(false);
     this.isSavingColumnPreferences.set(true);
 
@@ -468,45 +410,6 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
           this.notification.showError('Could not save column settings: ' + message);
         }
       });
-  }
-
-  columnPanelVisible(): ProxyTableColumnDefinition[] {
-    return this.columnEditorColumns().map(column => getProxyTableColumnDefinition(column));
-  }
-
-  columnPanelHidden(): ProxyTableColumnDefinition[] {
-    const selected = new Set(this.columnEditorColumns());
-    return this.proxyTableColumnDefinitions.filter(column => !selected.has(column.id));
-  }
-
-  columnPanelVisibleFiltered(): ProxyTableColumnDefinition[] {
-    const search = this.normalizedColumnSearch();
-    const visibleColumns = this.columnPanelVisible();
-    if (search.length === 0) {
-      return visibleColumns;
-    }
-    return visibleColumns.filter(column => this.matchesColumnSearch(column, search));
-  }
-
-  columnPanelHiddenFiltered(): ProxyTableColumnDefinition[] {
-    const search = this.normalizedColumnSearch();
-    const hiddenColumns = this.columnPanelHidden();
-    if (search.length === 0) {
-      return hiddenColumns;
-    }
-    return hiddenColumns.filter(column => this.matchesColumnSearch(column, search));
-  }
-
-  columnSearchActive(): boolean {
-    return this.normalizedColumnSearch().length > 0;
-  }
-
-  visibleColumnCount(): number {
-    return this.columnEditorColumns().length;
-  }
-
-  hiddenColumnCount(): number {
-    return this.proxyTableColumnDefinitions.length - this.columnEditorColumns().length;
   }
 
   applyFilters(): void {
@@ -1017,22 +920,9 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     };
   }
 
-  private normalizedColumnSearch(): string {
-    return this.columnEditorSearch().trim().toLowerCase();
-  }
-
-  private matchesColumnSearch(column: ProxyTableColumnDefinition, search: string): boolean {
-    const normalizedLabel = column.label.toLowerCase();
-    const normalizedExample = column.example?.toLowerCase() ?? '';
-    return normalizedLabel.includes(search) || normalizedExample.includes(search);
-  }
-
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {
     const normalized = normalizeProxyTableColumns(settings?.proxy_list_columns ?? DEFAULT_PROXY_TABLE_COLUMNS);
     this.displayedColumns.set(normalized);
-    if (!this.columnPanelOpen()) {
-      this.columnEditorColumns.set([...normalized]);
-    }
   }
 
   private isTargetWithin(target: Node, ...elements: Array<ElementRef<HTMLElement> | undefined>): boolean {

@@ -1,4 +1,3 @@
-import {CdkDragDrop, DragDropModule, moveItemInArray} from '@angular/cdk/drag-drop';
 import {Component, ElementRef, EventEmitter, HostListener, OnDestroy, OnInit, Output, ViewChild, signal} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
@@ -29,6 +28,7 @@ import {
 import {filter, finalize} from 'rxjs/operators';
 import {Subscription} from 'rxjs';
 import {HealthBarCellComponent} from '../../shared/health-bar-cell/health-bar-cell.component';
+import {ColumnPickerPanelComponent} from '../../shared/column-picker-panel/column-picker-panel.component';
 
 interface ScrapeSourceView extends ScrapeSourceInfo {
   urlHead: string;
@@ -45,9 +45,9 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
     CheckboxModule,
     ConfirmDialogModule,
     SkeletonModule,
-    DragDropModule,
     AddScrapeSourceComponent,
     HealthBarCellComponent,
+    ColumnPickerPanelComponent,
   ],
   providers: [ConfirmationService],
   templateUrl: './scrape-source-list.component.html',
@@ -57,7 +57,7 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
 export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   @Output() showAddScrapeSourceMessage = new EventEmitter<boolean>();
   @ViewChild('columnToggleAnchor') private columnToggleAnchor?: ElementRef<HTMLElement>;
-  @ViewChild('columnPanelRef') private columnPanelRef?: ElementRef<HTMLElement>;
+  @ViewChild('columnPanelRef', { read: ElementRef }) private columnPanelRef?: ElementRef<HTMLElement>;
 
   scrapeSources: ScrapeSourceView[] = [];
   selection = new SelectionModel<ScrapeSourceView>(true, []);
@@ -72,8 +72,8 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   columnPanelOpen = false;
   isSavingColumnPreferences = signal(false);
   displayedColumns: ScrapeSourceListColumnId[] = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
-  columnEditorColumns: ScrapeSourceListColumnId[] = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
   readonly skeletonRows = Array.from({ length: 6 });
+  readonly defaultScrapeSourceColumns = DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS;
   readonly scrapeSourceColumnDefinitions = SCRAPE_SOURCE_LIST_COLUMN_DEFINITIONS;
 
   private subscriptions = new Subscription();
@@ -252,55 +252,25 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       this.columnPanelOpen = false;
       return;
     }
-    this.columnEditorColumns = [...this.displayedColumns];
     this.suppressOutsideCloseUntil = Date.now() + 180;
     this.columnPanelOpen = true;
   }
 
   closeColumnPanel(): void {
-    this.columnEditorColumns = [...this.displayedColumns];
     this.columnPanelOpen = false;
   }
 
-  resetColumnEditor(): void {
-    this.columnEditorColumns = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
-  }
-
-  onColumnDrop(event: CdkDragDrop<ScrapeSourceListColumnDefinition[]>): void {
-    if (event.previousIndex === event.currentIndex) {
-      return;
-    }
-    const columns = [...this.columnEditorColumns];
-    moveItemInArray(columns, event.previousIndex, event.currentIndex);
-    this.columnEditorColumns = columns;
-  }
-
-  onColumnDragStart(): void {
+  onColumnEditorDragStart(): void {
     this.suppressOutsideCloseUntil = Date.now() + 60_000;
   }
 
-  onColumnDragEnd(): void {
+  onColumnEditorDragEnd(): void {
     this.suppressOutsideCloseUntil = Date.now() + 240;
   }
 
-  hideColumn(id: ScrapeSourceListColumnId): void {
-    if (this.columnEditorColumns.length <= 1) {
-      this.notification.showError('At least one column must stay visible.');
-      return;
-    }
-    this.columnEditorColumns = this.columnEditorColumns.filter(column => column !== id);
-  }
-
-  showColumn(id: ScrapeSourceListColumnId): void {
-    if (this.columnEditorColumns.includes(id)) {
-      return;
-    }
-    this.columnEditorColumns = [...this.columnEditorColumns, id];
-  }
-
-  saveColumnPreferences(): void {
+  saveColumnPreferences(nextColumns: string[]): void {
     const previous = [...this.displayedColumns];
-    const next = normalizeScrapeSourceListColumns(this.columnEditorColumns);
+    const next = normalizeScrapeSourceListColumns(nextColumns);
 
     this.displayedColumns = next;
     this.columnPanelOpen = false;
@@ -315,15 +285,6 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
           this.notification.showError('Could not save column settings: ' + message);
         }
       });
-  }
-
-  columnPanelVisible(): ScrapeSourceListColumnDefinition[] {
-    return this.columnEditorColumns.map(column => getScrapeSourceListColumnDefinition(column));
-  }
-
-  columnPanelHidden(): ScrapeSourceListColumnDefinition[] {
-    const selected = new Set(this.columnEditorColumns);
-    return this.scrapeSourceColumnDefinitions.filter(column => !selected.has(column.id));
   }
 
   tableColumns(): ScrapeSourceListColumnDefinition[] {
@@ -464,9 +425,6 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {
     const normalized = normalizeScrapeSourceListColumns(settings?.scrape_source_list_columns ?? DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS);
     this.displayedColumns = normalized;
-    if (!this.columnPanelOpen) {
-      this.columnEditorColumns = [...normalized];
-    }
   }
 
   private isTargetWithin(target: Node, ...elements: Array<ElementRef<HTMLElement> | undefined>): boolean {

@@ -7,6 +7,10 @@ import {UserSettings} from '../models/UserSettings';
 import {UserService} from './authorization/user.service';
 import {NotificationService} from './notification-service.service';
 import {DEFAULT_PROXY_TABLE_COLUMNS, normalizeProxyTableColumns} from '../shared/proxy-table/proxy-table-columns';
+import {
+  DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS,
+  normalizeScrapeSourceListColumns
+} from '../scraper/scrape-source-list/scrape-source-list-columns';
 
 @Injectable({
   providedIn: 'root'
@@ -143,6 +147,50 @@ export class SettingsService {
     );
   }
 
+  saveScrapeSourceProxyColumns(columns: string[]): Observable<any> {
+    const normalizedColumns = normalizeProxyTableColumns(columns);
+    const source$ = this.userSettings
+      ? of(this.userSettings)
+      : this.http.getUserSettings().pipe(
+          tap(settings => {
+            this.userSettings = settings;
+            this.userSettingsSubject.next(settings);
+          })
+        );
+
+    return source$.pipe(
+      map(current => this.buildUserSettingsPayload(current, { scrape_source_proxy_columns: normalizedColumns })),
+      switchMap(payload => this.http.saveUserSettings(payload).pipe(
+        tap(() => {
+          this.userSettings = payload;
+          this.userSettingsSubject.next(this.userSettings);
+        })
+      ))
+    );
+  }
+
+  saveScrapeSourceListColumns(columns: string[]): Observable<any> {
+    const normalizedColumns = normalizeScrapeSourceListColumns(columns);
+    const source$ = this.userSettings
+      ? of(this.userSettings)
+      : this.http.getUserSettings().pipe(
+          tap(settings => {
+            this.userSettings = settings;
+            this.userSettingsSubject.next(settings);
+          })
+        );
+
+    return source$.pipe(
+      map(current => this.buildUserSettingsPayload(current, { scrape_source_list_columns: normalizedColumns })),
+      switchMap(payload => this.http.saveUserSettings(payload).pipe(
+        tap(() => {
+          this.userSettings = payload;
+          this.userSettingsSubject.next(this.userSettings);
+        })
+      ))
+    );
+  }
+
   saveUserScrapingSources(sources: string[]): Observable<any> {
     if (this.userSettings) {
       this.userSettings.scraping_sources = sources
@@ -188,6 +236,18 @@ export class SettingsService {
         formData.ProxyListColumns ??
         current?.proxy_list_columns ??
         DEFAULT_PROXY_TABLE_COLUMNS
+      ),
+      scrape_source_proxy_columns: normalizeProxyTableColumns(
+        formData.scrape_source_proxy_columns ??
+        formData.ScrapeSourceProxyColumns ??
+        current?.scrape_source_proxy_columns ??
+        DEFAULT_PROXY_TABLE_COLUMNS
+      ),
+      scrape_source_list_columns: normalizeScrapeSourceListColumns(
+        formData.scrape_source_list_columns ??
+        formData.ScrapeSourceListColumns ??
+        current?.scrape_source_list_columns ??
+        DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS
       ),
     };
   }

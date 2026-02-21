@@ -1,4 +1,5 @@
-import {Component, EventEmitter, OnInit, Output} from '@angular/core';
+import {CdkDragDrop, DragDropModule, moveItemInArray} from '@angular/cdk/drag-drop';
+import {Component, ElementRef, EventEmitter, HostListener, OnDestroy, OnInit, Output, ViewChild, signal} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {SelectionModel} from '@angular/cdk/collections';
@@ -15,6 +16,18 @@ import {ConfirmDialogModule} from 'primeng/confirmdialog';
 import {SkeletonModule} from 'primeng/skeleton';
 import {ConfirmationService} from 'primeng/api';
 import {NotificationService} from '../../services/notification-service.service';
+import {SettingsService} from '../../services/settings.service';
+import {UserSettings} from '../../models/UserSettings';
+import {
+  DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS,
+  getScrapeSourceListColumnDefinition,
+  normalizeScrapeSourceListColumns,
+  SCRAPE_SOURCE_LIST_COLUMN_DEFINITIONS,
+  ScrapeSourceListColumnDefinition,
+  ScrapeSourceListColumnId
+} from './scrape-source-list-columns';
+import {filter, finalize} from 'rxjs/operators';
+import {Subscription} from 'rxjs';
 
 type HealthTone = 'healthy' | 'mixed' | 'unhealthy' | 'empty';
 
@@ -47,6 +60,7 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
     CheckboxModule,
     ConfirmDialogModule,
     SkeletonModule,
+    DragDropModule,
     AddScrapeSourceComponent
   ],
   providers: [ConfirmationService],
@@ -54,8 +68,10 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
   styleUrl: './scrape-source-list.component.scss',
   standalone: true
 })
-export class ScrapeSourceListComponent implements OnInit {
+export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   @Output() showAddScrapeSourceMessage = new EventEmitter<boolean>();
+  @ViewChild('columnToggleAnchor') private columnToggleAnchor?: ElementRef<HTMLElement>;
+  @ViewChild('columnPanelRef') private columnPanelRef?: ElementRef<HTMLElement>;
 
   scrapeSources: ScrapeSourceView[] = [];
   hoveredHealth: { source: ScrapeSourceView; x: number; y: number } | null = null;
@@ -68,19 +84,58 @@ export class ScrapeSourceListComponent implements OnInit {
   loading = false;
   checkingRobots: Record<number, boolean> = {};
   respectRobotsEnabled = false;
+  columnPanelOpen = false;
+  isSavingColumnPreferences = signal(false);
+  displayedColumns: ScrapeSourceListColumnId[] = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
+  columnEditorColumns: ScrapeSourceListColumnId[] = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
   readonly skeletonRows = Array.from({ length: 6 });
+  readonly scrapeSourceColumnDefinitions = SCRAPE_SOURCE_LIST_COLUMN_DEFINITIONS;
+
+  private subscriptions = new Subscription();
+  private suppressOutsideCloseUntil = 0;
 
   constructor(
     private http: HttpService,
     private confirmationService: ConfirmationService,
     private router: Router,
-    private notification: NotificationService
+    private notification: NotificationService,
+    private settingsService: SettingsService,
   ) { }
 
   ngOnInit(): void {
+    this.syncColumnsFromSettings(this.settingsService.getUserSettings());
+    const settingsSub = this.settingsService.userSettings$
+      .pipe(filter((settings): settings is UserSettings => !!settings))
+      .subscribe(settings => this.syncColumnsFromSettings(settings));
+    this.subscriptions.add(settingsSub);
+
     this.loadRespectRobotsSetting();
     this.getAndSetScrapeSourceCount();
     this.getAndSetScrapeSourcesList();
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (Date.now() < this.suppressOutsideCloseUntil) {
+      return;
+    }
+
+    if (!this.columnPanelOpen) {
+      return;
+    }
+
+    const target = event.target as Node | null;
+    if (!target) {
+      return;
+    }
+
+    if (!this.isTargetWithin(target, this.columnToggleAnchor, this.columnPanelRef)) {
+      this.columnPanelOpen = false;
+    }
   }
 
   private loadRespectRobotsSetting(): void {
@@ -204,6 +259,94 @@ export class ScrapeSourceListComponent implements OnInit {
     this.selectedScrapeSources = [];
     this.getAndSetScrapeSourceCount();
     this.getAndSetScrapeSourcesList();
+  }
+
+  openColumnPanel(): void {
+    this.columnEditorColumns = [...this.displayedColumns];
+    this.columnPanelOpen = true;
+  }
+
+  closeColumnPanel(): void {
+    this.columnEditorColumns = [...this.displayedColumns];
+    this.columnPanelOpen = false;
+  }
+
+  resetColumnEditor(): void {
+    this.columnEditorColumns = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
+  }
+
+  onColumnDrop(event: CdkDragDrop<ScrapeSourceListColumnDefinition[]>): void {
+    if (event.previousIndex === event.currentIndex) {
+      return;
+    }
+    const columns = [...this.columnEditorColumns];
+    moveItemInArray(columns, event.previousIndex, event.currentIndex);
+    this.columnEditorColumns = columns;
+  }
+
+  onColumnDragStart(): void {
+    this.suppressOutsideCloseUntil = Date.now() + 60_000;
+  }
+
+  onColumnDragEnd(): void {
+    this.suppressOutsideCloseUntil = Date.now() + 240;
+  }
+
+  hideColumn(id: ScrapeSourceListColumnId): void {
+    if (this.columnEditorColumns.length <= 1) {
+      this.notification.showError('At least one column must stay visible.');
+      return;
+    }
+    this.columnEditorColumns = this.columnEditorColumns.filter(column => column !== id);
+  }
+
+  showColumn(id: ScrapeSourceListColumnId): void {
+    if (this.columnEditorColumns.includes(id)) {
+      return;
+    }
+    this.columnEditorColumns = [...this.columnEditorColumns, id];
+  }
+
+  saveColumnPreferences(): void {
+    const previous = [...this.displayedColumns];
+    const next = normalizeScrapeSourceListColumns(this.columnEditorColumns);
+
+    this.displayedColumns = next;
+    this.columnPanelOpen = false;
+    this.isSavingColumnPreferences.set(true);
+
+    this.settingsService.saveScrapeSourceListColumns(next)
+      .pipe(finalize(() => { this.isSavingColumnPreferences.set(false); }))
+      .subscribe({
+        error: err => {
+          this.displayedColumns = previous;
+          const message = err?.error?.message ?? err?.message ?? 'Unknown error';
+          this.notification.showError('Could not save column settings: ' + message);
+        }
+      });
+  }
+
+  columnPanelVisible(): ScrapeSourceListColumnDefinition[] {
+    return this.columnEditorColumns.map(column => getScrapeSourceListColumnDefinition(column));
+  }
+
+  columnPanelHidden(): ScrapeSourceListColumnDefinition[] {
+    const selected = new Set(this.columnEditorColumns);
+    return this.scrapeSourceColumnDefinitions.filter(column => !selected.has(column.id));
+  }
+
+  tableColumns(): ScrapeSourceListColumnDefinition[] {
+    return this.displayedColumns
+      .map(column => getScrapeSourceListColumnDefinition(column))
+      .filter(column => this.respectRobotsEnabled || column.id !== 'robots_check');
+  }
+
+  tableColumnCount(): number {
+    return this.tableColumns().length + 1;
+  }
+
+  trackByColumn(_index: number, column: ScrapeSourceListColumnDefinition): ScrapeSourceListColumnId {
+    return column.id;
   }
 
   onScrapeSourcesAdded(): void {
@@ -399,5 +542,23 @@ export class ScrapeSourceListComponent implements OnInit {
       deadPercent,
       unknownPercent,
     };
+  }
+
+  private syncColumnsFromSettings(settings: UserSettings | undefined): void {
+    const normalized = normalizeScrapeSourceListColumns(settings?.scrape_source_list_columns ?? DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS);
+    this.displayedColumns = normalized;
+    if (!this.columnPanelOpen) {
+      this.columnEditorColumns = [...normalized];
+    }
+  }
+
+  private isTargetWithin(target: Node, ...elements: Array<ElementRef<HTMLElement> | undefined>): boolean {
+    for (const elementRef of elements) {
+      const element = elementRef?.nativeElement;
+      if (element && element.contains(target)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

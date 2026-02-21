@@ -1,4 +1,5 @@
-import {Component, OnDestroy, OnInit, signal} from '@angular/core';
+import {CdkDragDrop, DragDropModule, moveItemInArray} from '@angular/cdk/drag-drop';
+import {Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, signal} from '@angular/core';
 import { CommonModule, DatePipe, NgClass } from '@angular/common';
 import {FormBuilder, FormGroup} from '@angular/forms';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
@@ -16,6 +17,16 @@ import {ProxyFilterOptions} from '../../models/ProxyFilterOptions';
 import {ProxyFilterPanelComponent} from '../../shared/proxy-filter-panel/proxy-filter-panel.component';
 import {ProxyTableComponent} from '../../shared/proxy-table/proxy-table.component';
 import {
+  DEFAULT_PROXY_TABLE_COLUMNS,
+  PROXY_TABLE_COLUMN_DEFINITIONS,
+  ProxyTableColumnDefinition,
+  ProxyTableColumnId,
+  getProxyTableColumnDefinition,
+  normalizeProxyTableColumns,
+} from '../../shared/proxy-table/proxy-table-columns';
+import {SettingsService} from '../../services/settings.service';
+import {UserSettings} from '../../models/UserSettings';
+import {
   ProxyFilterOption,
   ProxyListAppliedFilters,
   ProxyListFilterFormValues,
@@ -30,6 +41,7 @@ import {
   normalizeFilterOptions,
   syncFilterFormWithApplied,
 } from '../../shared/proxy-filters';
+import {filter, finalize} from 'rxjs/operators';
 
 type HealthTone = 'healthy' | 'mixed' | 'unhealthy' | 'empty';
 type ReputationLabel = 'good' | 'neutral' | 'poor' | 'unknown';
@@ -45,6 +57,7 @@ type ReputationLabel = 'good' | 'neutral' | 'poor' | 'unknown';
     LoadingComponent,
     ButtonModule,
     ClipboardModule,
+    DragDropModule,
     ProxyFilterPanelComponent,
     ProxyTableComponent,
   ],
@@ -52,6 +65,11 @@ type ReputationLabel = 'good' | 'neutral' | 'poor' | 'unknown';
   styleUrl: './scrape-source-detail.component.scss'
 })
 export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
+  @ViewChild('filterToggleAnchor') private filterToggleAnchor?: ElementRef<HTMLElement>;
+  @ViewChild('filterPanelRef') private filterPanelRef?: ElementRef<HTMLElement>;
+  @ViewChild('columnToggleAnchor') private columnToggleAnchor?: ElementRef<HTMLElement>;
+  @ViewChild('columnPanelRef') private columnPanelRef?: ElementRef<HTMLElement>;
+
   sourceId = signal<number | undefined>(undefined);
   detail = signal<ScrapeSourceDetail | null>(null);
   isLoading = signal(true);
@@ -69,11 +87,17 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
   typeOptions = signal<ProxyFilterOption[]>([]);
   anonymityOptions = signal<ProxyFilterOption[]>([]);
   appliedFilters = signal<ProxyListAppliedFilters>(createDefaultProxyListAppliedFilters());
+  displayedColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
+  columnPanelOpen = signal(false);
+  columnEditorColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
+  isSavingColumnPreferences = signal(false);
   filterForm: FormGroup;
   readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
   readonly proxyReputationOptions = PROXY_REPUTATION_OPTIONS;
+  readonly proxyTableColumnDefinitions = PROXY_TABLE_COLUMN_DEFINITIONS;
   private readonly defaultFilterValues: ProxyListFilterFormValues = createDefaultProxyFilterValues();
   readonly proxySkeletonRows = Array.from({ length: 6 });
+  private suppressOutsideCloseUntil = 0;
 
   private proxySearchDebounce?: ReturnType<typeof setTimeout>;
 
@@ -86,6 +110,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     private fb: FormBuilder,
     private clipboard: Clipboard,
     private notification: NotificationService,
+    private settingsService: SettingsService,
   ) {
     this.filterForm = this.fb.group({
       proxyStatus: [this.defaultFilterValues.proxyStatus],
@@ -103,6 +128,12 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.syncColumnsFromSettings(this.settingsService.getUserSettings());
+    const settingsSub = this.settingsService.userSettings$
+      .pipe(filter((settings): settings is UserSettings => !!settings))
+      .subscribe(settings => this.syncColumnsFromSettings(settings));
+    this.subscriptions.add(settingsSub);
+
     const sub = this.route.paramMap.subscribe(params => {
       const rawId = params.get('id');
       const id = rawId ? Number(rawId) : NaN;
@@ -120,6 +151,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
       this.proxies.set([]);
       this.proxyTotal.set(0);
       this.filterPanelOpen.set(false);
+      this.columnPanelOpen.set(false);
       this.loadProxyList(id);
     });
 
@@ -132,6 +164,32 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
       this.proxySearchDebounce = undefined;
     }
     this.subscriptions.unsubscribe();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (Date.now() < this.suppressOutsideCloseUntil) {
+      return;
+    }
+
+    const target = event.target as Node | null;
+    if (!target) {
+      return;
+    }
+
+    if (
+      this.filterPanelOpen() &&
+      !this.isTargetWithin(target, this.filterToggleAnchor, this.filterPanelRef)
+    ) {
+      this.filterPanelOpen.set(false);
+    }
+
+    if (
+      this.columnPanelOpen() &&
+      !this.isTargetWithin(target, this.columnToggleAnchor, this.columnPanelRef)
+    ) {
+      this.columnPanelOpen.set(false);
+    }
   }
 
   get totalProxies(): number {
@@ -320,6 +378,82 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     this.filterPanelOpen.set(nextState);
   }
 
+  openColumnPanel(): void {
+    this.columnEditorColumns.set([...this.displayedColumns()]);
+    this.columnPanelOpen.set(true);
+  }
+
+  closeColumnPanel(): void {
+    this.columnEditorColumns.set([...this.displayedColumns()]);
+    this.columnPanelOpen.set(false);
+  }
+
+  resetColumnEditor(): void {
+    this.columnEditorColumns.set([...DEFAULT_PROXY_TABLE_COLUMNS]);
+  }
+
+  onColumnDrop(event: CdkDragDrop<ProxyTableColumnDefinition[]>): void {
+    if (event.previousIndex === event.currentIndex) {
+      return;
+    }
+    const columns = [...this.columnEditorColumns()];
+    moveItemInArray(columns, event.previousIndex, event.currentIndex);
+    this.columnEditorColumns.set(columns);
+  }
+
+  onColumnDragStart(): void {
+    this.suppressOutsideCloseUntil = Date.now() + 60_000;
+  }
+
+  onColumnDragEnd(): void {
+    this.suppressOutsideCloseUntil = Date.now() + 240;
+  }
+
+  hideColumn(id: ProxyTableColumnId): void {
+    const current = this.columnEditorColumns();
+    if (current.length <= 1) {
+      this.notification.showError('At least one column must stay visible.');
+      return;
+    }
+    this.columnEditorColumns.set(current.filter(column => column !== id));
+  }
+
+  showColumn(id: ProxyTableColumnId): void {
+    const current = this.columnEditorColumns();
+    if (current.includes(id)) {
+      return;
+    }
+    this.columnEditorColumns.set([...current, id]);
+  }
+
+  saveColumnPreferences(): void {
+    const previous = this.displayedColumns();
+    const next = normalizeProxyTableColumns(this.columnEditorColumns());
+
+    this.displayedColumns.set(next);
+    this.columnPanelOpen.set(false);
+    this.isSavingColumnPreferences.set(true);
+
+    this.settingsService.saveScrapeSourceProxyColumns(next)
+      .pipe(finalize(() => this.isSavingColumnPreferences.set(false)))
+      .subscribe({
+        error: err => {
+          this.displayedColumns.set(previous);
+          const message = err?.error?.message ?? err?.message ?? 'Unknown error';
+          this.notification.showError('Could not save column settings: ' + message);
+        }
+      });
+  }
+
+  columnPanelVisible(): ProxyTableColumnDefinition[] {
+    return this.columnEditorColumns().map(column => getProxyTableColumnDefinition(column));
+  }
+
+  columnPanelHidden(): ProxyTableColumnDefinition[] {
+    const selected = new Set(this.columnEditorColumns());
+    return this.proxyTableColumnDefinitions.filter(column => !selected.has(column.id));
+  }
+
   applyFilters(): void {
     const nextFilters = this.buildFiltersFromForm();
     this.appliedFilters.set(nextFilters);
@@ -464,6 +598,24 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
 
   private buildFilterPayload(filters: ProxyListAppliedFilters): ProxyListFilters | undefined {
     return buildProxyListFilterPayload(filters);
+  }
+
+  private syncColumnsFromSettings(settings: UserSettings | undefined): void {
+    const normalized = normalizeProxyTableColumns(settings?.scrape_source_proxy_columns ?? DEFAULT_PROXY_TABLE_COLUMNS);
+    this.displayedColumns.set(normalized);
+    if (!this.columnPanelOpen()) {
+      this.columnEditorColumns.set([...normalized]);
+    }
+  }
+
+  private isTargetWithin(target: Node, ...elements: Array<ElementRef<HTMLElement> | undefined>): boolean {
+    for (const elementRef of elements) {
+      const element = elementRef?.nativeElement;
+      if (element && element.contains(target)) {
+        return true;
+      }
+    }
+    return false;
   }
 
 }

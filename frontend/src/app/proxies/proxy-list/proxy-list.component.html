@@ -91,7 +91,7 @@
           <div class="column-panel__title">Visible</div>
           <div cdkDropList [cdkDropListData]="columnPanelVisible()" (cdkDropListDropped)="onColumnDrop($event)">
             @for (column of columnPanelVisible(); track column.id) {
-              <div class="column-panel__row" cdkDrag>
+              <div class="column-panel__row" cdkDrag (cdkDragStarted)="onColumnDragStart()" (cdkDragEnded)="onColumnDragEnd()">
                 <div class="column-panel__row-main">
                   <span class="column-panel__drag-handle" cdkDragHandle>
                     <i class="pi pi-bars" aria-hidden="true"></i>

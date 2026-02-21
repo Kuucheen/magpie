@@ -1,33 +1,125 @@
 <div class="proxy-container p-8 min-h-screen text-gray-300">
-  <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
-    <div class="flex flex-wrap items-center gap-4">
-      <p-button
-        label="Delete Selected"
-        icon="pi pi-trash"
-        styleClass="p-button-danger"
-        [disabled]="getSelectionCount() === 0"
-        (onClick)="deleteSelectedSources()"
-      ></p-button>
+  <div class="actions-wrapper">
+    <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-4">
+        <p-button
+          label="Delete Selected"
+          icon="pi pi-trash"
+          styleClass="p-button-danger"
+          [disabled]="getSelectionCount() === 0"
+          (onClick)="deleteSelectedSources()"
+        ></p-button>
 
-      <span class="text-sm text-gray-400">
-        Total: {{ totalItems }} sources
-      </span>
+        <span class="text-sm text-gray-400">
+          Total: {{ totalItems }} sources
+        </span>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-4">
+        <p-button
+          label="Refresh"
+          icon="pi pi-refresh"
+          styleClass="p-button-outlined"
+          (onClick)="refreshList()"
+          [disabled]="loading"
+        ></p-button>
+
+        <div #columnToggleAnchor>
+          <p-button
+            label="Columns"
+            icon="pi pi-table"
+            styleClass="p-button-outlined"
+            [disabled]="isSavingColumnPreferences()"
+            (onClick)="openColumnPanel()"
+          ></p-button>
+        </div>
+
+        <app-add-scrape-source
+          (showAddScrapeSourcesMessage)="onShowAddScrapeSourcesMessage($event)"
+          (scrapeSourcesAdded)="onScrapeSourcesAdded()"
+        ></app-add-scrape-source>
+      </div>
     </div>
 
-    <div class="flex flex-wrap items-center gap-4">
-      <p-button
-        label="Refresh"
-        icon="pi pi-refresh"
-        styleClass="p-button-outlined"
-        (onClick)="refreshList()"
-        [disabled]="loading"
-      ></p-button>
+    @if (columnPanelOpen) {
+      <div class="column-panel" #columnPanelRef>
+        <div class="column-panel__header">
+          <h3>Table Columns</h3>
+          <p-button
+            label="Reset"
+            icon="pi pi-refresh"
+            styleClass="p-button-text p-button-sm"
+            (onClick)="resetColumnEditor()"
+          ></p-button>
+        </div>
 
-      <app-add-scrape-source
-        (showAddScrapeSourcesMessage)="onShowAddScrapeSourcesMessage($event)"
-        (scrapeSourcesAdded)="onScrapeSourcesAdded()"
-      ></app-add-scrape-source>
-    </div>
+        <div class="column-panel__section">
+          <div class="column-panel__title">Visible (ordered)</div>
+          <div cdkDropList [cdkDropListData]="columnPanelVisible()" (cdkDropListDropped)="onColumnDrop($event)">
+            @for (column of columnPanelVisible(); track column.id) {
+              <div class="column-panel__row" cdkDrag (cdkDragStarted)="onColumnDragStart()" (cdkDragEnded)="onColumnDragEnd()">
+                <div class="column-panel__row-main">
+                  <span class="column-panel__drag-handle" cdkDragHandle>
+                    <i class="pi pi-bars" aria-hidden="true"></i>
+                  </span>
+                  <div class="column-panel__label-wrap">
+                    <span class="column-panel__label">{{ column.label }}</span>
+                    @if (column.example) {
+                      <span class="column-panel__example">{{ column.example }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="column-panel__controls">
+                  <p-button
+                    icon="pi pi-eye-slash"
+                    styleClass="p-button-text p-button-sm"
+                    [disabled]="columnPanelVisible().length <= 1"
+                    (onClick)="hideColumn(column.id)"
+                  ></p-button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="column-panel__section">
+          <div class="column-panel__title">Hidden</div>
+          @if (columnPanelHidden().length === 0) {
+            <div class="column-panel__empty">No hidden columns.</div>
+          } @else {
+            @for (column of columnPanelHidden(); track column.id) {
+              <div class="column-panel__row">
+                <div class="column-panel__label-wrap">
+                  <span class="column-panel__label">{{ column.label }}</span>
+                  @if (column.example) {
+                    <span class="column-panel__example">{{ column.example }}</span>
+                  }
+                </div>
+                <p-button
+                  icon="pi pi-eye"
+                  styleClass="p-button-text p-button-sm"
+                  (onClick)="showColumn(column.id)"
+                ></p-button>
+              </div>
+            }
+          }
+        </div>
+
+        <div class="column-panel__footer">
+          <p-button
+            label="Cancel"
+            styleClass="p-button-text"
+            (onClick)="closeColumnPanel()"
+          ></p-button>
+          <p-button
+            label="Save"
+            icon="pi pi-check"
+            [loading]="isSavingColumnPreferences()"
+            (onClick)="saveColumnPreferences()"
+          ></p-button>
+        </div>
+      </div>
+    }
   </div>
 
   <p-table
@@ -57,23 +149,17 @@
             [indeterminate]="isSomeSelected()"
           ></p-checkbox>
         </th>
-        <th pSortableColumn="url" class="url-cell">
-          URL <p-sortIcon field="url"></p-sortIcon>
-        </th>
-        <th style="width: 9rem" class="text-center" pSortableColumn="proxy_count">
-          Proxy Count <p-sortIcon field="proxy_count"></p-sortIcon>
-        </th>
-        <th style="width: 13rem" class="text-center" pSortableColumn="health">
-          Health <p-sortIcon field="health"></p-sortIcon>
-        </th>
-        @if (respectRobotsEnabled) {
-          <th style="width: 11rem" class="text-center">
-            Robots Check
-          </th>
+        @for (column of tableColumns(); track trackByColumn($index, column)) {
+          @if (column.sortField) {
+            <th [pSortableColumn]="column.sortField" class="text-center" [ngClass]="{'url-cell': column.id === 'url'}">
+              {{ column.label }} <p-sortIcon [field]="column.sortField"></p-sortIcon>
+            </th>
+          } @else {
+            <th class="text-center" [ngClass]="{'url-cell': column.id === 'url'}">
+              {{ column.label }}
+            </th>
+          }
         }
-        <th style="width: 7rem" class="text-center">
-          Details
-        </th>
       </tr>
     </ng-template>
     <ng-template pTemplate="loadingbody">
@@ -83,26 +169,32 @@
             <td>
               <p-skeleton width="1.25rem" height="1.25rem" shape="circle"></p-skeleton>
             </td>
-            <td>
-              <p-skeleton width="100%" height="0.85rem"></p-skeleton>
-            </td>
-            <td class="text-center">
-              <p-skeleton width="3rem" height="0.85rem" class="inline-block"></p-skeleton>
-            </td>
-            <td class="text-center">
-              <div class="health-skeleton">
-                <p-skeleton width="7rem" height="1.35rem" class="inline-block"></p-skeleton>
-                <p-skeleton width="4.5rem" height="0.6rem" class="inline-block"></p-skeleton>
-              </div>
-            </td>
-            @if (respectRobotsEnabled) {
-              <td class="text-center">
-                <p-skeleton width="7.5rem" height="1.5rem" class="inline-block"></p-skeleton>
-              </td>
+            @for (column of tableColumns(); track trackByColumn($index, column)) {
+              @if (column.id === 'url') {
+                <td>
+                  <p-skeleton width="100%" height="0.85rem"></p-skeleton>
+                </td>
+              } @else if (column.id === 'proxy_count') {
+                <td class="text-center">
+                  <p-skeleton width="3rem" height="0.85rem" class="inline-block"></p-skeleton>
+                </td>
+              } @else if (column.id === 'health') {
+                <td class="text-center">
+                  <div class="health-skeleton">
+                    <p-skeleton width="7rem" height="1.35rem" class="inline-block"></p-skeleton>
+                    <p-skeleton width="4.5rem" height="0.6rem" class="inline-block"></p-skeleton>
+                  </div>
+                </td>
+              } @else if (column.id === 'robots_check') {
+                <td class="text-center">
+                  <p-skeleton width="7.5rem" height="1.5rem" class="inline-block"></p-skeleton>
+                </td>
+              } @else {
+                <td class="text-center">
+                  <p-skeleton width="4.5rem" height="1.5rem" class="inline-block"></p-skeleton>
+                </td>
+              }
             }
-            <td class="text-center">
-              <p-skeleton width="4.5rem" height="1.5rem" class="inline-block"></p-skeleton>
-            </td>
           </tr>
         }
       }
@@ -116,60 +208,72 @@
             [ngModel]="selection.isSelected(source)"
           ></p-checkbox>
         </td>
-        <td class="url-cell">
-          <a
-            [href]="source.url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="scrape-url"
-            [title]="source.url"
-            (click)="$event.stopPropagation()"
-          >
-            <span class="scrape-url-start">{{ source.urlHead }}</span><span class="scrape-url-end">{{ source.urlTail }}</span>
-          </a>
-        </td>
-        <td class="text-center">
-          {{ source.proxy_count | number }}
-        </td>
-        <td class="text-center health-td">
-          <div
-            class="health-cell"
-            (mouseenter)="showHealthPopup($event, source)"
-            (mouseleave)="hideHealthPopup()"
-          >
-            <div class="health-sub">{{ source.health.ratioLabel }}</div>
-            <div class="health-bar" aria-hidden="true">
-              <span class="health-bar__segment health-bar__segment--alive" [style.width.%]="source.health.alivePercent"></span>
-              <span class="health-bar__segment health-bar__segment--dead" [style.width.%]="source.health.deadPercent"></span>
-              <span class="health-bar__segment health-bar__segment--unknown" [style.width.%]="source.health.unknownPercent"></span>
-            </div>
-          </div>
-        </td>
-        @if (respectRobotsEnabled) {
-          <td class="text-center">
-            <p-button
-              label="Check robots.txt"
-              icon="pi pi-shield"
-              size="small"
-              [loading]="isCheckingRobots(source.id)"
-              styleClass="p-button-outlined p-button-secondary"
-              (onClick)="checkRobots(source, $event)"
-            ></p-button>
-          </td>
+        @for (column of tableColumns(); track trackByColumn($index, column)) {
+          @switch (column.id) {
+            @case ('url') {
+              <td class="url-cell">
+                <a
+                  [href]="source.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="scrape-url"
+                  [title]="source.url"
+                  (click)="$event.stopPropagation()"
+                >
+                  <span class="scrape-url-start">{{ source.urlHead }}</span><span class="scrape-url-end">{{ source.urlTail }}</span>
+                </a>
+              </td>
+            }
+            @case ('proxy_count') {
+              <td class="text-center">
+                {{ source.proxy_count | number }}
+              </td>
+            }
+            @case ('health') {
+              <td class="text-center health-td">
+                <div
+                  class="health-cell"
+                  (mouseenter)="showHealthPopup($event, source)"
+                  (mouseleave)="hideHealthPopup()"
+                >
+                  <div class="health-sub">{{ source.health.ratioLabel }}</div>
+                  <div class="health-bar" aria-hidden="true">
+                    <span class="health-bar__segment health-bar__segment--alive" [style.width.%]="source.health.alivePercent"></span>
+                    <span class="health-bar__segment health-bar__segment--dead" [style.width.%]="source.health.deadPercent"></span>
+                    <span class="health-bar__segment health-bar__segment--unknown" [style.width.%]="source.health.unknownPercent"></span>
+                  </div>
+                </div>
+              </td>
+            }
+            @case ('robots_check') {
+              <td class="text-center">
+                <p-button
+                  label="Check robots.txt"
+                  icon="pi pi-shield"
+                  size="small"
+                  [loading]="isCheckingRobots(source.id)"
+                  styleClass="p-button-outlined p-button-secondary"
+                  (onClick)="checkRobots(source, $event)"
+                ></p-button>
+              </td>
+            }
+            @case ('actions') {
+              <td class="text-center" (click)="$event.stopPropagation()">
+                <p-button
+                  label="Details"
+                  icon="pi pi-external-link"
+                  styleClass="p-button-text p-button-sm"
+                  (onClick)="onViewSource($event, source)"
+                ></p-button>
+              </td>
+            }
+          }
         }
-        <td class="text-center" (click)="$event.stopPropagation()">
-          <p-button
-            label="Details"
-            icon="pi pi-external-link"
-            styleClass="p-button-text p-button-sm"
-            (onClick)="onViewSource($event, source)"
-          ></p-button>
-        </td>
       </tr>
     </ng-template>
     <ng-template pTemplate="emptyMessage">
       <tr>
-        <td [attr.colspan]="respectRobotsEnabled ? 6 : 5">No scrape sources found.</td>
+        <td [attr.colspan]="tableColumnCount()">No scrape sources found.</td>
       </tr>
     </ng-template>
   </p-table>

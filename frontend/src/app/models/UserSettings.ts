@@ -17,4 +17,6 @@ export interface UserSettings {
 
   scraping_sources: string[]
   proxy_list_columns?: string[]
+  scrape_source_proxy_columns?: string[]
+  scrape_source_list_columns?: string[]
 }

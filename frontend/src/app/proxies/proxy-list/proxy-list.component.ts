@@ -128,6 +128,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   private proxyListSubscription?: Subscription;
   private navigationSubscription?: Subscription;
   private userSettingsSubscription?: Subscription;
+  private suppressOutsideCloseUntil = 0;
 
   constructor(
     private http: HttpService,
@@ -259,6 +260,10 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
+    if (Date.now() < this.suppressOutsideCloseUntil) {
+      return;
+    }
+
     const target = event.target as Node | null;
     if (!target) {
       return;
@@ -387,6 +392,14 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     const columns = [...this.columnEditorColumns()];
     moveItemInArray(columns, event.previousIndex, event.currentIndex);
     this.columnEditorColumns.set(columns);
+  }
+
+  onColumnDragStart(): void {
+    this.suppressOutsideCloseUntil = Date.now() + 60_000;
+  }
+
+  onColumnDragEnd(): void {
+    this.suppressOutsideCloseUntil = Date.now() + 240;
   }
 
   hideColumn(id: ProxyTableColumnId): void {

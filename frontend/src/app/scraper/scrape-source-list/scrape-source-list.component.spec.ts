@@ -4,6 +4,7 @@ import {RouterTestingModule} from '@angular/router/testing';
 import {of} from 'rxjs';
 import {ScrapeSourceListComponent} from './scrape-source-list.component';
 import {HttpService} from '../../services/http.service';
+import {SettingsService} from '../../services/settings.service';
 
 describe('ScrapeSourceListComponent', () => {
   let component: ScrapeSourceListComponent;
@@ -15,12 +16,18 @@ describe('ScrapeSourceListComponent', () => {
       getScrapingSourcesCount: jasmine.createSpy('getScrapingSourcesCount').and.returnValue(of(0)),
       getScrapingSourcePage: jasmine.createSpy('getScrapingSourcePage').and.returnValue(of([])),
     } satisfies Partial<HttpService>;
+    const settingsServiceStub = {
+      getUserSettings: jasmine.createSpy('getUserSettings').and.returnValue(undefined),
+      userSettings$: of(undefined),
+      saveScrapeSourceListColumns: jasmine.createSpy('saveScrapeSourceListColumns').and.returnValue(of({message: 'ok'})),
+    } satisfies Partial<SettingsService>;
 
     await TestBed.configureTestingModule({
       imports: [ScrapeSourceListComponent, RouterTestingModule],
       providers: [
         MessageService,
         {provide: HttpService, useValue: httpServiceStub},
+        {provide: SettingsService, useValue: settingsServiceStub},
       ]
     })
     .compileComponents();

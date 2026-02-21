@@ -106,6 +106,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   displayedColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
   columnPanelOpen = signal(false);
   columnEditorColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
+  columnEditorSearch = signal('');
   isSavingColumnPreferences = signal(false);
   filterForm: FormGroup;
   readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
@@ -377,15 +378,18 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.stopTriggerEvent(event);
     if (this.columnPanelOpen()) {
       this.columnPanelOpen.set(false);
+      this.columnEditorSearch.set('');
       return;
     }
     this.columnEditorColumns.set([...this.displayedColumns()]);
+    this.columnEditorSearch.set('');
     this.suppressOutsideCloseUntil = Date.now() + 180;
     this.columnPanelOpen.set(true);
   }
 
   closeColumnPanel(): void {
     this.columnEditorColumns.set([...this.displayedColumns()]);
+    this.columnEditorSearch.set('');
     this.columnPanelOpen.set(false);
   }
 
@@ -394,6 +398,9 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   onColumnDrop(event: CdkDragDrop<ProxyTableColumnDefinition[]>): void {
+    if (this.columnSearchActive()) {
+      return;
+    }
     if (event.previousIndex === event.currentIndex) {
       return;
     }
@@ -427,11 +434,28 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.columnEditorColumns.set([...current, id]);
   }
 
+  hideAllColumns(): void {
+    const current = this.columnEditorColumns();
+    if (current.length <= 1) {
+      return;
+    }
+    this.columnEditorColumns.set([current[0]]);
+  }
+
+  showAllColumns(): void {
+    this.columnEditorColumns.set(this.proxyTableColumnDefinitions.map(column => column.id));
+  }
+
+  onColumnEditorSearchChange(value: string): void {
+    this.columnEditorSearch.set(value);
+  }
+
   saveColumnPreferences(): void {
     const previous = this.displayedColumns();
     const next = normalizeProxyTableColumns(this.columnEditorColumns());
 
     this.displayedColumns.set(next);
+    this.columnEditorSearch.set('');
     this.columnPanelOpen.set(false);
     this.isSavingColumnPreferences.set(true);
 
@@ -453,6 +477,36 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   columnPanelHidden(): ProxyTableColumnDefinition[] {
     const selected = new Set(this.columnEditorColumns());
     return this.proxyTableColumnDefinitions.filter(column => !selected.has(column.id));
+  }
+
+  columnPanelVisibleFiltered(): ProxyTableColumnDefinition[] {
+    const search = this.normalizedColumnSearch();
+    const visibleColumns = this.columnPanelVisible();
+    if (search.length === 0) {
+      return visibleColumns;
+    }
+    return visibleColumns.filter(column => this.matchesColumnSearch(column, search));
+  }
+
+  columnPanelHiddenFiltered(): ProxyTableColumnDefinition[] {
+    const search = this.normalizedColumnSearch();
+    const hiddenColumns = this.columnPanelHidden();
+    if (search.length === 0) {
+      return hiddenColumns;
+    }
+    return hiddenColumns.filter(column => this.matchesColumnSearch(column, search));
+  }
+
+  columnSearchActive(): boolean {
+    return this.normalizedColumnSearch().length > 0;
+  }
+
+  visibleColumnCount(): number {
+    return this.columnEditorColumns().length;
+  }
+
+  hiddenColumnCount(): number {
+    return this.proxyTableColumnDefinitions.length - this.columnEditorColumns().length;
   }
 
   applyFilters(): void {
@@ -961,6 +1015,16 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       anonymityLevels: normalizeSelection(anonymityRaw.map(item => `${item}`)),
       reputationLabels: filteredReputation,
     };
+  }
+
+  private normalizedColumnSearch(): string {
+    return this.columnEditorSearch().trim().toLowerCase();
+  }
+
+  private matchesColumnSearch(column: ProxyTableColumnDefinition, search: string): boolean {
+    const normalizedLabel = column.label.toLowerCase();
+    const normalizedExample = column.example?.toLowerCase() ?? '';
+    return normalizedLabel.includes(search) || normalizedExample.includes(search);
   }
 
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {

@@ -1,4 +1,14 @@
-import {ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges} from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  Input,
+  OnChanges,
+  OnDestroy,
+  Output,
+  SimpleChanges
+} from '@angular/core';
 import {NgClass} from '@angular/common';
 import {SelectionModel} from '@angular/cdk/collections';
 import {TableLazyLoadEvent, TableModule} from 'primeng/table';
@@ -43,7 +53,7 @@ type ProxyRow = ProxyInfo & { __meta?: ProxyRowMeta };
   styleUrls: ['./proxy-table.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ProxyTableComponent implements OnChanges {
+export class ProxyTableComponent implements OnChanges, OnDestroy {
   private _proxies: ProxyRow[] = [];
   private _columns: ProxyTableColumnId[] = [...DEFAULT_PROXY_TABLE_COLUMNS];
   private readonly dateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -96,9 +106,20 @@ export class ProxyTableComponent implements OnChanges {
   @Output() sort = new EventEmitter<{ field: string; order: number }>();
   @Output() viewProxy = new EventEmitter<ProxyInfo>();
 
+  copiedValueKey: string | null = null;
+  private copyFeedbackTimeout?: ReturnType<typeof setTimeout>;
+
+  constructor(private cdr: ChangeDetectorRef) {}
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['emptyReputationLabel'] || changes['missingReputationScoreLabel']) {
       this.decorateProxies();
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.copyFeedbackTimeout) {
+      clearTimeout(this.copyFeedbackTimeout);
     }
   }
 
@@ -182,6 +203,23 @@ export class ProxyTableComponent implements OnChanges {
     this.viewProxy.emit(proxy);
   }
 
+  isCopied(proxy: ProxyInfo, field: 'ip' | 'ip_port' | 'port'): boolean {
+    return this.copiedValueKey === this.getCopyValueKey(proxy, field);
+  }
+
+  async copyProxyValue(event: MouseEvent, proxy: ProxyInfo, field: 'ip' | 'ip_port' | 'port'): Promise<void> {
+    event.stopPropagation();
+    const value = this.resolveCopyValue(proxy, field);
+    if (!value) {
+      return;
+    }
+    const copied = await this.copyText(value);
+    if (!copied) {
+      return;
+    }
+    this.showCopyFeedback(this.getCopyValueKey(proxy, field));
+  }
+
   private decorateProxies(): void {
     if (!this._proxies.length) {
       return;
@@ -260,6 +298,67 @@ export class ProxyTableComponent implements OnChanges {
     }
 
     return null;
+  }
+
+  private resolveCopyValue(proxy: ProxyInfo, field: 'ip' | 'ip_port' | 'port'): string {
+    if (field === 'ip_port') {
+      return `${proxy.ip}:${proxy.port}`;
+    }
+    if (field === 'port') {
+      return `${proxy.port}`;
+    }
+    return proxy.ip;
+  }
+
+  private getCopyValueKey(proxy: ProxyInfo, field: 'ip' | 'ip_port' | 'port'): string {
+    return `${proxy.id}:${field}`;
+  }
+
+  private showCopyFeedback(key: string): void {
+    this.copiedValueKey = key;
+    if (this.copyFeedbackTimeout) {
+      clearTimeout(this.copyFeedbackTimeout);
+    }
+    this.copyFeedbackTimeout = setTimeout(() => {
+      if (this.copiedValueKey === key) {
+        this.copiedValueKey = null;
+        this.cdr.markForCheck();
+      }
+    }, 1400);
+    this.cdr.markForCheck();
+  }
+
+  private async copyText(text: string): Promise<boolean> {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fallback to execCommand for environments without clipboard permissions.
+      }
+    }
+
+    if (typeof document === 'undefined') {
+      return false;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    try {
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return copied;
+    } catch {
+      document.body.removeChild(textarea);
+      return false;
+    }
   }
 
 }

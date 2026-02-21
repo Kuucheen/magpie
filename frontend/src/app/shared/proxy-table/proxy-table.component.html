@@ -179,13 +179,49 @@
             </td>
           }
           @case ('ip') {
-            <td>{{ proxy.ip }}</td>
+            <td class="copy-cell">
+              <button
+                type="button"
+                class="copy-value"
+                [class.copy-value--copied]="isCopied(proxy, 'ip')"
+                [pTooltip]="isCopied(proxy, 'ip') ? 'Copied' : 'Click to copy'"
+                tooltipPosition="top"
+                (click)="copyProxyValue($event, proxy, 'ip')"
+              >
+                <span class="copy-value__text">{{ proxy.ip }}</span>
+                <i class="pi" [ngClass]="isCopied(proxy, 'ip') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+              </button>
+            </td>
           }
           @case ('ip_port') {
-            <td>{{ proxy.ip }}:{{ proxy.port }}</td>
+            <td class="copy-cell">
+              <button
+                type="button"
+                class="copy-value"
+                [class.copy-value--copied]="isCopied(proxy, 'ip_port')"
+                [pTooltip]="isCopied(proxy, 'ip_port') ? 'Copied' : 'Click to copy'"
+                tooltipPosition="top"
+                (click)="copyProxyValue($event, proxy, 'ip_port')"
+              >
+                <span class="copy-value__text">{{ proxy.ip }}:{{ proxy.port }}</span>
+                <i class="pi" [ngClass]="isCopied(proxy, 'ip_port') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+              </button>
+            </td>
           }
           @case ('port') {
-            <td>{{ proxy.port }}</td>
+            <td class="copy-cell">
+              <button
+                type="button"
+                class="copy-value"
+                [class.copy-value--copied]="isCopied(proxy, 'port')"
+                [pTooltip]="isCopied(proxy, 'port') ? 'Copied' : 'Click to copy'"
+                tooltipPosition="top"
+                (click)="copyProxyValue($event, proxy, 'port')"
+              >
+                <span class="copy-value__text">{{ proxy.port }}</span>
+                <i class="pi" [ngClass]="isCopied(proxy, 'port') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+              </button>
+            </td>
           }
           @case ('response_time') {
             <td>{{ proxy.response_time }} ms</td>

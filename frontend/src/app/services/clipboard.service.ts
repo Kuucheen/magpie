@@ -4,6 +4,18 @@ import {Injectable} from '@angular/core';
   providedIn: 'root',
 })
 export class ClipboardService {
+  async readText(): Promise<string | null> {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
+      return null;
+    }
+
+    try {
+      return await navigator.clipboard.readText();
+    } catch {
+      return null;
+    }
+  }
+
   async copyText(value: string): Promise<boolean> {
     const text = `${value ?? ''}`;
     if (!text) {

@@ -7,6 +7,7 @@ import {ButtonModule} from 'primeng/button';
 import {TextareaModule} from 'primeng/textarea';
 import {TooltipModule} from 'primeng/tooltip';
 import {DialogModule} from 'primeng/dialog';
+import {ClipboardService} from '../../services/clipboard.service';
 import {NotificationService} from '../../services/notification-service.service';
 import {
   ProcesingPopupComponent
@@ -57,17 +58,18 @@ export class AddScrapeSourceComponent {
 
   constructor(
     private service: HttpService,
+    private clipboardService: ClipboardService,
     private notification: NotificationService
   ) { }
 
   async pasteFromClipboard(): Promise<void> {
-    try {
-      const text = await navigator.clipboard.readText();
-      this.clipboardScrapeSources.set(text);
-      this.processClipboardSources();
-    } catch (err) {
-      console.error('Failed to read clipboard:', err);
+    const text = await this.clipboardService.readText();
+    if (text === null) {
+      this.notification.showWarn('Could not read clipboard.');
+      return;
     }
+    this.clipboardScrapeSources.set(text);
+    this.processClipboardSources();
   }
 
   clearClipboardSources(): void {

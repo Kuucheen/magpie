@@ -6,6 +6,7 @@ import {Button} from 'primeng/button';
 import {DialogModule} from 'primeng/dialog';
 import {TooltipComponent} from '../../../tooltip/tooltip.component';
 import {HttpService} from '../../../services/http.service';
+import {ClipboardService} from '../../../services/clipboard.service';
 import {NotificationService} from '../../../services/notification-service.service';
 import {AddProxiesDetails} from '../../../models/AddProxiesResponse';
 
@@ -61,17 +62,18 @@ export class AddProxiesComponent {
 
   constructor(
     private service: HttpService,
+    private clipboardService: ClipboardService,
     private notification: NotificationService
   ) { }
 
   async pasteFromClipboard(): Promise<void> {
-    try {
-      const text = await navigator.clipboard.readText();
-      this.clipboardProxies.set(text);
-      this.processClipboardProxies();
-    } catch (err) {
-      console.error('Failed to read clipboard:', err);
+    const text = await this.clipboardService.readText();
+    if (text === null) {
+      this.notification.showWarn('Could not read clipboard.');
+      return;
     }
+    this.clipboardProxies.set(text);
+    this.processClipboardProxies();
   }
 
   clearClipboardProxies(): void {

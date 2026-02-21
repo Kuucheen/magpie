@@ -5,6 +5,8 @@ export interface RotatingProxy {
   listen_protocol?: string | null;
   transport_protocol?: string | null;
   listen_transport_protocol?: string | null;
+  uptime_filter_type?: string | null;
+  uptime_percentage?: number | null;
   alive_proxy_count: number;
   listen_port: number;
   auth_required: boolean;
@@ -24,6 +26,8 @@ export interface CreateRotatingProxy {
   listen_protocol: string;
   transport_protocol: string;
   listen_transport_protocol: string;
+  uptime_filter_type?: string | null;
+  uptime_percentage?: number | null;
   auth_required: boolean;
   auth_username?: string | null;
   auth_password?: string | null;

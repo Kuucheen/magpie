@@ -159,6 +159,33 @@
               </p>
             </div>
 
+            <div class="field-group">
+              <label class="field-label" for="uptimePercentage">Uptime Filter</label>
+              <div class="uptime-controls">
+                <p-select inputId="uptimeFilterType"
+                          class="w-full"
+                          [options]="uptimeFilterTypeOptions"
+                          optionLabel="label"
+                          optionValue="value"
+                          formControlName="uptimeFilterType">
+                </p-select>
+                <input id="uptimePercentage"
+                       type="number"
+                       pInputText
+                       class="p-inputtext-sm w-full"
+                       min="0"
+                       max="100"
+                       step="0.1"
+                       placeholder="0-100"
+                       formControlName="uptimePercentage">
+              </div>
+              @if (createForm.get('uptimePercentage')?.invalid && (createForm.get('uptimePercentage')?.dirty || createForm.get('uptimePercentage')?.touched)) {
+                <p class="field-error">Uptime percentage must be between 0 and 100.</p>
+              } @else {
+                <p class="field-hint">Leave empty to allow any uptime ratio for the selected proxy protocol.</p>
+              }
+            </div>
+
             <div class="field-group full">
               <label class="field-label" for="reputationFilter">Reputation Filter</label>
               <p-multiSelect inputId="reputationFilter"
@@ -317,6 +344,10 @@
                   <span class="filter-label">Reputation</span>
                   <span class="filter-value">{{ reputationFilterSummary(proxy.reputation_labels) }}</span>
                 </div>
+                <div class="reputation-filter">
+                  <span class="filter-label">Uptime</span>
+                  <span class="filter-value">{{ uptimeFilterSummary(proxy.uptime_filter_type, proxy.uptime_percentage) }}</span>
+                </div>
               </td>
               <td>
                 <div class="chip-stack">
@@ -467,6 +498,10 @@
         <div class="detail-row">
           <span class="label">Reputation Filter</span>
           <span class="value">{{ reputationFilterSummary(selectedRotator()?.reputation_labels) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Uptime Filter</span>
+          <span class="value">{{ uptimeFilterSummary(selectedRotator()?.uptime_filter_type, selectedRotator()?.uptime_percentage) }}</span>
         </div>
         <div class="detail-row">
           <span class="label">Authentication</span>

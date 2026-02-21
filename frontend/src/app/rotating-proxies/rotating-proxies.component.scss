@@ -121,6 +121,13 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
   }
 }
 
+.uptime-controls {
+  display: grid;
+  grid-template-columns: minmax(145px, 180px) minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+}
+
 .field-label {
   display: inline-flex;
   align-items: center;
@@ -502,6 +509,10 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
 @media (max-width: 768px) {
   .field-group.full {
     grid-column: span 1;
+  }
+
+  .uptime-controls {
+    grid-template-columns: 1fr;
   }
 
   .actions {

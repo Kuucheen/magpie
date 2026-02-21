@@ -73,6 +73,10 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     {label: 'Neutral', value: 'neutral'},
     {label: 'Bad', value: 'poor'},
   ];
+  readonly uptimeFilterTypeOptions = [
+    {label: 'Minimum uptime', value: 'min'},
+    {label: 'Maximum uptime', value: 'max'},
+  ];
   private readonly allReputationValues = this.reputationOptions.map(option => option.value);
   private readonly reputationDisplay: Record<string, string> = {
     good: 'Good',
@@ -98,6 +102,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       listenProtocol: ['', Validators.required],
       transportProtocol: ['tcp', Validators.required],
       listenTransportProtocol: ['tcp', Validators.required],
+      uptimeFilterType: ['min'],
+      uptimePercentage: [null, [Validators.min(0), Validators.max(100)]],
       authRequired: [false],
       authUsername: [{value: '', disabled: true}, [Validators.maxLength(120)]],
       authPassword: [{value: '', disabled: true}, [Validators.maxLength(120)]],
@@ -209,6 +215,12 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       listen_transport_protocol: this.createForm.get('listenTransportProtocol')?.value,
       auth_required: !!this.createForm.get('authRequired')?.value,
     };
+
+    const uptimePercentage = this.normalizeUptimePercentage(this.createForm.get('uptimePercentage')?.value);
+    if (uptimePercentage !== null) {
+      payload.uptime_filter_type = this.normalizeUptimeFilterType(this.createForm.get('uptimeFilterType')?.value) || 'min';
+      payload.uptime_percentage = uptimePercentage;
+    }
 
     const reputationSelection = this.normalizeReputationSelection(this.createForm.get('reputationLabels')?.value);
     if (reputationSelection.length > 0) {
@@ -439,6 +451,16 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
+  uptimeFilterSummary(type: string | null | undefined, percentage: number | null | undefined): string {
+    const normalizedType = this.normalizeUptimeFilterType(type);
+    const normalizedPercentage = this.normalizeUptimePercentage(percentage);
+    if (!normalizedType || normalizedPercentage === null) {
+      return 'No uptime filter';
+    }
+    const comparator = normalizedType === 'max' ? '<=' : '>=';
+    return `${comparator} ${normalizedPercentage}%`;
+  }
+
   private buildProtocolOptions(settings: UserSettings | null | undefined): { label: string; value: string }[] {
     if (!settings) {
       return [];
@@ -469,6 +491,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     this.setDisabledState('listenProtocol', submitting || noneAvailable);
     this.setDisabledState('transportProtocol', submitting || noneAvailable);
     this.setDisabledState('listenTransportProtocol', submitting || noneAvailable);
+    this.setDisabledState('uptimeFilterType', submitting);
+    this.setDisabledState('uptimePercentage', submitting);
     this.setDisabledState('reputationLabels', submitting);
     this.setDisabledState('authRequired', submitting);
   }
@@ -523,6 +547,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     const listenAddress = listenHost ? `${listenHost}:${proxy.listen_port}` : `${proxy.listen_port}`;
     const transportProtocol = (proxy.transport_protocol ?? 'tcp').toString().trim().toLowerCase() || 'tcp';
     const listenTransportProtocol = (proxy.listen_transport_protocol ?? transportProtocol).toString().trim().toLowerCase() || transportProtocol;
+    const uptimeFilterType = this.normalizeUptimeFilterType(proxy.uptime_filter_type);
+    const uptimePercentage = this.normalizeUptimePercentage(proxy.uptime_percentage);
 
     return {
       ...proxy,
@@ -533,6 +559,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       auth_password: proxy.auth_password ?? null,
       listen_host: listenHost || null,
       listen_address: listenAddress,
+      uptime_filter_type: uptimeFilterType || null,
+      uptime_percentage: uptimePercentage,
       reputation_labels: this.normalizeReputationSelection(proxy.reputation_labels),
     };
   }
@@ -552,6 +580,25 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       }
     }
     return normalized;
+  }
+
+  private normalizeUptimeFilterType(raw: string | null | undefined): 'min' | 'max' | '' {
+    const normalized = (raw ?? '').toString().trim().toLowerCase();
+    if (normalized === 'min' || normalized === 'max') {
+      return normalized;
+    }
+    return '';
+  }
+
+  private normalizeUptimePercentage(raw: number | string | null | undefined): number | null {
+    if (raw === null || raw === undefined || raw === '') {
+      return null;
+    }
+    const parsed = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+      return null;
+    }
+    return Math.round(parsed * 10) / 10;
   }
 
   private resolveHostValue(host: string | null | undefined): string {

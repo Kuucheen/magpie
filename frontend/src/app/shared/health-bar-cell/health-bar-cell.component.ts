@@ -108,12 +108,11 @@ export class HealthBarCellComponent {
     if (!target) {
       return;
     }
-    const bar = target.querySelector<HTMLElement>('.health-bar');
-    const rect = (bar ?? target).getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
     const spacing = 10;
     this.hovered = {
-      x: rect.right + spacing,
-      y: rect.top + rect.height / 2,
+      x: rect.left + rect.width / 2,
+      y: rect.bottom + spacing,
     };
   }
 

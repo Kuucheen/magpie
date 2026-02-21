@@ -49,7 +49,7 @@
 
 .health-tooltip {
   position: fixed;
-  transform: translate(0, -50%);
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;

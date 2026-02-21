@@ -140,11 +140,6 @@ export const PROXY_TABLE_COLUMN_DEFINITIONS: readonly ProxyTableColumnDefinition
 
 export const DEFAULT_PROXY_TABLE_COLUMNS: readonly ProxyTableColumnId[] = [
   'alive',
-  'health_overall',
-  'health_http',
-  'health_https',
-  'health_socks4',
-  'health_socks5',
   'ip_port',
   'response_time',
   'estimated_type',

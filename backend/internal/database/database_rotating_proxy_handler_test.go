@@ -234,6 +234,66 @@ func TestCreateRotatingProxy_ListensOnProtocolWithoutUserFlag(t *testing.T) {
 	}
 }
 
+func TestCreateRotatingProxy_UptimeFilterValidation(t *testing.T) {
+	db := setupRotatingProxyTestDB(t)
+
+	user := domain.User{
+		Email:        "uptime-validation@example.com",
+		Password:     "password123",
+		HTTPProtocol: true,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	protocol := domain.Protocol{Name: "http"}
+	if err := db.Create(&protocol).Error; err != nil {
+		t.Fatalf("create protocol: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		tp      string
+		pct     *float64
+		wantErr error
+	}{
+		{name: "missing percentage", tp: "min", pct: nil, wantErr: ErrRotatingProxyUptimeValueMissing},
+		{name: "missing type", tp: "", pct: float64Ptr(80), wantErr: ErrRotatingProxyUptimeTypeMissing},
+		{name: "invalid type", tp: "avg", pct: float64Ptr(80), wantErr: ErrRotatingProxyUptimeTypeInvalid},
+		{name: "above max", tp: "max", pct: float64Ptr(120), wantErr: ErrRotatingProxyUptimeOutOfRange},
+		{name: "below min", tp: "min", pct: float64Ptr(-1), wantErr: ErrRotatingProxyUptimeOutOfRange},
+	}
+
+	for idx, tc := range cases {
+		payload := dto.RotatingProxyCreateRequest{
+			Name:             fmt.Sprintf("invalid-uptime-%d", idx),
+			Protocol:         "http",
+			UptimeFilterType: tc.tp,
+			UptimePercentage: tc.pct,
+		}
+		_, err := CreateRotatingProxy(user.ID, payload)
+		if err != tc.wantErr {
+			t.Fatalf("%s: expected %v, got %v", tc.name, tc.wantErr, err)
+		}
+	}
+
+	created, err := CreateRotatingProxy(user.ID, dto.RotatingProxyCreateRequest{
+		Name:             "valid-uptime-filter",
+		Protocol:         "http",
+		UptimeFilterType: "min",
+		UptimePercentage: float64Ptr(80.04),
+	})
+	if err != nil {
+		t.Fatalf("create rotating proxy with valid uptime filter: %v", err)
+	}
+	if created.UptimeFilterType != "min" {
+		t.Fatalf("uptime filter type = %q, want min", created.UptimeFilterType)
+	}
+	if created.UptimePercentage == nil || *created.UptimePercentage != 80.0 {
+		t.Fatalf("uptime percentage = %v, want 80.0", created.UptimePercentage)
+	}
+}
+
 func TestGetNextRotatingProxy_RotatesAcrossAliveProxies(t *testing.T) {
 	db := setupRotatingProxyTestDB(t)
 
@@ -520,6 +580,135 @@ func TestGetNextRotatingProxy_ReputationFilterApplied(t *testing.T) {
 	}
 }
 
+func TestGetNextRotatingProxy_UptimeFilterApplied(t *testing.T) {
+	db := setupRotatingProxyTestDB(t)
+
+	user := domain.User{
+		Email:        "uptime-filter@example.com",
+		Password:     "password123",
+		HTTPProtocol: true,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	protocol := domain.Protocol{Name: "http"}
+	if err := db.Create(&protocol).Error; err != nil {
+		t.Fatalf("create protocol: %v", err)
+	}
+
+	judge := domain.Judge{FullString: "http://judge-uptime.example.com"}
+	if err := db.Create(&judge).Error; err != nil {
+		t.Fatalf("create judge: %v", err)
+	}
+
+	proxies := []domain.Proxy{
+		{IP: "10.0.2.10", Port: 9100, Country: "AA", EstimatedType: "residential"}, // 80%
+		{IP: "10.0.2.11", Port: 9101, Country: "AA", EstimatedType: "residential"}, // 40%
+		{IP: "10.0.2.12", Port: 9102, Country: "AA", EstimatedType: "residential"}, // 100%
+	}
+	statuses := [][]bool{
+		{true, true, true, false, true},
+		{false, false, false, true, true},
+		{true, true, true, true, true},
+	}
+
+	createdAt := time.Unix(10, 0)
+	for proxyIdx := range proxies {
+		if err := db.Create(&proxies[proxyIdx]).Error; err != nil {
+			t.Fatalf("create proxy %d: %v", proxyIdx, err)
+		}
+		if err := db.Create(&domain.UserProxy{
+			UserID:  user.ID,
+			ProxyID: proxies[proxyIdx].ID,
+		}).Error; err != nil {
+			t.Fatalf("link proxy %d: %v", proxyIdx, err)
+		}
+
+		for statIdx, alive := range statuses[proxyIdx] {
+			stat := domain.ProxyStatistic{
+				Alive:        alive,
+				ResponseTime: 120,
+				Attempt:      1,
+				ProtocolID:   protocol.ID,
+				ProxyID:      proxies[proxyIdx].ID,
+				JudgeID:      judge.ID,
+				CreatedAt:    createdAt.Add(time.Duration(proxyIdx*10+statIdx) * time.Minute),
+			}
+			if err := db.Create(&stat).Error; err != nil {
+				t.Fatalf("create statistic proxy=%d stat=%d: %v", proxyIdx, statIdx, err)
+			}
+			if err := updateProxyStatusCaches(db, []domain.ProxyStatistic{stat}); err != nil {
+				t.Fatalf("update proxy status cache proxy=%d stat=%d: %v", proxyIdx, statIdx, err)
+			}
+		}
+	}
+
+	rotatorMin := domain.RotatingProxy{
+		UserID:           user.ID,
+		Name:             "uptime-min-rotator",
+		ProtocolID:       protocol.ID,
+		ListenPort:       10900,
+		UptimeFilterType: "min",
+		UptimePercentage: float64Ptr(80),
+	}
+	if err := db.Create(&rotatorMin).Error; err != nil {
+		t.Fatalf("create min-uptime rotating proxy: %v", err)
+	}
+
+	minFirst, err := GetNextRotatingProxy(user.ID, rotatorMin.ID)
+	if err != nil {
+		t.Fatalf("min filter first rotation: %v", err)
+	}
+	if minFirst.ProxyID != proxies[0].ID {
+		t.Fatalf("min filter first proxy id = %d, want %d", minFirst.ProxyID, proxies[0].ID)
+	}
+
+	minSecond, err := GetNextRotatingProxy(user.ID, rotatorMin.ID)
+	if err != nil {
+		t.Fatalf("min filter second rotation: %v", err)
+	}
+	if minSecond.ProxyID != proxies[2].ID {
+		t.Fatalf("min filter second proxy id = %d, want %d", minSecond.ProxyID, proxies[2].ID)
+	}
+
+	minThird, err := GetNextRotatingProxy(user.ID, rotatorMin.ID)
+	if err != nil {
+		t.Fatalf("min filter third rotation: %v", err)
+	}
+	if minThird.ProxyID != proxies[0].ID {
+		t.Fatalf("min filter third proxy id = %d, want %d", minThird.ProxyID, proxies[0].ID)
+	}
+
+	rotatorMax := domain.RotatingProxy{
+		UserID:           user.ID,
+		Name:             "uptime-max-rotator",
+		ProtocolID:       protocol.ID,
+		ListenPort:       10901,
+		UptimeFilterType: "max",
+		UptimePercentage: float64Ptr(50),
+	}
+	if err := db.Create(&rotatorMax).Error; err != nil {
+		t.Fatalf("create max-uptime rotating proxy: %v", err)
+	}
+
+	maxFirst, err := GetNextRotatingProxy(user.ID, rotatorMax.ID)
+	if err != nil {
+		t.Fatalf("max filter first rotation: %v", err)
+	}
+	if maxFirst.ProxyID != proxies[1].ID {
+		t.Fatalf("max filter first proxy id = %d, want %d", maxFirst.ProxyID, proxies[1].ID)
+	}
+
+	maxSecond, err := GetNextRotatingProxy(user.ID, rotatorMax.ID)
+	if err != nil {
+		t.Fatalf("max filter second rotation: %v", err)
+	}
+	if maxSecond.ProxyID != proxies[1].ID {
+		t.Fatalf("max filter second proxy id = %d, want %d", maxSecond.ProxyID, proxies[1].ID)
+	}
+}
+
 func TestGetNextRotatingProxy_ConcurrentStress(t *testing.T) {
 	tempDir := t.TempDir()
 	dsn := fmt.Sprintf(
@@ -691,4 +880,9 @@ func isSQLiteLocked(err error) bool {
 	}
 	message := err.Error()
 	return strings.Contains(message, "database is locked") || strings.Contains(message, "database table is locked")
+}
+
+func float64Ptr(value float64) *float64 {
+	v := value
+	return &v
 }

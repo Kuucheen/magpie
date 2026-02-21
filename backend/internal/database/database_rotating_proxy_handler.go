@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"time"
@@ -26,6 +27,10 @@ var (
 	ErrRotatingProxyAuthUsernameNeeded = errors.New("authentication username is required when authentication is enabled")
 	ErrRotatingProxyAuthPasswordNeeded = errors.New("authentication password is required when authentication is enabled")
 	ErrRotatingProxyPortExhausted      = errors.New("no available ports for rotating proxies")
+	ErrRotatingProxyUptimeTypeInvalid  = errors.New("uptime filter type must be either min or max")
+	ErrRotatingProxyUptimeTypeMissing  = errors.New("uptime filter type is required when uptime percentage is set")
+	ErrRotatingProxyUptimeValueMissing = errors.New("uptime percentage is required when uptime filter type is set")
+	ErrRotatingProxyUptimeOutOfRange   = errors.New("uptime percentage must be between 0 and 100")
 )
 
 var (
@@ -37,7 +42,11 @@ var (
 	}
 )
 
-const rotatingProxyNameMaxLength = 120
+const (
+	rotatingProxyNameMaxLength = 120
+	uptimeFilterMin            = "min"
+	uptimeFilterMax            = "max"
+)
 
 func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*dto.RotatingProxy, error) {
 	if DB == nil {
@@ -75,9 +84,14 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 		}
 	}
 
+	uptimeFilterType, uptimePercentage, err := validateRotatorUptimeFilter(payload.UptimeFilterType, payload.UptimePercentage)
+	if err != nil {
+		return nil, err
+	}
+
 	var result *dto.RotatingProxy
 
-	err := DB.Transaction(func(tx *gorm.DB) error {
+	err = DB.Transaction(func(tx *gorm.DB) error {
 		var user domain.User
 		if err := tx.First(&user, userID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -113,6 +127,8 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 			ListenProtocolID:        listenProtocol.ID,
 			TransportProtocol:       transportProtocol,
 			ListenTransportProtocol: listenTransportProtocol,
+			UptimeFilterType:        uptimeFilterType,
+			UptimePercentage:        cloneFloat64Ptr(uptimePercentage),
 			AuthRequired:            payload.AuthRequired,
 			AuthUsername:            strings.TrimSpace(payload.AuthUsername),
 			AuthPassword:            payload.AuthPassword,
@@ -132,7 +148,7 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 			return err
 		}
 
-		aliveProxies, err := aliveProxiesForProtocol(tx, userID, proxyProtocol.ID, filters)
+		aliveProxies, err := aliveProxiesForProtocol(tx, userID, proxyProtocol.ID, filters, uptimeFilterType, uptimePercentage)
 		if err != nil {
 			return err
 		}
@@ -144,6 +160,8 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 			ListenProtocol:          listenProtocol.Name,
 			TransportProtocol:       transportProtocol,
 			ListenTransportProtocol: listenTransportProtocol,
+			UptimeFilterType:        uptimeFilterType,
+			UptimePercentage:        cloneFloat64Ptr(uptimePercentage),
 			AliveProxyCount:         len(aliveProxies),
 			ListenPort:              entity.ListenPort,
 			AuthRequired:            entity.AuthRequired,
@@ -198,7 +216,8 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 			listenTransportProtocol = transportProtocol
 		}
 		labels := sanitizeRotatorReputationLabels(row.ReputationLabels.Clone())
-		proxies, err := getAliveProxiesCached(userID, row.ProtocolID, labels, protocolCache)
+		uptimeFilterType, uptimePercentage := normalizeRotatorUptimeFilter(row.UptimeFilterType, row.UptimePercentage)
+		proxies, err := getAliveProxiesCached(userID, row.ProtocolID, labels, uptimeFilterType, uptimePercentage, protocolCache)
 		if err != nil {
 			return nil, err
 		}
@@ -218,6 +237,8 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 			ListenProtocol:          listenProtocol,
 			TransportProtocol:       transportProtocol,
 			ListenTransportProtocol: listenTransportProtocol,
+			UptimeFilterType:        uptimeFilterType,
+			UptimePercentage:        cloneFloat64Ptr(uptimePercentage),
 			AliveProxyCount:         len(proxies),
 			ListenPort:              row.ListenPort,
 			AuthRequired:            row.AuthRequired,
@@ -269,7 +290,8 @@ func GetNextRotatingProxy(userID uint, rotatingProxyID uint64) (*dto.RotatingPro
 		}
 
 		labels := sanitizeRotatorReputationLabels(entity.ReputationLabels.Clone())
-		proxies, err := aliveProxiesForProtocol(tx, userID, entity.ProtocolID, labels)
+		uptimeFilterType, uptimePercentage := normalizeRotatorUptimeFilter(entity.UptimeFilterType, entity.UptimePercentage)
+		proxies, err := aliveProxiesForProtocol(tx, userID, entity.ProtocolID, labels, uptimeFilterType, uptimePercentage)
 		if err != nil {
 			return err
 		}
@@ -313,15 +335,15 @@ func GetNextRotatingProxy(userID uint, rotatingProxyID uint64) (*dto.RotatingPro
 	return result, nil
 }
 
-func getAliveProxiesCached(userID uint, protocolID int, labels []string, cache map[string][]domain.Proxy) ([]domain.Proxy, error) {
+func getAliveProxiesCached(userID uint, protocolID int, labels []string, uptimeFilterType string, uptimePercentage *float64, cache map[string][]domain.Proxy) ([]domain.Proxy, error) {
 	normLabels := sanitizeRotatorReputationLabels(labels)
-	cacheKey := buildReputationCacheKey(protocolID, normLabels)
+	cacheKey := buildAliveProxyCacheKey(protocolID, normLabels, uptimeFilterType, uptimePercentage)
 
 	if proxies, ok := cache[cacheKey]; ok {
 		return proxies, nil
 	}
 
-	proxies, err := aliveProxiesForProtocol(DB, userID, protocolID, normLabels)
+	proxies, err := aliveProxiesForProtocol(DB, userID, protocolID, normLabels, uptimeFilterType, uptimePercentage)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +371,7 @@ func getProxyAddressCached(userID uint, proxyID uint64, cache map[uint64]string)
 	return address, nil
 }
 
-func aliveProxiesForProtocol(tx *gorm.DB, userID uint, protocolID int, labels []string) ([]domain.Proxy, error) {
+func aliveProxiesForProtocol(tx *gorm.DB, userID uint, protocolID int, labels []string, uptimeFilterType string, uptimePercentage *float64) ([]domain.Proxy, error) {
 	filterLabels := sanitizeRotatorReputationLabels(labels)
 
 	var proxies []domain.Proxy
@@ -360,6 +382,7 @@ func aliveProxiesForProtocol(tx *gorm.DB, userID uint, protocolID int, labels []
 		Joins("JOIN proxy_latest_statistics pls ON pls.proxy_id = proxies.id AND pls.protocol_id = ? AND pls.alive = ?", protocolID, true)
 
 	query = applyReputationFilter(query, filterLabels)
+	query = applyUptimeFilter(query, tx, protocolID, uptimeFilterType, uptimePercentage)
 
 	err := query.
 		Order("proxies.id").
@@ -379,6 +402,28 @@ func applyReputationFilter(query *gorm.DB, labels []string) *gorm.DB {
 	return query.
 		Joins("JOIN proxy_reputations pr ON pr.proxy_id = proxies.id AND pr.kind = ?", domain.ProxyReputationKindOverall).
 		Where("pr.label IN ?", labels)
+}
+
+func applyUptimeFilter(query *gorm.DB, tx *gorm.DB, protocolID int, uptimeFilterType string, uptimePercentage *float64) *gorm.DB {
+	normalizedType, normalizedPercentage := normalizeRotatorUptimeFilter(uptimeFilterType, uptimePercentage)
+	if normalizedType == "" || normalizedPercentage == nil {
+		return query
+	}
+
+	uptimeQuery := tx.
+		Table("proxy_statistics psr").
+		Select(
+			"psr.proxy_id AS proxy_id, "+
+				"ROUND(100.0 * SUM(CASE WHEN psr.alive THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS uptime_percentage",
+		).
+		Where("psr.protocol_id = ?", protocolID).
+		Group("psr.proxy_id")
+
+	query = query.Joins("JOIN (?) AS puf ON puf.proxy_id = proxies.id", uptimeQuery)
+	if normalizedType == uptimeFilterMax {
+		return query.Where("puf.uptime_percentage <= ?", *normalizedPercentage)
+	}
+	return query.Where("puf.uptime_percentage >= ?", *normalizedPercentage)
 }
 
 func shouldApplyReputationFilter(labels []string) bool {
@@ -509,11 +554,75 @@ func sanitizeRotatorReputationLabels(labels []string) []string {
 	return result
 }
 
-func buildReputationCacheKey(protocolID int, labels []string) string {
-	if len(labels) == 0 {
-		return fmt.Sprintf("%d:*", protocolID)
+func validateRotatorUptimeFilter(rawType string, rawPercentage *float64) (string, *float64, error) {
+	filterType := strings.ToLower(strings.TrimSpace(rawType))
+	hasType := filterType != ""
+	hasPercentage := rawPercentage != nil
+
+	if !hasType && !hasPercentage {
+		return "", nil, nil
 	}
-	return fmt.Sprintf("%d:%s", protocolID, strings.Join(labels, ","))
+	if !hasType && hasPercentage {
+		return "", nil, ErrRotatingProxyUptimeTypeMissing
+	}
+	if hasType && !hasPercentage {
+		return "", nil, ErrRotatingProxyUptimeValueMissing
+	}
+	if filterType != uptimeFilterMin && filterType != uptimeFilterMax {
+		return "", nil, ErrRotatingProxyUptimeTypeInvalid
+	}
+
+	value := *rawPercentage
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return "", nil, ErrRotatingProxyUptimeOutOfRange
+	}
+	if value < 0 || value > 100 {
+		return "", nil, ErrRotatingProxyUptimeOutOfRange
+	}
+
+	rounded := math.Round(value*10) / 10
+	return filterType, &rounded, nil
+}
+
+func normalizeRotatorUptimeFilter(rawType string, rawPercentage *float64) (string, *float64) {
+	filterType := strings.ToLower(strings.TrimSpace(rawType))
+	if rawPercentage == nil {
+		return "", nil
+	}
+	if filterType != uptimeFilterMin && filterType != uptimeFilterMax {
+		return "", nil
+	}
+
+	value := *rawPercentage
+	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 100 {
+		return "", nil
+	}
+
+	rounded := math.Round(value*10) / 10
+	return filterType, &rounded
+}
+
+func buildAliveProxyCacheKey(protocolID int, labels []string, uptimeFilterType string, uptimePercentage *float64) string {
+	labelKey := "*"
+	if len(labels) > 0 {
+		labelKey = strings.Join(labels, ",")
+	}
+
+	uptimeType, uptimeValue := normalizeRotatorUptimeFilter(uptimeFilterType, uptimePercentage)
+	uptimeKey := "*"
+	if uptimeType != "" && uptimeValue != nil {
+		uptimeKey = fmt.Sprintf("%s:%0.1f", uptimeType, *uptimeValue)
+	}
+
+	return fmt.Sprintf("%d:%s:%s", protocolID, labelKey, uptimeKey)
+}
+
+func cloneFloat64Ptr(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	v := *value
+	return &v
 }
 
 func GetAllRotatingProxies() ([]domain.RotatingProxy, error) {
@@ -577,6 +686,10 @@ func normalizeRotatingProxyProtocols(rotator *domain.RotatingProxy) {
 	if strings.TrimSpace(rotator.ListenTransportProtocol) == "" {
 		listenTransportProtocol = transportProtocol
 	}
+	uptimeFilterType, uptimePercentage := normalizeRotatorUptimeFilter(rotator.UptimeFilterType, rotator.UptimePercentage)
+
 	rotator.TransportProtocol = transportProtocol
 	rotator.ListenTransportProtocol = listenTransportProtocol
+	rotator.UptimeFilterType = uptimeFilterType
+	rotator.UptimePercentage = cloneFloat64Ptr(uptimePercentage)
 }

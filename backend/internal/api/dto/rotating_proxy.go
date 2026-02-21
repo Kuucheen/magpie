@@ -9,6 +9,8 @@ type RotatingProxy struct {
 	ListenProtocol          string     `json:"listen_protocol,omitempty"`
 	TransportProtocol       string     `json:"transport_protocol,omitempty"`
 	ListenTransportProtocol string     `json:"listen_transport_protocol,omitempty"`
+	UptimeFilterType        string     `json:"uptime_filter_type,omitempty"`
+	UptimePercentage        *float64   `json:"uptime_percentage,omitempty"`
 	AliveProxyCount         int        `json:"alive_proxy_count"`
 	ListenPort              uint16     `json:"listen_port"`
 	AuthRequired            bool       `json:"auth_required"`
@@ -28,6 +30,8 @@ type RotatingProxyCreateRequest struct {
 	ListenProtocol          string   `json:"listen_protocol,omitempty"`
 	TransportProtocol       string   `json:"transport_protocol,omitempty"`
 	ListenTransportProtocol string   `json:"listen_transport_protocol,omitempty"`
+	UptimeFilterType        string   `json:"uptime_filter_type,omitempty"`
+	UptimePercentage        *float64 `json:"uptime_percentage,omitempty"`
 	AuthRequired            bool     `json:"auth_required"`
 	AuthUsername            string   `json:"auth_username,omitempty"`
 	AuthPassword            string   `json:"auth_password,omitempty"`

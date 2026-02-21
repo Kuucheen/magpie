@@ -19,6 +19,8 @@ type RotatingProxy struct {
 	ListenProtocol          Protocol   `gorm:"foreignKey:ListenProtocolID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
 	TransportProtocol       string     `gorm:"not null;default:'tcp'"`
 	ListenTransportProtocol string     `gorm:"not null;default:'tcp'"`
+	UptimeFilterType        string     `gorm:"size:8;default:''"`
+	UptimePercentage        *float64   `gorm:"type:numeric(5,2)"`
 	ListenPort              uint16     `gorm:"uniqueIndex"`
 	AuthRequired            bool       `gorm:"not null;default:false"`
 	AuthUsername            string     `gorm:"size:120;default:''"`

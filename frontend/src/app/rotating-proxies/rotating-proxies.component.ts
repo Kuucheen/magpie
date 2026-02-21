@@ -14,6 +14,7 @@ import {Chip} from 'primeng/chip';
 import {environment} from '../../environments/environment';
 
 import {HttpService} from '../services/http.service';
+import {ClipboardService} from '../services/clipboard.service';
 import {NotificationService} from '../services/notification-service.service';
 import {CreateRotatingProxy, RotatingProxy} from '../models/RotatingProxy';
 import {UserSettings} from '../models/UserSettings';
@@ -88,6 +89,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   constructor(
     private fb: FormBuilder,
     private http: HttpService,
+    private clipboardService: ClipboardService,
     private notification: NotificationService
   ) {
     this.createForm = this.fb.group({
@@ -578,13 +580,13 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(value)
-        .then(() => this.notification.showSuccess(successMessage))
-        .catch(() => this.notification.showWarn('Could not copy to clipboard.'));
-    } else {
-      this.notification.showWarn('Clipboard access is not available.');
-    }
+    this.clipboardService.copyText(value).then(copied => {
+      if (copied) {
+        this.notification.showSuccess(successMessage);
+        return;
+      }
+      this.notification.showWarn('Could not copy to clipboard.');
+    });
   }
 
   private resolveDefaultHost(): string {

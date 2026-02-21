@@ -18,6 +18,7 @@ import {CheckboxModule} from 'primeng/checkbox';
 import {FormsModule} from '@angular/forms';
 import {ProxyInfo} from '../../models/ProxyInfo';
 import {ProxyReputation} from '../../models/ProxyReputation';
+import {ClipboardService} from '../../services/clipboard.service';
 import {HealthBarCellComponent} from '../health-bar-cell/health-bar-cell.component';
 import {
   DEFAULT_PROXY_TABLE_COLUMNS,
@@ -109,7 +110,10 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
   copiedValueKey: string | null = null;
   private copyFeedbackTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private clipboardService: ClipboardService,
+  ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['emptyReputationLabel'] || changes['missingReputationScoreLabel']) {
@@ -213,7 +217,7 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
     if (!value) {
       return;
     }
-    const copied = await this.copyText(value);
+    const copied = await this.clipboardService.copyText(value);
     if (!copied) {
       return;
     }
@@ -326,39 +330,6 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
       }
     }, 1400);
     this.cdr.markForCheck();
-  }
-
-  private async copyText(text: string): Promise<boolean> {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch {
-        // Fallback to execCommand for environments without clipboard permissions.
-      }
-    }
-
-    if (typeof document === 'undefined') {
-      return false;
-    }
-
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.setAttribute('readonly', '');
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    textarea.setSelectionRange(0, textarea.value.length);
-
-    try {
-      const copied = document.execCommand('copy');
-      document.body.removeChild(textarea);
-      return copied;
-    } catch {
-      document.body.removeChild(textarea);
-      return false;
-    }
   }
 
 }

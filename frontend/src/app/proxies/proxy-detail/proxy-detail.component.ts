@@ -5,13 +5,13 @@ import {UIChart} from 'primeng/chart';
 import {TableModule} from 'primeng/table';
 import {ButtonModule} from 'primeng/button';
 import {DialogModule} from 'primeng/dialog';
-import {ClipboardModule, Clipboard} from '@angular/cdk/clipboard';
 import {DomSanitizer, SafeHtml} from '@angular/platform-browser';
 import {ProxyDetail} from '../../models/ProxyDetail';
 import {ProxyStatistic} from '../../models/ProxyStatistic';
 import {ProxyReputation} from '../../models/ProxyReputation';
 import {HttpService} from '../../services/http.service';
 import {Subscription} from 'rxjs';
+import {ClipboardService} from '../../services/clipboard.service';
 import {NotificationService} from '../../services/notification-service.service';
 import {LoadingComponent} from '../../ui-elements/loading/loading.component';
 
@@ -52,7 +52,6 @@ interface ReputationSignalStructuredItem {
     TableModule,
     ButtonModule,
     DialogModule,
-    ClipboardModule,
     LoadingComponent,
     DatePipe,
     NgClass,
@@ -94,7 +93,7 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private http: HttpService,
-    private clipboard: Clipboard,
+    private clipboardService: ClipboardService,
     private sanitizer: DomSanitizer,
     private notification: NotificationService,
   ) {}
@@ -248,21 +247,13 @@ export class ProxyDetailComponent implements OnInit, OnDestroy {
   }
 
   private copyToClipboard(value: string, successMessage: string): void {
-    const copied = this.clipboard.copy(value);
-    if (copied) {
-      this.notification.showSuccess(successMessage);
-      return;
-    }
-
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(value).then(
-        () => this.notification.showSuccess(successMessage),
-        () => this.notification.showError('Failed to access clipboard')
-      );
-      return;
-    }
-
-    this.notification.showError('Clipboard not available');
+    this.clipboardService.copyText(value).then(copied => {
+      if (copied) {
+        this.notification.showSuccess(successMessage);
+        return;
+      }
+      this.notification.showError('Failed to access clipboard');
+    });
   }
 
   get authenticationDisplay(): string {

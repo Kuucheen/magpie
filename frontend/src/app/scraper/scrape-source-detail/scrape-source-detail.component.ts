@@ -4,9 +4,9 @@ import { CommonModule, DatePipe, NgClass } from '@angular/common';
 import {FormBuilder, FormGroup} from '@angular/forms';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
-import {ClipboardModule, Clipboard} from '@angular/cdk/clipboard';
 import {ScrapeSourceDetail} from '../../models/ScrapeSourceDetail';
 import {HttpService} from '../../services/http.service';
+import {ClipboardService} from '../../services/clipboard.service';
 import {NotificationService} from '../../services/notification-service.service';
 import {LoadingComponent} from '../../ui-elements/loading/loading.component';
 import {ProxyInfo} from '../../models/ProxyInfo';
@@ -56,7 +56,6 @@ type ReputationLabel = 'good' | 'neutral' | 'poor' | 'unknown';
     NgClass,
     LoadingComponent,
     ButtonModule,
-    ClipboardModule,
     DragDropModule,
     ProxyFilterPanelComponent,
     ProxyTableComponent,
@@ -108,7 +107,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private http: HttpService,
     private fb: FormBuilder,
-    private clipboard: Clipboard,
+    private clipboardService: ClipboardService,
     private notification: NotificationService,
     private settingsService: SettingsService,
   ) {
@@ -587,21 +586,13 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
   }
 
   private copyToClipboard(value: string, successMessage: string): void {
-    const copied = this.clipboard.copy(value);
-    if (copied) {
-      this.notification.showSuccess(successMessage);
-      return;
-    }
-
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(value).then(
-        () => this.notification.showSuccess(successMessage),
-        () => this.notification.showError('Failed to access clipboard')
-      );
-      return;
-    }
-
-    this.notification.showError('Clipboard not available');
+    this.clipboardService.copyText(value).then(copied => {
+      if (copied) {
+        this.notification.showSuccess(successMessage);
+        return;
+      }
+      this.notification.showError('Failed to access clipboard');
+    });
   }
 
   private buildFilterPayload(filters: ProxyListAppliedFilters): ProxyListFilters | undefined {

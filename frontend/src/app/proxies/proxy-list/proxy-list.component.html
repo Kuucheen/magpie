@@ -29,7 +29,7 @@
             [label]="filterButtonLabel()"
             icon="pi pi-filter"
             [styleClass]="filterToggleClass()"
-            (onClick)="toggleFilterPanel()"
+            (onClick)="toggleFilterPanel($event)"
           ></p-button>
         </div>
 
@@ -39,7 +39,7 @@
             icon="pi pi-table"
             styleClass="p-button-outlined"
             [disabled]="isSavingColumnPreferences()"
-            (onClick)="openColumnPanel()"
+            (onClick)="openColumnPanel($event)"
           ></p-button>
         </div>
 

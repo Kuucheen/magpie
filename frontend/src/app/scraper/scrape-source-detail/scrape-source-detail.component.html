@@ -205,7 +205,7 @@
             [label]="filterButtonLabel()"
             icon="pi pi-filter"
             [styleClass]="filterToggleClass()"
-            (onClick)="toggleFilterPanel()"
+            (onClick)="toggleFilterPanel($event)"
           ></p-button>
         </div>
         <div #columnToggleAnchor>
@@ -214,7 +214,7 @@
             icon="pi pi-table"
             styleClass="p-button-outlined"
             [disabled]="isSavingColumnPreferences()"
-            (onClick)="openColumnPanel()"
+            (onClick)="openColumnPanel($event)"
           ></p-button>
         </div>
         <input
@@ -265,7 +265,7 @@
           </div>
 
           <div class="column-panel__section">
-            <div class="column-panel__title">Visible (ordered)</div>
+            <div class="column-panel__title">Visible</div>
             <div cdkDropList [cdkDropListData]="columnPanelVisible()" (cdkDropListDropped)="onColumnDrop($event)">
               @for (column of columnPanelVisible(); track column.id) {
                 <div

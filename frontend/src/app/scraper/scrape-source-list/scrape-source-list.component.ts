@@ -261,8 +261,14 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     this.getAndSetScrapeSourcesList();
   }
 
-  openColumnPanel(): void {
+  openColumnPanel(event?: Event | { originalEvent?: Event }): void {
+    this.stopTriggerEvent(event);
+    if (this.columnPanelOpen) {
+      this.columnPanelOpen = false;
+      return;
+    }
     this.columnEditorColumns = [...this.displayedColumns];
+    this.suppressOutsideCloseUntil = Date.now() + 180;
     this.columnPanelOpen = true;
   }
 
@@ -560,5 +566,13 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       }
     }
     return false;
+  }
+
+  private stopTriggerEvent(event?: Event | { originalEvent?: Event }): void {
+    if (!event) {
+      return;
+    }
+    const domEvent = (event as { originalEvent?: Event }).originalEvent ?? (event as Event);
+    domEvent?.stopPropagation?.();
   }
 }

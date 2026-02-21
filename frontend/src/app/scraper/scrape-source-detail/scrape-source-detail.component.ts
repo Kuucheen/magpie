@@ -369,17 +369,25 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
     this.loadProxyList();
   }
 
-  toggleFilterPanel(): void {
+  toggleFilterPanel(event?: Event | { originalEvent?: Event }): void {
+    this.stopTriggerEvent(event);
     const nextState = !this.filterPanelOpen();
     if (nextState) {
       this.syncFilterFormWithApplied();
       this.ensureFilterOptionsLoaded();
+      this.suppressOutsideCloseUntil = Date.now() + 180;
     }
     this.filterPanelOpen.set(nextState);
   }
 
-  openColumnPanel(): void {
+  openColumnPanel(event?: Event | { originalEvent?: Event }): void {
+    this.stopTriggerEvent(event);
+    if (this.columnPanelOpen()) {
+      this.columnPanelOpen.set(false);
+      return;
+    }
     this.columnEditorColumns.set([...this.displayedColumns()]);
+    this.suppressOutsideCloseUntil = Date.now() + 180;
     this.columnPanelOpen.set(true);
   }
 
@@ -616,6 +624,14 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
       }
     }
     return false;
+  }
+
+  private stopTriggerEvent(event?: Event | { originalEvent?: Event }): void {
+    if (!event) {
+      return;
+    }
+    const domEvent = (event as { originalEvent?: Event }).originalEvent ?? (event as Event);
+    domEvent?.stopPropagation?.();
   }
 
 }

@@ -231,18 +231,12 @@
             }
             @case ('health') {
               <td class="text-center health-td">
-                <div
-                  class="health-cell"
-                  (mouseenter)="showHealthPopup($event, source)"
-                  (mouseleave)="hideHealthPopup()"
-                >
-                  <div class="health-sub">{{ source.health.ratioLabel }}</div>
-                  <div class="health-bar" aria-hidden="true">
-                    <span class="health-bar__segment health-bar__segment--alive" [style.width.%]="source.health.alivePercent"></span>
-                    <span class="health-bar__segment health-bar__segment--dead" [style.width.%]="source.health.deadPercent"></span>
-                    <span class="health-bar__segment health-bar__segment--unknown" [style.width.%]="source.health.unknownPercent"></span>
-                  </div>
-                </div>
+                <app-health-bar-cell
+                  [aliveCount]="source.alive_count"
+                  [deadCount]="source.dead_count"
+                  [unknownCount]="source.unknown_count ?? null"
+                  [total]="source.proxy_count"
+                ></app-health-bar-cell>
               </td>
             }
             @case ('robots_check') {
@@ -278,30 +272,6 @@
     </ng-template>
   </p-table>
 
-  @if (hoveredHealth) {
-    <div
-      class="health-tooltip"
-      [style.left.px]="hoveredHealth.x"
-      [style.top.px]="hoveredHealth.y"
-    >
-      <div
-        class="status-pill"
-        [ngClass]="{
-          'status-pill--mixed': hoveredHealth.source.health.tone === 'mixed',
-          'status-pill--dead': hoveredHealth.source.health.tone === 'unhealthy',
-          'status-pill--unknown': hoveredHealth.source.health.tone === 'empty'
-        }"
-      >
-        <span class="status-dot" [ngClass]="hoveredHealth.source.health.dotClass"></span>
-        {{ hoveredHealth.source.health.label }}
-      </div>
-      <div class="health-counts">
-      <span class="health-count health-count--alive">Alive {{ hoveredHealth.source.health.aliveCount | number }}</span>
-      <span class="health-count health-count--dead">Dead {{ hoveredHealth.source.health.deadCount | number }}</span>
-      <span class="health-count health-count--unknown">Unknown {{ hoveredHealth.source.health.unknownCount | number }}</span>
-      </div>
-    </div>
-  }
 </div>
 
 <p-confirmDialog

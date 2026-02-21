@@ -602,6 +602,21 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       return null;
     }
 
+    if (field === 'health_overall' || field === 'alive_ratio_overall') {
+      return proxy.health?.overall ?? null;
+    }
+    if (field === 'health_http' || field === 'alive_ratio_http') {
+      return proxy.health?.http ?? null;
+    }
+    if (field === 'health_https' || field === 'alive_ratio_https') {
+      return proxy.health?.https ?? null;
+    }
+    if (field === 'health_socks4' || field === 'alive_ratio_socks4') {
+      return proxy.health?.socks4 ?? null;
+    }
+    if (field === 'health_socks5' || field === 'alive_ratio_socks5') {
+      return proxy.health?.socks5 ?? null;
+    }
     if (field === 'reputation') {
       return this.getPrimaryReputation(proxy)?.score ?? null;
     }

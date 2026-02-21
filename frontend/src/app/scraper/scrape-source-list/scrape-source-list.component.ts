@@ -28,26 +28,11 @@ import {
 } from './scrape-source-list-columns';
 import {filter, finalize} from 'rxjs/operators';
 import {Subscription} from 'rxjs';
-
-type HealthTone = 'healthy' | 'mixed' | 'unhealthy' | 'empty';
-
-interface ScrapeSourceHealthView {
-  tone: HealthTone;
-  label: string;
-  ratioLabel: string;
-  dotClass: Record<string, boolean>;
-  aliveCount: number;
-  deadCount: number;
-  unknownCount: number;
-  alivePercent: number;
-  deadPercent: number;
-  unknownPercent: number;
-}
+import {HealthBarCellComponent} from '../../shared/health-bar-cell/health-bar-cell.component';
 
 interface ScrapeSourceView extends ScrapeSourceInfo {
   urlHead: string;
   urlTail: string;
-  health: ScrapeSourceHealthView;
 }
 
 @Component({
@@ -61,7 +46,8 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
     ConfirmDialogModule,
     SkeletonModule,
     DragDropModule,
-    AddScrapeSourceComponent
+    AddScrapeSourceComponent,
+    HealthBarCellComponent,
   ],
   providers: [ConfirmationService],
   templateUrl: './scrape-source-list.component.html',
@@ -74,7 +60,6 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   @ViewChild('columnPanelRef') private columnPanelRef?: ElementRef<HTMLElement>;
 
   scrapeSources: ScrapeSourceView[] = [];
-  hoveredHealth: { source: ScrapeSourceView; x: number; y: number } | null = null;
   selection = new SelectionModel<ScrapeSourceView>(true, []);
   selectedScrapeSources: ScrapeSourceView[] = [];
   page = 0; // PrimeNG uses 0-based pagination
@@ -408,32 +393,12 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     return this.checkingRobots[sourceId];
   }
 
-  showHealthPopup(event: MouseEvent, source: ScrapeSourceView): void {
-    const target = event.currentTarget as HTMLElement | null;
-    if (!target) {
-      return;
-    }
-    const bar = target.querySelector<HTMLElement>('.health-bar');
-    const rect = (bar ?? target).getBoundingClientRect();
-    const spacing = 10;
-    this.hoveredHealth = {
-      source,
-      x: rect.right + spacing,
-      y: rect.top + rect.height / 2,
-    };
-  }
-
-  hideHealthPopup(): void {
-    this.hoveredHealth = null;
-  }
-
   private buildViewSource(source: ScrapeSourceInfo): ScrapeSourceView {
     const { head, tail } = this.splitUrlForDisplay(source.url);
     return {
       ...source,
       urlHead: head,
       urlTail: tail,
-      health: this.buildHealthView(source)
     };
   }
 
@@ -494,60 +459,6 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       }
     });
     this.selectedScrapeSources = [...this.selection.selected];
-  }
-
-  private buildHealthView(source: ScrapeSourceInfo): ScrapeSourceHealthView {
-    const total = Math.max(0, source.proxy_count ?? 0);
-    const alive = Math.max(0, source.alive_count ?? 0);
-    const dead = Math.max(0, source.dead_count ?? 0);
-    const unknownFallback = Math.max(0, total - alive - dead);
-    const unknown = Math.max(0, source.unknown_count ?? unknownFallback);
-
-    let tone: HealthTone = 'empty';
-    if (total > 0) {
-      const ratio = alive / total;
-      if (ratio >= 0.7) {
-        tone = 'healthy';
-      } else if (ratio >= 0.4) {
-        tone = 'mixed';
-      } else {
-        tone = 'unhealthy';
-      }
-    }
-
-    const label = tone === 'healthy'
-      ? 'Healthy'
-      : tone === 'mixed'
-        ? 'Mixed'
-        : tone === 'unhealthy'
-          ? 'Unhealthy'
-          : 'No data';
-
-    const ratioLabel = total > 0 ? `${Math.round((alive / total) * 100)}% alive` : 'No data';
-
-    const dotClass = {
-      alive: tone === 'healthy',
-      mixed: tone === 'mixed',
-      dead: tone === 'unhealthy',
-      unknown: tone === 'empty',
-    };
-
-    const alivePercent = total > 0 ? (alive / total) * 100 : 0;
-    const deadPercent = total > 0 ? (dead / total) * 100 : 0;
-    const unknownPercent = total > 0 ? (unknown / total) * 100 : 0;
-
-    return {
-      tone,
-      label,
-      ratioLabel,
-      dotClass,
-      aliveCount: alive,
-      deadCount: dead,
-      unknownCount: unknown,
-      alivePercent,
-      deadPercent,
-      unknownPercent,
-    };
   }
 
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {

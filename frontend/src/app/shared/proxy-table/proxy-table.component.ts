@@ -8,6 +8,7 @@ import {CheckboxModule} from 'primeng/checkbox';
 import {FormsModule} from '@angular/forms';
 import {ProxyInfo} from '../../models/ProxyInfo';
 import {ProxyReputation} from '../../models/ProxyReputation';
+import {HealthBarCellComponent} from '../health-bar-cell/health-bar-cell.component';
 import {
   DEFAULT_PROXY_TABLE_COLUMNS,
   ProxyTableColumnDefinition,
@@ -36,6 +37,7 @@ type ProxyRow = ProxyInfo & { __meta?: ProxyRowMeta };
     CheckboxModule,
     SkeletonModule,
     Tooltip,
+    HealthBarCellComponent,
   ],
   templateUrl: './proxy-table.component.html',
   styleUrls: ['./proxy-table.component.scss'],
@@ -160,6 +162,17 @@ export class ProxyTableComponent implements OnChanges {
     return column.skeletonWidth ?? '6rem';
   }
 
+  hasHealthValue(value: number | null | undefined): boolean {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+
+  healthDeadPercent(value: number | null | undefined): number {
+    if (!this.hasHealthValue(value)) {
+      return 0;
+    }
+    return Math.max(0, 100 - (value as number));
+  }
+
   onViewProxy(event: Event | { originalEvent?: Event }, proxy: ProxyInfo): void {
     if ((event as { originalEvent?: Event }).originalEvent) {
       (event as { originalEvent?: Event }).originalEvent?.stopPropagation?.();
@@ -248,4 +261,5 @@ export class ProxyTableComponent implements OnChanges {
 
     return null;
   }
+
 }

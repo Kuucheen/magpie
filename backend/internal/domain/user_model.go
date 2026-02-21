@@ -16,6 +16,25 @@ var defaultProxyListColumns = []string{
 	"actions",
 }
 
+var defaultScrapeSourceProxyColumns = []string{
+	"alive",
+	"ip_port",
+	"response_time",
+	"estimated_type",
+	"country",
+	"reputation",
+	"latest_check",
+	"actions",
+}
+
+var defaultScrapeSourceListColumns = []string{
+	"url",
+	"proxy_count",
+	"health",
+	"robots_check",
+	"actions",
+}
+
 var validProxyListColumns = map[string]struct{}{
 	"alive":          {},
 	"ip":             {},
@@ -27,6 +46,14 @@ var validProxyListColumns = map[string]struct{}{
 	"reputation":     {},
 	"latest_check":   {},
 	"actions":        {},
+}
+
+var validScrapeSourceListColumns = map[string]struct{}{
+	"url":          {},
+	"proxy_count":  {},
+	"health":       {},
+	"robots_check": {},
+	"actions":      {},
 }
 
 type User struct {
@@ -47,6 +74,8 @@ type User struct {
 	AutoRemoveFailingProxies   bool       `gorm:"not null;default:false"`
 	AutoRemoveFailureThreshold uint8      `gorm:"not null;default:3"`
 	ProxyListColumns           StringList `gorm:"type:jsonb;default:'[]'"`
+	ScrapeSourceProxyColumns   StringList `gorm:"type:jsonb;default:'[]'"`
+	ScrapeSourceListColumns    StringList `gorm:"type:jsonb;default:'[]'"`
 
 	//Relations
 	Judges       []Judge        `gorm:"many2many:user_judges;"`
@@ -71,6 +100,8 @@ func (u *User) ToUserSettings(simpleUserJudges []dto.SimpleUserJudge, scrapingSo
 		SimpleUserJudges:           simpleUserJudges,
 		ScrapingSources:            scrapingSources,
 		ProxyListColumns:           NormalizeProxyListColumns(u.ProxyListColumns.Clone()),
+		ScrapeSourceProxyColumns:   NormalizeScrapeSourceProxyColumns(u.ScrapeSourceProxyColumns.Clone()),
+		ScrapeSourceListColumns:    NormalizeScrapeSourceListColumns(u.ScrapeSourceListColumns.Clone()),
 	}
 }
 
@@ -97,6 +128,64 @@ func NormalizeProxyListColumns(columns []string) []string {
 	}
 
 	return normalized
+}
+
+func NormalizeScrapeSourceProxyColumns(columns []string) []string {
+	if len(columns) == 0 {
+		return append([]string(nil), defaultScrapeSourceProxyColumns...)
+	}
+
+	seen := make(map[string]struct{}, len(columns))
+	normalized := make([]string, 0, len(columns))
+	for _, column := range columns {
+		if _, exists := validProxyListColumns[column]; !exists {
+			continue
+		}
+		if _, duplicate := seen[column]; duplicate {
+			continue
+		}
+		seen[column] = struct{}{}
+		normalized = append(normalized, column)
+	}
+
+	if len(normalized) == 0 {
+		return append([]string(nil), defaultScrapeSourceProxyColumns...)
+	}
+
+	return normalized
+}
+
+func NormalizeScrapeSourceListColumns(columns []string) []string {
+	if len(columns) == 0 {
+		return append([]string(nil), defaultScrapeSourceListColumns...)
+	}
+
+	seen := make(map[string]struct{}, len(columns))
+	normalized := make([]string, 0, len(columns))
+	for _, column := range columns {
+		canonical := canonicalScrapeSourceListColumn(column)
+		if _, exists := validScrapeSourceListColumns[canonical]; !exists {
+			continue
+		}
+		if _, duplicate := seen[canonical]; duplicate {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
+	}
+
+	if len(normalized) == 0 {
+		return append([]string(nil), defaultScrapeSourceListColumns...)
+	}
+
+	return normalized
+}
+
+func canonicalScrapeSourceListColumn(column string) string {
+	if column == "details" {
+		return "actions"
+	}
+	return column
 }
 
 func (u *User) GetProtocolMap() map[string]int {

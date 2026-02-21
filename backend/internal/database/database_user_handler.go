@@ -148,6 +148,8 @@ func UpdateUserSettings(userID uint, settings dto.UserSettings) error {
 			"AutoRemoveFailingProxies":   settings.AutoRemoveFailingProxies,
 			"AutoRemoveFailureThreshold": settings.AutoRemoveFailureThreshold,
 			"ProxyListColumns":           domain.StringList(domain.NormalizeProxyListColumns(settings.ProxyListColumns)),
+			"ScrapeSourceProxyColumns":   domain.StringList(domain.NormalizeScrapeSourceProxyColumns(settings.ScrapeSourceProxyColumns)),
+			"ScrapeSourceListColumns":    domain.StringList(domain.NormalizeScrapeSourceListColumns(settings.ScrapeSourceListColumns)),
 		}
 		if err := tx.Model(&domain.User{}).
 			Where("id = ?", userID).

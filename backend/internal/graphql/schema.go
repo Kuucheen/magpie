@@ -43,6 +43,8 @@ func NewSchema() (gql.Schema, error) {
 			"judges":                     &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(simpleJudgeType)))},
 			"scrapingSources":            &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(gql.String)))},
 			"proxyListColumns":           &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(gql.String)))},
+			"scrapeSourceProxyColumns":   &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(gql.String)))},
+			"scrapeSourceListColumns":    &gql.Field{Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(gql.String)))},
 		},
 	})
 
@@ -399,6 +401,12 @@ func NewSchema() (gql.Schema, error) {
 			"proxyListColumns": &gql.InputObjectFieldConfig{
 				Type: gql.NewList(gql.NewNonNull(gql.String)),
 			},
+			"scrapeSourceProxyColumns": &gql.InputObjectFieldConfig{
+				Type: gql.NewList(gql.NewNonNull(gql.String)),
+			},
+			"scrapeSourceListColumns": &gql.InputObjectFieldConfig{
+				Type: gql.NewList(gql.NewNonNull(gql.String)),
+			},
 		},
 	})
 
@@ -480,6 +488,8 @@ func buildUserSettings(user domain.User, judges []dto.SimpleUserJudge, sources [
 		"judges":                     judgeList,
 		"scrapingSources":            dtoSettings.ScrapingSources,
 		"proxyListColumns":           dtoSettings.ProxyListColumns,
+		"scrapeSourceProxyColumns":   dtoSettings.ScrapeSourceProxyColumns,
+		"scrapeSourceListColumns":    dtoSettings.ScrapeSourceListColumns,
 	}
 }
 
@@ -753,6 +763,24 @@ func applyUserSettings(ctx context.Context, input map[string]interface{}) error 
 			}
 		}
 		settings.ProxyListColumns = columns
+	}
+	if rawColumns, ok := input["scrapeSourceProxyColumns"].([]interface{}); ok {
+		columns := make([]string, 0, len(rawColumns))
+		for _, raw := range rawColumns {
+			if column, ok := raw.(string); ok {
+				columns = append(columns, column)
+			}
+		}
+		settings.ScrapeSourceProxyColumns = columns
+	}
+	if rawColumns, ok := input["scrapeSourceListColumns"].([]interface{}); ok {
+		columns := make([]string, 0, len(rawColumns))
+		for _, raw := range rawColumns {
+			if column, ok := raw.(string); ok {
+				columns = append(columns, column)
+			}
+		}
+		settings.ScrapeSourceListColumns = columns
 	}
 
 	if err := database.UpdateUserSettings(userID, settings); err != nil {

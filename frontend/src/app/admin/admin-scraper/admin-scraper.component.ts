@@ -59,7 +59,6 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
         error: err => this.notification.showError("Could not get scraper settings" + err.error.message)
     });
 
-    const threadsCtrl  = this.settingsForm.get('scraper_threads');
     const dynamicCtrl  = this.settingsForm.get('scraper_dynamic_threads');
     const proxyLimitCtrl = this.settingsForm.get('proxy_limit_enabled');
 
@@ -93,6 +92,7 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
     return this.fb.group({
       scraper_dynamic_threads: true,
       scraper_threads: [{ value: 250, disabled: true }],
+      scraper_max_threads: [500],
       scraper_retries: [2],
       scraper_timeout: [7500],
       scraper_respect_robots_txt: [true],
@@ -113,6 +113,7 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
     this.settingsForm.patchValue({
       scraper_dynamic_threads: settings.scraper.dynamic_threads,
       scraper_threads: settings.scraper.threads,
+      scraper_max_threads: settings.scraper.max_threads ?? settings.scraper.threads ?? 500,
       scraper_retries: settings.scraper.retries,
       scraper_timeout: settings.scraper.timeout,
       scraper_respect_robots_txt: settings.scraper.respect_robots_txt ?? true,
@@ -134,14 +135,17 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
 
   private updateThreadControlState(isDynamic: boolean): void {
     const threadsCtrl  = this.settingsForm.get('scraper_threads');
-    if (!threadsCtrl) {
+    const maxThreadsCtrl = this.settingsForm.get('scraper_max_threads');
+    if (!threadsCtrl || !maxThreadsCtrl) {
       return;
     }
 
     if (isDynamic) {
       threadsCtrl.disable({ emitEvent: false });
+      maxThreadsCtrl.enable({ emitEvent: false });
     } else {
       threadsCtrl.enable({ emitEvent: false });
+      maxThreadsCtrl.disable({ emitEvent: false });
     }
   }
 

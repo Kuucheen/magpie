@@ -127,6 +127,15 @@
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
+    flex: 1;
+  }
+
+  .toggle-inline-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-left: auto;
+    flex-wrap: wrap;
   }
 
   .toggle-title {
@@ -314,6 +323,15 @@
       display: block;
       min-height: 2.8rem;
     }
+
+    .scraper-max-threads-input {
+      width: 8rem;
+      min-width: 8rem;
+
+      .p-inputnumber-input {
+        width: 100%;
+      }
+    }
   }
 }
 
@@ -327,6 +345,12 @@
 
     .proxy-grid {
       grid-template-columns: 1fr;
+    }
+
+    .toggle-inline-field {
+      width: 100%;
+      margin-left: 0;
+      justify-content: flex-start;
     }
 
     :host ::ng-deep .p-tablist {

@@ -39,6 +39,7 @@ export interface GlobalSettings {
   scraper: {
     dynamic_threads: boolean;
     threads: number;
+    max_threads: number;
     retries: number;
     timeout: number;
 

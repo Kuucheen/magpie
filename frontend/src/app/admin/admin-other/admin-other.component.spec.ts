@@ -29,6 +29,7 @@ const defaultSettings: GlobalSettings = {
   scraper: {
     dynamic_threads: true,
     threads: 1,
+    max_threads: 1,
     retries: 1,
     timeout: 1000,
     respect_robots_txt: true,

@@ -358,6 +358,7 @@ export class SettingsService {
     const scraper: GlobalSettings['scraper'] = {
       dynamic_threads: formData.scraper_dynamic_threads ?? current?.scraper?.dynamic_threads ?? true,
       threads:         formData.scraper_threads         ?? current?.scraper?.threads         ?? 250,
+      max_threads:     formData.scraper_max_threads     ?? current?.scraper?.max_threads     ?? current?.scraper?.threads ?? 500,
       retries:         formData.scraper_retries         ?? current?.scraper?.retries         ?? 2,
       timeout:         formData.scraper_timeout         ?? current?.scraper?.timeout         ?? 7500,
       respect_robots_txt: formData.scraper_respect_robots_txt ?? current?.scraper?.respect_robots_txt ?? true,

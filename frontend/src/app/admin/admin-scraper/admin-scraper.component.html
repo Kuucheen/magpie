@@ -142,6 +142,24 @@
                       <span class="toggle-title">Dynamic Threads</span>
                       <span class="toggle-hint">Automatically scale thread usage based on available proxies and checker demand.</span>
                     </label>
+                    @if (settingsForm.get('scraper_dynamic_threads')?.value) {
+                      <div class="toggle-inline-field">
+                        <label class="field-label" for="scraper_max_threads">
+                          Max Threads
+                          <i class="pi pi-info-circle text-gray-400 cursor-help"
+                             pTooltip="Upper thread limit while Dynamic Threads is enabled."
+                             tooltipPosition="top">
+                          </i>
+                        </label>
+                        <p-inputNumber
+                          formControlName="scraper_max_threads"
+                          [min]="1"
+                          [max]="10000"
+                          [inputId]="'scraper_max_threads'"
+                          styleClass="scraper-max-threads-input">
+                        </p-inputNumber>
+                      </div>
+                    }
                   </div>
 
                   <div class="toggle-card">

@@ -6,7 +6,7 @@ import {PrimeTemplate} from 'primeng/api';
 import {UIChart} from 'primeng/chart';
 import {Dialog} from 'primeng/dialog';
 import Chart from 'chart.js/auto';
-import {ChartData, ChartOptions, TooltipItem} from 'chart.js';
+import {ChartData, ChartOptions, ChartType, Tooltip, TooltipItem, TooltipPositionerFunction, TooltipPositionerMap} from 'chart.js';
 import {ChoroplethController, GeoFeature, ColorScale, ProjectionScale} from 'chartjs-chart-geo';
 import {feature} from 'topojson-client';
 import worldMap from 'world-atlas/countries-110m.json';
@@ -23,6 +23,54 @@ interface CountryBreakdown {
 type CountryFeature = Feature & { properties: { name: string } };
 
 Chart.register(ChoroplethController, GeoFeature, ColorScale, ProjectionScale);
+
+const GEO_TOOLTIP_POSITIONER = 'cursorSafe';
+const GEO_TOOLTIP_OFFSET = 14;
+const GEO_TOOLTIP_MARGIN = 8;
+
+declare module 'chart.js' {
+  interface TooltipPositionerMap {
+    cursorSafe: TooltipPositionerFunction<ChartType>;
+  }
+}
+
+const tooltipPositioners = Tooltip.positioners as TooltipPositionerMap;
+
+if (!tooltipPositioners[GEO_TOOLTIP_POSITIONER]) {
+  tooltipPositioners[GEO_TOOLTIP_POSITIONER] = function (_items, eventPosition) {
+    const chartArea = this.chart.chartArea;
+    const width = this.width ?? 0;
+    const height = this.height ?? 0;
+    const anchorX = eventPosition?.x ?? chartArea.left;
+    const anchorY = eventPosition?.y ?? chartArea.top;
+
+    const placeRight = anchorX + GEO_TOOLTIP_OFFSET + width <= chartArea.right - GEO_TOOLTIP_MARGIN;
+    const placeBelow = anchorY + GEO_TOOLTIP_OFFSET + height <= chartArea.bottom - GEO_TOOLTIP_MARGIN;
+
+    const nextX = placeRight
+      ? anchorX + GEO_TOOLTIP_OFFSET
+      : anchorX - width - GEO_TOOLTIP_OFFSET;
+    const nextY = placeBelow
+      ? anchorY + GEO_TOOLTIP_OFFSET
+      : anchorY - height - GEO_TOOLTIP_OFFSET;
+
+    const x = Math.min(
+      chartArea.right - width - GEO_TOOLTIP_MARGIN,
+      Math.max(chartArea.left + GEO_TOOLTIP_MARGIN, nextX)
+    );
+    const y = Math.min(
+      chartArea.bottom - height - GEO_TOOLTIP_MARGIN,
+      Math.max(chartArea.top + GEO_TOOLTIP_MARGIN, nextY)
+    );
+
+    return {
+      x,
+      y,
+      xAlign: placeRight ? 'left' : 'right',
+      yAlign: placeBelow ? 'top' : 'bottom'
+    };
+  };
+}
 
 const WORLD_TOPO = worldMap as unknown as { objects: { countries: any } };
 const WORLD_FEATURE_COLLECTION = feature(
@@ -523,12 +571,15 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
       plugins: {
         legend: { display: false },
         tooltip: {
-          position: 'nearest',
+          position: GEO_TOOLTIP_POSITIONER,
           animation: false,
           animations: {
             numbers: { duration: 0 },
             opacity: { duration: 0 }
           },
+          displayColors: false,
+          caretSize: 0,
+          caretPadding: 10,
           callbacks: {
             label: (context: TooltipItem<'choropleth'>) => {
               const raw = context.raw as any;

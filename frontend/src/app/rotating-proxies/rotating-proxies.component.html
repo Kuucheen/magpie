@@ -34,6 +34,11 @@
               Enable at least one protocol in your account settings to create a rotator.
             </div>
           }
+          @if (!hasAvailableInstances()) {
+            <div class="form-alert">
+              No instance currently has free rotator ports. Free ports on an instance before creating a new rotator.
+            </div>
+          }
 
           <div class="create-layout">
             <div class="flow-column">
@@ -157,6 +162,28 @@
                   </div>
                 </div>
               </section>
+
+              <section class="form-section">
+                <p class="section-step">Step 4</p>
+                <h4 class="subsection-title">Choose Instance</h4>
+                <p class="subsection-hint">Select the region/instance that will host this rotator endpoint.</p>
+                <div class="field-group">
+                  <label class="field-label" for="rotatorInstance">Instance</label>
+                  <p-select inputId="rotatorInstance"
+                            class="w-full"
+                            [options]="instanceOptions()"
+                            optionLabel="label"
+                            optionValue="value"
+                            placeholder="Select an instance"
+                            formControlName="instanceId">
+                  </p-select>
+                  @if (createForm.get('instanceId')?.invalid && (createForm.get('instanceId')?.dirty || createForm.get('instanceId')?.touched)) {
+                    <p class="field-error">Please select an instance.</p>
+                  } @else {
+                    <p class="field-hint">Only instances with free rotator ports are shown.</p>
+                  }
+                </div>
+              </section>
             </div>
 
             <aside class="support-column">
@@ -257,6 +284,10 @@
                     </span>
                   </div>
                   <div class="summary-item">
+                    <span class="summary-label">Instance</span>
+                    <span class="summary-value">{{ instanceSummary(createForm.get('instanceId')?.value) }}</span>
+                  </div>
+                  <div class="summary-item">
                     <span class="summary-label">Reputation</span>
                     <span class="summary-value">{{ reputationFilterSummary(createForm.get('reputationLabels')?.value) }}</span>
                   </div>
@@ -279,7 +310,7 @@
                     type="submit"
                     label="Create Rotator"
                     icon="pi pi-plus"
-                    [disabled]="createForm.invalid || submitting() || noProtocolsAvailable()"
+                    [disabled]="createForm.invalid || submitting() || noProtocolsAvailable() || !hasAvailableInstances()"
                     [loading]="submitting()">
             </button>
           </div>
@@ -376,6 +407,10 @@
               <td class="name-cell">
                 <div class="name">{{ proxy.name }}</div>
                 <div class="created">Created {{ proxy.created_at | date:'short' }}</div>
+                <div class="reputation-filter">
+                  <span class="filter-label">Instance</span>
+                  <span class="filter-value">{{ proxy.instance_name || proxy.instance_id || 'Unknown' }} · {{ proxy.instance_region || 'Unknown' }}</span>
+                </div>
                 <div class="reputation-filter">
                   <span class="filter-label">Reputation</span>
                   <span class="filter-value">{{ reputationFilterSummary(proxy.reputation_labels) }}</span>
@@ -482,6 +517,14 @@
         <div class="detail-row">
           <span class="label">Endpoint</span>
           <span class="value">{{ rotatorEndpoint(selectedRotator()) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Instance</span>
+          <span class="value">
+            {{ selectedRotator()?.instance_name || selectedRotator()?.instance_id || 'Unknown' }}
+            ·
+            {{ selectedRotator()?.instance_region || 'Unknown' }}
+          </span>
         </div>
         <div class="detail-row">
           <span class="label">Connection</span>

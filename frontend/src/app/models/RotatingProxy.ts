@@ -1,6 +1,9 @@
 export interface RotatingProxy {
   id: number;
   name: string;
+  instance_id?: string | null;
+  instance_name?: string | null;
+  instance_region?: string | null;
   protocol: string;
   listen_protocol?: string | null;
   transport_protocol?: string | null;
@@ -22,6 +25,7 @@ export interface RotatingProxy {
 
 export interface CreateRotatingProxy {
   name: string;
+  instance_id: string;
   protocol: string;
   listen_protocol: string;
   transport_protocol: string;
@@ -32,6 +36,17 @@ export interface CreateRotatingProxy {
   auth_username?: string | null;
   auth_password?: string | null;
   reputation_labels?: string[] | null;
+}
+
+export interface RotatingProxyInstance {
+  id: string;
+  name: string;
+  region: string;
+  port_start: number;
+  port_end: number;
+  used_ports: number;
+  free_ports: number;
+  total_ports: number;
 }
 
 export interface RotatingProxyNext {

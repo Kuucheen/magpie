@@ -16,10 +16,16 @@ import {environment} from '../../environments/environment';
 import {HttpService} from '../services/http.service';
 import {ClipboardService} from '../services/clipboard.service';
 import {NotificationService} from '../services/notification-service.service';
-import {CreateRotatingProxy, RotatingProxy} from '../models/RotatingProxy';
+import {CreateRotatingProxy, RotatingProxy, RotatingProxyInstance} from '../models/RotatingProxy';
 import {UserSettings} from '../models/UserSettings';
 import {TooltipComponent} from '../tooltip/tooltip.component';
 import {SkeletonModule} from 'primeng/skeleton';
+
+type RotatorInstanceOption = {
+  label: string;
+  value: string;
+  freePorts: number;
+};
 
 @Component({
   selector: 'app-rotating-proxies',
@@ -60,6 +66,8 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   protocolOptions = signal<{ label: string; value: string }[]>([]);
   listenProtocolOptions = signal<{ label: string; value: string }[]>([...this.protocolOptionList]);
   transportProtocolOptions = [...this.transportProtocolOptionList];
+  instanceOptions = signal<RotatorInstanceOption[]>([]);
+  hasAvailableInstances = signal(false);
   loading = signal(false);
   hasLoaded = signal(false);
   submitting = signal(false);
@@ -98,6 +106,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   ) {
     this.createForm = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(120)]],
+      instanceId: ['', Validators.required],
       protocol: ['', Validators.required],
       listenProtocol: ['', Validators.required],
       transportProtocol: ['tcp', Validators.required],
@@ -133,10 +142,11 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     forkJoin({
       proxies: this.http.getRotatingProxies(),
       settings: this.http.getUserSettings(),
+      instances: this.http.getRotatingProxyInstances(),
     })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: ({proxies, settings}) => {
+        next: ({proxies, settings, instances}) => {
           const rawProxies = proxies ?? [];
           const currentSelectedId = this.selectedRotator()?.id ?? null;
           if (!this.rotatorHost()) {
@@ -164,8 +174,10 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
 
           const options = this.buildProtocolOptions(settings);
           this.protocolOptions.set(options);
+          this.applyInstanceOptions(instances ?? []);
           const noneAvailable = options.length === 0;
           this.noProtocolsAvailable.set(noneAvailable);
+          const instanceControl = this.createForm.get('instanceId');
           const protocolControl = this.createForm.get('protocol');
           const listenControl = this.createForm.get('listenProtocol');
           const transportControl = this.createForm.get('transportProtocol');
@@ -188,10 +200,15 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           }
           if (!currentListenTransport || !transportValues.includes(currentListenTransport)) {
             this.createForm.patchValue({listenTransportProtocol: transportValues[0] ?? 'tcp'}, {emitEvent: false});
-        }
-        this.updateFormDisabledStates();
-        this.loading.set(false);
-        this.hasLoaded.set(true);
+          }
+          const availableInstances = this.instanceOptions().map(option => option.value);
+          const currentInstance = instanceControl?.value;
+          if (!currentInstance || !availableInstances.includes(currentInstance)) {
+            this.createForm.patchValue({instanceId: availableInstances[0] ?? ''}, {emitEvent: false});
+          }
+          this.updateFormDisabledStates();
+          this.loading.set(false);
+          this.hasLoaded.set(true);
       },
       error: err => {
         this.loading.set(false);
@@ -209,6 +226,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
 
     const payload: CreateRotatingProxy = {
       name: (this.createForm.get('name')?.value ?? '').trim(),
+      instance_id: this.createForm.get('instanceId')?.value,
       protocol: this.createForm.get('protocol')?.value,
       listen_protocol: this.createForm.get('listenProtocol')?.value,
       transport_protocol: this.createForm.get('transportProtocol')?.value,
@@ -238,6 +256,12 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       this.notification.showWarn('Name cannot be empty.');
       return;
     }
+    if (!payload.instance_id) {
+      this.createForm.get('instanceId')?.setValue('');
+      this.createForm.get('instanceId')?.markAsTouched();
+      this.notification.showWarn('Please select an instance.');
+      return;
+    }
 
     this.submitting.set(true);
     this.updateFormDisabledStates();
@@ -262,6 +286,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
           this.createForm.patchValue({name: ''}, {emitEvent: false});
           this.createForm.get('authUsername')?.reset('', {emitEvent: false});
           this.createForm.get('authPassword')?.reset('', {emitEvent: false});
+          this.loadInitialData();
           this.notification.showSuccess('Rotating proxy created.');
         },
         error: err => {
@@ -461,6 +486,18 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     return `${comparator} ${normalizedPercentage}%`;
   }
 
+  instanceSummary(instanceId: string | null | undefined): string {
+    const id = (instanceId ?? '').toString().trim();
+    if (!id) {
+      return 'Not selected';
+    }
+    const option = this.instanceOptions().find(item => item.value === id);
+    if (!option) {
+      return id;
+    }
+    return `${option.label} (${option.freePorts} free)`;
+  }
+
   private buildProtocolOptions(settings: UserSettings | null | undefined): { label: string; value: string }[] {
     if (!settings) {
       return [];
@@ -485,8 +522,10 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   private updateFormDisabledStates(): void {
     const submitting = this.submitting();
     const noneAvailable = this.noProtocolsAvailable();
+    const noInstances = !this.hasAvailableInstances();
 
     this.setDisabledState('name', submitting || noneAvailable);
+    this.setDisabledState('instanceId', submitting || noInstances);
     this.setDisabledState('protocol', submitting || noneAvailable);
     this.setDisabledState('listenProtocol', submitting || noneAvailable);
     this.setDisabledState('transportProtocol', submitting || noneAvailable);
@@ -650,5 +689,19 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       return window.location.hostname;
     }
     return '';
+  }
+
+  private applyInstanceOptions(instances: RotatingProxyInstance[] | null | undefined): void {
+    const raw = instances ?? [];
+    const options = raw
+      .filter(instance => instance && instance.free_ports > 0)
+      .map(instance => ({
+        value: instance.id,
+        freePorts: instance.free_ports,
+        label: `${instance.name} · ${instance.region}`,
+      }));
+
+    this.instanceOptions.set(options);
+    this.hasAvailableInstances.set(options.length > 0);
   }
 }

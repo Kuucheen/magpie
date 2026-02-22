@@ -15,7 +15,7 @@ import {DeleteAccount} from '../models/DeleteAccount';
 import {ProxyDetail} from '../models/ProxyDetail';
 import {ProxyStatistic} from '../models/ProxyStatistic';
 import {ProxyStatisticResponseDetail} from '../models/ProxyStatisticResponseDetail';
-import {RotatingProxy, CreateRotatingProxy, RotatingProxyNext} from '../models/RotatingProxy';
+import {RotatingProxy, CreateRotatingProxy, RotatingProxyNext, RotatingProxyInstance} from '../models/RotatingProxy';
 import {map} from 'rxjs/operators';
 import {DeleteSettings} from '../models/DeleteSettings';
 import {AddProxiesResponse} from '../models/AddProxiesResponse';
@@ -117,6 +117,12 @@ export class HttpService {
     return this.http
       .get<{rotating_proxies: RotatingProxy[]}>(`${this.apiUrl}/rotatingProxies`)
       .pipe(map(res => res?.rotating_proxies ?? []));
+  }
+
+  getRotatingProxyInstances() {
+    return this.http
+      .get<{instances: RotatingProxyInstance[]}>(`${this.apiUrl}/rotatingProxies/instances`)
+      .pipe(map(res => res?.instances ?? []));
   }
 
   createRotatingProxy(payload: CreateRotatingProxy) {

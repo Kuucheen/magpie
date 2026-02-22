@@ -31,3 +31,13 @@ Services:
 ## Multi-instance considerations
 
 Leader-based routines use Redis locks. If running multiple backend instances, ensure all instances share the same Redis and database.
+
+For rotating proxy listeners, set per-instance identity vars so instances are distinguishable in the UI and API:
+
+- `MAGPIE_INSTANCE_ID`: stable unique id for the instance.
+- `MAGPIE_INSTANCE_NAME`: display name for the instance.
+- `MAGPIE_INSTANCE_REGION`: region label for the instance.
+
+Optionally tune listener reconciliation:
+
+- `ROTATING_PROXY_SYNC_INTERVAL_SECONDS` (default `10`).

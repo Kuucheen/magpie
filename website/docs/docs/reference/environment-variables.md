@@ -30,6 +30,10 @@ In default Docker Compose this is set to `redis://redis:6379`.
 
 - `ROTATING_PROXY_PORT_START` (default `20000`)
 - `ROTATING_PROXY_PORT_END` (default `20100`)
+- `ROTATING_PROXY_SYNC_INTERVAL_SECONDS` (default `10`): interval used by each backend instance to reconcile local rotating listeners.
+- `MAGPIE_INSTANCE_ID` (default hostname): stable identifier for the backend instance that owns/listens for its rotators.
+- `MAGPIE_INSTANCE_NAME` (default `MAGPIE_INSTANCE_ID`): human-readable instance label returned by the rotating instances API.
+- `MAGPIE_INSTANCE_REGION` (default `Unknown`): region label returned by the rotating instances API.
 
 ## Maintenance
 

@@ -39,6 +39,7 @@ Request:
 ```json
 {
   "name": "res-good",
+  "instance_id": "proxy-node-1",
   "protocol": "http",
   "listen_protocol": "http",
   "transport_protocol": "tcp",
@@ -53,6 +54,7 @@ Request:
 Validation and behavior:
 
 - `name` required, max length 120, unique per user.
+- `instance_id` required and must be one of the currently available instances with free listener ports.
 - `protocol` required and must be enabled in the user's protocol settings.
 - `auth_required=true` requires non-empty `auth_username` and `auth_password`.
 - `reputation_labels` currently supports `good`, `neutral`, `poor`.
@@ -65,6 +67,29 @@ Status mapping:
 - `404`: rotator not found
 - `409`: conflict (name exists, or no alive proxies for next)
 - `503`: rotating port range exhausted
+
+## `GET /api/rotatingProxies/instances`
+
+Requires auth. Returns only instances that currently have free rotator listener ports.
+
+Response:
+
+```json
+{
+  "instances": [
+    {
+      "id": "proxy-node-1",
+      "name": "Proxy Node 1",
+      "region": "us-east-1",
+      "port_start": 20000,
+      "port_end": 20100,
+      "used_ports": 12,
+      "free_ports": 89,
+      "total_ports": 101
+    }
+  ]
+}
+```
 
 ## `DELETE /api/rotatingProxies/{id}`
 

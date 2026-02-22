@@ -42,6 +42,7 @@ type Config struct {
 	Scraper struct {
 		DynamicThreads bool   `json:"dynamic_threads"`
 		Threads        uint32 `json:"threads"`
+		MaxThreads     uint32 `json:"max_threads"`
 		Retries        uint32 `json:"retries"`
 		Timeout        uint32 `json:"timeout"`
 		RespectRobots  bool   `json:"respect_robots_txt"`
@@ -225,13 +226,18 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 }
 
 func normalizeThreadSettings(cfg *Config) {
-	if cfg.Checker.MaxThreads == 0 {
-		if cfg.Checker.Threads > 0 {
-			cfg.Checker.MaxThreads = cfg.Checker.Threads
-		} else {
-			cfg.Checker.MaxThreads = 250
-		}
+	cfg.Checker.MaxThreads = normalizeMaxThreads(cfg.Checker.MaxThreads, cfg.Checker.Threads, 250)
+	cfg.Scraper.MaxThreads = normalizeMaxThreads(cfg.Scraper.MaxThreads, cfg.Scraper.Threads, 250)
+}
+
+func normalizeMaxThreads(maxThreads uint32, threads uint32, fallback uint32) uint32 {
+	if maxThreads > 0 {
+		return maxThreads
 	}
+	if threads > 0 {
+		return threads
+	}
+	return fallback
 }
 
 func GetConfig() Config {

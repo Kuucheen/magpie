@@ -201,11 +201,22 @@ func autoThreadCount(cfg config.Config) uint32 {
 
 	numerator := uint64(perInstance) * uint64(cfg.Scraper.Timeout) * uint64(cfg.Scraper.Retries+1)
 	threads := (numerator + period - 1) / period
+	maxThreads := cfg.Scraper.MaxThreads
+	if maxThreads == 0 {
+		if cfg.Scraper.Threads > 0 {
+			maxThreads = cfg.Scraper.Threads
+		} else {
+			maxThreads = 250
+		}
+	}
 
-	switch {
-	case threads == 0 && perInstance > 0:
+	if threads == 0 && perInstance > 0 {
 		threads = 1
-	case threads > math.MaxUint32:
+	}
+	if threads > uint64(maxThreads) {
+		threads = uint64(maxThreads)
+	}
+	if threads > math.MaxUint32 {
 		threads = math.MaxUint32
 	}
 	return uint32(threads)
@@ -405,6 +416,7 @@ func mustRestartBrowser() {
 		time.Sleep(time.Duration(250*(i+1)) * time.Millisecond)
 	}
 	if err != nil {
+		_ = rod.Try(func() { b.MustClose() })
 		panic(fmt.Errorf("browser connect failed: %w", err))
 	}
 

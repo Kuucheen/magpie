@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
 	"magpie/internal/config"
@@ -21,6 +23,7 @@ const (
 	proxyKeyPrefix  = "proxy:"
 	queueKey        = "proxy_queue"
 	emptyQueueSleep = 1 * time.Second
+	processingLease = 5 * time.Minute
 )
 
 //go:embed pop.lua
@@ -194,7 +197,13 @@ func (rpq *RedisProxyQueue) GetNextProxyContext(ctx context.Context) (domain.Pro
 		}
 
 		currentTime := time.Now().Unix()
-		result, err := rpq.popScript.Run(ctx, rpq.client, []string{queueKey, proxyKeyPrefix}, currentTime).Result()
+		result, err := rpq.popScript.Run(
+			ctx,
+			rpq.client,
+			[]string{queueKey, proxyKeyPrefix},
+			currentTime,
+			int64(processingLease/time.Second),
+		).Result()
 
 		if errors.Is(err, redis.Nil) {
 			select {
@@ -207,9 +216,10 @@ func (rpq *RedisProxyQueue) GetNextProxyContext(ctx context.Context) (domain.Pro
 			return domain.Proxy{}, time.Time{}, fmt.Errorf("lua script failed: %w", err)
 		}
 
-		resSlice := result.([]interface{})
-		proxyJSON := resSlice[1].(string)
-		score := resSlice[2].(int64)
+		proxyJSON, score, err := parseProxyPopResult(result)
+		if err != nil {
+			return domain.Proxy{}, time.Time{}, fmt.Errorf("invalid lua response: %w", err)
+		}
 
 		var payload queuedProxy
 		if err := json.Unmarshal([]byte(proxyJSON), &payload); err != nil {
@@ -218,6 +228,74 @@ func (rpq *RedisProxyQueue) GetNextProxyContext(ctx context.Context) (domain.Pro
 		proxy := payload.toDomainProxy()
 
 		return proxy, time.Unix(score, 0), nil
+	}
+}
+
+func parseProxyPopResult(result interface{}) (string, int64, error) {
+	resSlice, ok := result.([]interface{})
+	if !ok {
+		return "", 0, fmt.Errorf("unexpected lua result type %T", result)
+	}
+	if len(resSlice) != 3 {
+		return "", 0, fmt.Errorf("unexpected lua result length %d", len(resSlice))
+	}
+
+	proxyJSON, err := coerceLuaString(resSlice[1])
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid proxy payload: %w", err)
+	}
+
+	score, err := coerceLuaInt64(resSlice[2])
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid score: %w", err)
+	}
+
+	return proxyJSON, score, nil
+}
+
+func coerceLuaString(value interface{}) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	default:
+		return "", fmt.Errorf("expected string/[]byte, got %T", value)
+	}
+}
+
+func coerceLuaInt64(value interface{}) (int64, error) {
+	switch v := value.(type) {
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	case int32:
+		return int64(v), nil
+	case uint64:
+		if v > math.MaxInt64 {
+			return 0, fmt.Errorf("uint64 value out of range: %d", v)
+		}
+		return int64(v), nil
+	case float64:
+		if math.Trunc(v) != v {
+			return 0, fmt.Errorf("non-integer float64 value %f", v)
+		}
+		return int64(v), nil
+	case string:
+		parsed, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return parsed, nil
+	case []byte:
+		parsed, err := strconv.ParseInt(string(v), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("expected numeric lua response, got %T", value)
 	}
 }
 

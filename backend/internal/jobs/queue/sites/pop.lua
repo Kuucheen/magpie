@@ -1,21 +1,20 @@
-local popped = redis.call('ZPOPMIN', KEYS[1], 1)
-if #popped == 0 then
-  return nil                                  -- queue empty
-end
+local result = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+if #result == 0 then return nil end
 
-local member = popped[1]                      -- site url
-local score  = tonumber(popped[2])            -- next-due timestamp
-local now    = tonumber(ARGV[1])
+local member = result[1]
+local score = tonumber(result[2])
+local now = tonumber(ARGV[1])
+local lease_seconds = tonumber(ARGV[2])
 
--- If the next-due time is still in the future, push it back and exit
-if score > now then
-  redis.call('ZADD', KEYS[1], score, member)  -- restore exactly as it was
+if score > now then return nil end
+
+local site_key = KEYS[2] .. member
+local site_data = redis.call('GET', site_key)
+if not site_data then
+  redis.call('ZREM', KEYS[1], member)
   return nil
 end
 
--- Fetch the cached site definition, then delete the key
-local site_key  = KEYS[2] .. member
-local site_data = redis.call('GET', site_key)
-redis.call('DEL', site_key)
+redis.call('ZADD', KEYS[1], now + lease_seconds, member)
 
-return { member, site_data, score }
+return {member, site_data, score}

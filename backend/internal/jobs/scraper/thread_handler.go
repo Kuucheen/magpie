@@ -168,6 +168,9 @@ func scrapeWorker() {
 
 		if !hasUsers {
 			log.Debug("scrape site no longer in use; skipping requeue", "site_id", site.ID, "url", site.URL)
+			if err := sitequeue.PublicScrapeSiteQueue.RemoveFromQueue([]domain.ScrapeSite{site}); err != nil {
+				log.Error("failed to remove scrape site without owners from queue", "site_id", site.ID, "url", site.URL, "err", err)
+			}
 			continue
 		}
 

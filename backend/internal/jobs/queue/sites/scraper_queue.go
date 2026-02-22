@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
 	"magpie/internal/config"
@@ -21,6 +23,7 @@ const (
 	scrapesiteKeyPrefix = "scrapesite:"
 	scrapesiteQueueKey  = "scrapesite_queue"
 	emptyQueueSleep     = 1 * time.Second
+	processingLease     = 5 * time.Minute
 )
 
 //go:embed pop.lua
@@ -177,7 +180,13 @@ func (rssq *RedisScrapeSiteQueue) GetNextScrapeSiteContext(ctx context.Context) 
 		}
 
 		currentTime := time.Now().Unix()
-		result, err := rssq.popScript.Run(ctx, rssq.client, []string{scrapesiteQueueKey, scrapesiteKeyPrefix}, currentTime).Result()
+		result, err := rssq.popScript.Run(
+			ctx,
+			rssq.client,
+			[]string{scrapesiteQueueKey, scrapesiteKeyPrefix},
+			currentTime,
+			int64(processingLease/time.Second),
+		).Result()
 
 		if errors.Is(err, redis.Nil) {
 			select {
@@ -190,9 +199,10 @@ func (rssq *RedisScrapeSiteQueue) GetNextScrapeSiteContext(ctx context.Context) 
 			return domain.ScrapeSite{}, time.Time{}, fmt.Errorf("lua script failed: %w", err)
 		}
 
-		resSlice := result.([]interface{})
-		siteJSON := resSlice[1].(string)
-		score := resSlice[2].(int64)
+		siteJSON, score, err := parseScrapePopResult(result)
+		if err != nil {
+			return domain.ScrapeSite{}, time.Time{}, fmt.Errorf("invalid lua response: %w", err)
+		}
 
 		var site domain.ScrapeSite
 		if err := json.Unmarshal([]byte(siteJSON), &site); err != nil {
@@ -200,6 +210,74 @@ func (rssq *RedisScrapeSiteQueue) GetNextScrapeSiteContext(ctx context.Context) 
 		}
 
 		return site, time.Unix(score, 0), nil
+	}
+}
+
+func parseScrapePopResult(result interface{}) (string, int64, error) {
+	resSlice, ok := result.([]interface{})
+	if !ok {
+		return "", 0, fmt.Errorf("unexpected lua result type %T", result)
+	}
+	if len(resSlice) != 3 {
+		return "", 0, fmt.Errorf("unexpected lua result length %d", len(resSlice))
+	}
+
+	siteJSON, err := coerceLuaString(resSlice[1])
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid site payload: %w", err)
+	}
+
+	score, err := coerceLuaInt64(resSlice[2])
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid score: %w", err)
+	}
+
+	return siteJSON, score, nil
+}
+
+func coerceLuaString(value interface{}) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	default:
+		return "", fmt.Errorf("expected string/[]byte, got %T", value)
+	}
+}
+
+func coerceLuaInt64(value interface{}) (int64, error) {
+	switch v := value.(type) {
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	case int32:
+		return int64(v), nil
+	case uint64:
+		if v > math.MaxInt64 {
+			return 0, fmt.Errorf("uint64 value out of range: %d", v)
+		}
+		return int64(v), nil
+	case float64:
+		if math.Trunc(v) != v {
+			return 0, fmt.Errorf("non-integer float64 value %f", v)
+		}
+		return int64(v), nil
+	case string:
+		parsed, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return parsed, nil
+	case []byte:
+		parsed, err := strconv.ParseInt(string(v), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("expected numeric lua response, got %T", value)
 	}
 }
 

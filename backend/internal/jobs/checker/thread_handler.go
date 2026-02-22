@@ -170,7 +170,9 @@ func work() {
 			continue
 		}
 		if !hasUsers {
-			//log.Debug("proxy no longer has associated users; skipping requeue", "proxy_id", proxy.ID)
+			if err := proxyqueue.PublicProxyQueue.RemoveFromQueue([]domain.Proxy{proxy}); err != nil {
+				log.Error("failed to remove proxy without owners from queue", "proxy_id", proxy.ID, "error", err)
+			}
 			continue
 		}
 

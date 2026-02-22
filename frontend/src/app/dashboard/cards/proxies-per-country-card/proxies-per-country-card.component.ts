@@ -11,6 +11,7 @@ import {ChoroplethController, GeoFeature, ColorScale, ProjectionScale} from 'cha
 import {feature} from 'topojson-client';
 import worldMap from 'world-atlas/countries-110m.json';
 import {Feature, FeatureCollection} from 'geojson';
+import {geoMercator} from 'd3-geo';
 
 interface CountryBreakdown {
   name: string;
@@ -33,6 +34,7 @@ const WORLD_FEATURES = WORLD_FEATURES_ALL.filter(
   (feat) => (feat.properties?.name ?? '').toLowerCase() !== 'antarctica'
 ) as CountryFeature[];
 const FEATURE_BY_NAME = new Map<string, CountryFeature>();
+const WORLD_PROJECTION = geoMercator().rotate([-10, 0]);
 
 WORLD_FEATURES.forEach((feat) => {
   const key = (feat.properties?.name ?? '').toString().toLowerCase();
@@ -559,7 +561,7 @@ export class ProxiesPerCountryCardComponent implements OnChanges, AfterViewInit 
       scales: {
         projection: {
           axis: 'x',
-          projection: 'mercator'
+          projection: WORLD_PROJECTION
         },
         color: {
           axis: 'x',

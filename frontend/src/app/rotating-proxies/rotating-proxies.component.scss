@@ -46,6 +46,11 @@ $column-muted: #9ca3af;
   }
 }
 
+.create-card:hover {
+  border-color: rgba(148, 163, 184, 0.3);
+  background-color: rgba(23, 23, 23, 0.5);
+}
+
 .section-title {
   font-size: 1rem;
   font-weight: 600;
@@ -118,8 +123,8 @@ $column-muted: #9ca3af;
 }
 
 .form-section {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(163, 163, 163, 0.22);
+  background: rgba(38, 38, 38, 0.5);
   border-radius: 14px;
   padding: 0.95rem 1rem;
   display: flex;
@@ -133,7 +138,7 @@ $column-muted: #9ca3af;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.85);
+  color: rgba(212, 212, 212, 0.82);
 }
 
 .subsection-title {

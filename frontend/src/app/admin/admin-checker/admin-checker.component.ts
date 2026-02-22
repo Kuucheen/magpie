@@ -72,20 +72,15 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
         this.updateProtocolsAndBlacklist(settingsState.protocols, settingsState.blacklist_sources);
       });
 
-    const dynamicControl = this.settingsForm.get('dynamic_threads')!;
-    const threadsControl = this.settingsForm.get('threads');
+    const dynamicControl = this.settingsForm.get('dynamic_threads');
+    this.updateThreadControlState(!!dynamicControl?.value);
 
-    // Check initial state and set the threads control accordingly.
-    if (dynamicControl?.value) {
-      threadsControl?.disable();
-    } else {
-      threadsControl?.enable();
-    }
-
-    dynamicControl?.valueChanges?.subscribe({
-      next: dynamic => dynamic ? threadsControl?.disable() : threadsControl?.enable(),
-      error: err => this.notification.showError("Could not get dynamic thread info " + err.error.message)
-    });
+    dynamicControl?.valueChanges
+      ?.pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: dynamic => this.updateThreadControlState(!!dynamic),
+        error: err => this.notification.showError("Could not get dynamic thread info " + err.error.message)
+      });
   }
 
   ngOnDestroy(): void {
@@ -98,6 +93,7 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
     return this.fb.group({
       dynamic_threads: false,
       threads: [250],
+      max_threads: [250],
       retries: [2],
       timeout: [7500],
       protocols: this.fb.group({
@@ -141,6 +137,7 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
     this.settingsForm.patchValue({
       dynamic_threads: checkerSettings.dynamic_threads,
       threads: checkerSettings.threads,
+      max_threads: checkerSettings.max_threads ?? checkerSettings.threads ?? 250,
       retries: checkerSettings.retries,
       timeout: checkerSettings.timeout,
       checker_timer: {
@@ -229,6 +226,20 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
     proxyHeaders.forEach(header => {
       proxyHeaderArray.push(this.fb.control(header));
     });
+  }
+
+  private updateThreadControlState(dynamic: boolean): void {
+    const threadsControl = this.settingsForm.get('threads');
+    const maxThreadsControl = this.settingsForm.get('max_threads');
+
+    if (dynamic) {
+      threadsControl?.disable({emitEvent: false});
+      maxThreadsControl?.enable({emitEvent: false});
+      return;
+    }
+
+    threadsControl?.enable({emitEvent: false});
+    maxThreadsControl?.disable({emitEvent: false});
   }
 
   get judges() {

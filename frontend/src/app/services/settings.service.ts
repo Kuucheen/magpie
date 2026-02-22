@@ -299,6 +299,7 @@ export class SettingsService {
     const checker: GlobalSettings['checker'] = {
       dynamic_threads: formData.dynamic_threads      ?? current?.checker?.dynamic_threads      ?? true,
       threads:         formData.threads              ?? current?.checker?.threads              ?? 250,
+      max_threads:     formData.max_threads          ?? current?.checker?.max_threads          ?? current?.checker?.threads ?? 250,
       retries:         formData.retries              ?? current?.checker?.retries              ?? 2,
       timeout:         formData.timeout              ?? current?.checker?.timeout              ?? 7500,
 

@@ -134,8 +134,17 @@
                   </div>
                 </div>
                 <div class="toggle-grid">
-                  <div class="toggle-option">
+                  <div class="toggle-option dynamic-threads-option">
                     <app-checkbox label="Dynamic Threads" formControlName="dynamic_threads"></app-checkbox>
+                    @if (settingsForm.get('dynamic_threads')?.value) {
+                      <div class="dynamic-max-threads">
+                        <label class="field-label" for="max_threads">
+                          Max Threads
+                          <app-tooltip [text]="'Upper thread limit while Dynamic Threads is enabled.'"></app-tooltip>
+                        </label>
+                        <input id="max_threads" formControlName="max_threads" type="number" pInputText class="p-inputtext-sm dynamic-max-threads-input"/>
+                      </div>
+                    }
                   </div>
                   <div class="toggle-option">
                     <app-checkbox label="Use HTTPS for SOCKS" formControlName="use_https_for_socks"></app-checkbox>

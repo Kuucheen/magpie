@@ -511,18 +511,18 @@ func GetProxyInfoPage(userId uint, page int) []dto.ProxyInfo {
 }
 
 func buildProxyHealthSubQuery(userId uint) *gorm.DB {
-	return DB.Table("proxy_statistics psr").
+	return DB.Table("proxy_latest_statistics pls").
 		Select(
-			"psr.proxy_id AS proxy_id, "+
-				"ROUND(100.0 * SUM(CASE WHEN psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(COUNT(*), 0), 1) AS health_overall, "+
-				"ROUND(100.0 * SUM(CASE WHEN proto.name = 'http' AND psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(SUM(CASE WHEN proto.name = 'http' THEN 1 ELSE 0 END), 0), 1) AS health_http, "+
-				"ROUND(100.0 * SUM(CASE WHEN proto.name = 'https' AND psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(SUM(CASE WHEN proto.name = 'https' THEN 1 ELSE 0 END), 0), 1) AS health_https, "+
-				"ROUND(100.0 * SUM(CASE WHEN proto.name = 'socks4' AND psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(SUM(CASE WHEN proto.name = 'socks4' THEN 1 ELSE 0 END), 0), 1) AS health_socks4, "+
-				"ROUND(100.0 * SUM(CASE WHEN proto.name = 'socks5' AND psr.alive THEN 1 ELSE 0 END)::numeric / NULLIF(SUM(CASE WHEN proto.name = 'socks5' THEN 1 ELSE 0 END), 0), 1) AS health_socks5",
+			"pls.proxy_id AS proxy_id, "+
+				"ROUND(100.0 * AVG(CASE WHEN pls.alive THEN 1 ELSE 0 END)::numeric, 1) AS health_overall, "+
+				"MAX(CASE WHEN LOWER(proto.name) = 'http' THEN CASE WHEN pls.alive THEN 100.0 ELSE 0.0 END END) AS health_http, "+
+				"MAX(CASE WHEN LOWER(proto.name) = 'https' THEN CASE WHEN pls.alive THEN 100.0 ELSE 0.0 END END) AS health_https, "+
+				"MAX(CASE WHEN LOWER(proto.name) = 'socks4' THEN CASE WHEN pls.alive THEN 100.0 ELSE 0.0 END END) AS health_socks4, "+
+				"MAX(CASE WHEN LOWER(proto.name) = 'socks5' THEN CASE WHEN pls.alive THEN 100.0 ELSE 0.0 END END) AS health_socks5",
 		).
-		Joins("JOIN protocols proto ON proto.id = psr.protocol_id").
-		Where("EXISTS (SELECT 1 FROM user_proxies up WHERE up.proxy_id = psr.proxy_id AND up.user_id = ?)", userId).
-		Group("psr.proxy_id")
+		Joins("JOIN protocols proto ON proto.id = pls.protocol_id").
+		Where("EXISTS (SELECT 1 FROM user_proxies up WHERE up.proxy_id = pls.proxy_id AND up.user_id = ?)", userId).
+		Group("pls.proxy_id")
 }
 
 func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search string, filters dto.ProxyListFilters) ([]dto.ProxyInfo, int64) {
@@ -624,29 +624,38 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		return proxies, total
 	}
 
-	// Proxy IPs are stored encrypted, so the search needs to run after decrypting
-	// the values that came back from the database. We therefore filter in-memory
-	// once the full result set for the user has been loaded.
-	if err := query.Scan(&rows).Error; err != nil {
+	rangeStart, rangeEnd, ok := buildIPIntSearchRange(lowerSearch)
+	if !ok {
+		return []dto.ProxyInfo{}, 0
+	}
+
+	filteredQuery := query.Where("proxies.ip_int BETWEEN ? AND ?", rangeStart, rangeEnd)
+
+	var total int64
+	if err := filteredQuery.
+		Session(&gorm.Session{}).
+		Limit(-1).
+		Offset(-1).
+		Order("").
+		Distinct("proxies.id").
+		Count(&total).Error; err != nil {
+		return []dto.ProxyInfo{}, 0
+	}
+	if total == 0 {
+		return []dto.ProxyInfo{}, 0
+	}
+
+	offset := (page - 1) * pageSize
+	if err := filteredQuery.
+		Offset(offset).
+		Limit(pageSize).
+		Scan(&rows).Error; err != nil {
 		return []dto.ProxyInfo{}, 0
 	}
 
 	proxies := proxyInfoRowsToDTO(rows)
 	attachReputationsToProxyInfos(proxies)
-	filtered := filterProxiesBySearch(proxies, lowerSearch)
-	total := int64(len(filtered))
-	start := (page - 1) * pageSize
-	if start >= len(filtered) {
-		return []dto.ProxyInfo{}, total
-	}
-
-	end := start + pageSize
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-
-	pageSlice := filtered[start:end]
-	return pageSlice, total
+	return proxies, total
 }
 
 func isLikelyProxyIPSearch(search string) bool {
@@ -662,6 +671,48 @@ func isLikelyProxyIPSearch(search string) bool {
 	}
 
 	return strings.Contains(search, ".")
+}
+
+func buildIPIntSearchRange(search string) (uint32, uint32, bool) {
+	if search == "" {
+		return 0, 0, false
+	}
+
+	parts := strings.Split(search, ".")
+	for len(parts) > 0 && parts[len(parts)-1] == "" {
+		parts = parts[:len(parts)-1]
+	}
+	if len(parts) == 0 || len(parts) > 4 {
+		return 0, 0, false
+	}
+
+	octets := make([]uint32, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			return 0, 0, false
+		}
+		value, err := strconv.Atoi(part)
+		if err != nil || value < 0 || value > 255 {
+			return 0, 0, false
+		}
+		octets = append(octets, uint32(value))
+	}
+
+	var start uint32
+	var end uint32
+	for idx := 0; idx < 4; idx++ {
+		shift := uint(24 - (idx * 8))
+
+		if idx < len(octets) {
+			start |= octets[idx] << shift
+			end |= octets[idx] << shift
+			continue
+		}
+
+		end |= uint32(255) << shift
+	}
+
+	return start, end, true
 }
 
 func applyProxySearchQuery(query *gorm.DB, pattern string) *gorm.DB {

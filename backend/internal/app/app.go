@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime/debug"
 	"strconv"
 
 	"github.com/charmbracelet/log"
@@ -30,7 +29,6 @@ func Run() error {
 	}
 
 	log.SetLevel(log.DebugLevel)
-	debug.SetMaxThreads(9999999999)
 
 	backendPortFlag := flag.Int("backend-port", defaultBackendPort, "Port for API server")
 	productionFlag := flag.Bool("production", false, "Run in production mode")

@@ -3,6 +3,12 @@ $muted: rgba(148, 163, 184, 0.82);
 $panel: rgba(24, 24, 27, 0.92);
 $border: rgba(148, 163, 184, 0.16);
 $accent: rgba(var(--theme-primary-500-rgb), 1);
+$column-accent: #1cbb57;
+$column-surface: #141414;
+$column-border-strong: rgba(255, 255, 255, 0.12);
+$column-border-soft: rgba(255, 255, 255, 0.09);
+$column-subtle: rgba(255, 255, 255, 0.04);
+$column-muted: #9ca3af;
 
 :host {
   display: block;
@@ -497,43 +503,214 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
 .details-dialog {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
+
+  .details-connection {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    border: 1px solid $column-border-strong;
+    background: $column-surface;
+    border-radius: 14px;
+    padding: 0.95rem;
+  }
+
+  .connection-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .connection-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
 
   .details-grid {
     display: grid;
-    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+  }
+
+  .detail-card {
+    border: 1px solid $column-border-soft;
+    border-radius: 12px;
+    padding: 0.8rem 0.9rem;
+    background: rgba(255, 255, 255, 0.02);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+
+    h4 {
+      margin: 0;
+      font-size: 0.83rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: $column-muted;
+      font-weight: 700;
+    }
   }
 
   .detail-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.7rem;
+    min-width: 0;
 
     .label {
-      font-size: 0.85rem;
+      font-size: 0.74rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: $muted;
+      letter-spacing: 0.04em;
+      color: $column-muted;
+      font-weight: 700;
+      flex: 0 0 5.2rem;
     }
 
     .value {
       font-weight: 600;
-      color: $text;
-      max-width: 60%;
-      word-break: break-all;
+      color: #e5e7eb;
+      flex: 1 1 auto;
+      max-width: 100%;
+      text-align: right;
+      overflow-wrap: anywhere;
+      min-width: 0;
 
       &.muted {
-        color: $muted;
+        color: $column-muted;
       }
     }
   }
 
-  .details-actions {
-    display: flex;
-    justify-content: center;
+  .auth-copy-values {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    max-width: 100%;
     flex-wrap: wrap;
-    gap: 0.75rem;
+  }
+
+  .auth-copy-divider {
+    color: $column-muted;
+    font-weight: 600;
+  }
+
+  .ip-port-copy-values {
+    flex-wrap: nowrap;
+  }
+
+  .auth-copy-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    max-width: 100%;
+    padding: 0.18rem 0.42rem;
+    border-radius: 0.45rem;
+    border: 1px dashed transparent;
+    background: transparent;
+    color: #e5e7eb;
+    font: inherit;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+
+    .pi {
+      font-size: 0.7rem;
+      color: rgba(148, 163, 184, 0.85);
+      opacity: 0;
+      transition: color 0.2s ease, opacity 0.15s ease;
+    }
+
+    &:not(.auth-copy-value--copied):hover,
+    &:not(.auth-copy-value--copied):focus-visible {
+      border-color: rgba(148, 163, 184, 0.45);
+      background: rgba(148, 163, 184, 0.1);
+
+      .pi {
+        opacity: 1;
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgba($column-accent, 0.55);
+      outline-offset: 2px;
+    }
+
+    &--copied {
+      border-style: solid;
+      border-color: rgba($column-accent, 0.65);
+      background: rgba($column-accent, 0.2);
+      color: #bbf7d0;
+
+      .pi {
+        color: rgba($column-accent, 1);
+        opacity: 1;
+      }
+    }
+  }
+
+  .copy-value__text {
+    white-space: nowrap;
+  }
+
+  .connection-copy-value {
+    width: 100%;
+    justify-content: space-between;
+    border-radius: 10px;
+    border: 1px solid $column-border-strong;
+    background: $column-subtle;
+    padding: 0.7rem 0.75rem;
+    line-height: 1.35;
+
+    .copy-value__text {
+      white-space: normal;
+      overflow-wrap: anywhere;
+      text-align: left;
+    }
+  }
+
+  .endpoint-copy-value {
+    align-self: flex-start;
+    width: fit-content;
+    max-width: 100%;
+    justify-content: flex-start;
+    margin-left: -0.35rem;
+  }
+
+  .meta-item .label,
+  .connection-field .label {
+    color: $column-muted;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+  }
+
+  .meta-item .value {
+    color: #e5e7eb;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .protocol-chip {
+    background: rgba($column-accent, 0.18);
+    border-color: rgba($column-accent, 0.32);
+    color: #d8fbe5;
+  }
+
+  .transport-chip {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #d1d5db;
   }
 }
 
@@ -541,7 +718,7 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
   text-align: center;
   font-size: 0.9rem;
   padding: 1rem 0;
-  color: $muted;
+  color: $column-muted;
 }
 
 :host ::ng-deep {
@@ -690,6 +867,24 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
     .action-buttons {
       justify-content: flex-start;
       flex-wrap: wrap;
+    }
+  }
+
+  .details-dialog {
+    .connection-meta,
+    .details-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .detail-row {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.35rem;
+
+      .value {
+        max-width: 100%;
+        text-align: left;
+      }
     }
   }
 }

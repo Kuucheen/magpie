@@ -511,112 +511,186 @@
   (visibleChange)="detailsVisible.set($event)"
   [modal]="true"
   [dismissableMask]="true"
-  [style]="{width: '625px'}"
-  [breakpoints]="{'960px': '70vw', '640px': '90vw'}"
+  [style]="{width: '680px', 'max-width': '95vw'}"
+  [breakpoints]="{'960px': '78vw', '640px': '95vw'}"
   (onHide)="onDetailsHide()"
   [header]="selectedRotator() ? selectedRotator()?.name + ' · ' + protocolLabel(selectedRotator()?.listen_protocol ?? selectedRotator()?.protocol ?? '') : 'Rotator Details'">
-  @if (selectedRotator()) {
+  @if (selectedRotator(); as rotator) {
     <div class="details-dialog mt-4">
-      <div class="details-grid">
-        <div class="detail-row">
-          <span class="label">Endpoint</span>
-          <span class="value">{{ rotatorEndpoint(selectedRotator()) }}</span>
+      <section class="details-connection">
+        <div class="connection-meta">
+          <div class="meta-item">
+            <span class="label">Endpoint</span>
+            @if (rotatorEndpoint(rotator); as endpoint) {
+              <button
+                type="button"
+                class="auth-copy-value endpoint-copy-value"
+                [class.auth-copy-value--copied]="isDetailFieldCopied('endpoint')"
+                [pTooltip]="isDetailFieldCopied('endpoint') ? 'Copied' : 'Click to copy'"
+                tooltipPosition="top"
+                (click)="copyDetailField('endpoint', endpoint)"
+              >
+                <span class="copy-value__text">{{ endpoint }}</span>
+                <i class="pi" [ngClass]="isDetailFieldCopied('endpoint') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+              </button>
+            } @else {
+              <span class="value muted">Unavailable</span>
+            }
+          </div>
+          <div class="meta-item">
+            <span class="label">Instance</span>
+            <span class="value">
+              {{ rotator.instance_name || rotator.instance_id || 'Unknown' }}
+              ·
+              {{ rotator.instance_region || 'Unknown' }}
+            </span>
+          </div>
         </div>
-        <div class="detail-row">
-          <span class="label">Instance</span>
-          <span class="value">
-            {{ selectedRotator()?.instance_name || selectedRotator()?.instance_id || 'Unknown' }}
-            ·
-            {{ selectedRotator()?.instance_region || 'Unknown' }}
-          </span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Connection</span>
-          @if (rotatorConnectionString(selectedRotator())) {
-            <span class="value">{{ rotatorConnectionString(selectedRotator()) }}</span>
+
+        <div class="connection-field">
+          <span class="label">Connection URL</span>
+          @if (rotatorConnectionString(rotator); as connectionString) {
+            <button
+              type="button"
+              class="auth-copy-value connection-copy-value"
+              [class.auth-copy-value--copied]="isDetailFieldCopied('connection')"
+              [pTooltip]="isDetailFieldCopied('connection') ? 'Copied' : 'Click to copy'"
+              tooltipPosition="top"
+              (click)="copyDetailField('connection', connectionString)"
+            >
+              <span class="copy-value__text">{{ connectionString }}</span>
+              <i class="pi" [ngClass]="isDetailFieldCopied('connection') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+            </button>
           } @else {
             <span class="value muted">Unavailable</span>
           }
         </div>
-        <div class="detail-row">
-          <span class="label">Rotator Protocol</span>
-          <span class="value">
-            @if (selectedRotator()?.listen_protocol ?? selectedRotator()?.protocol) {
-              <p-chip class="protocol-chip">{{ protocolLabel(selectedRotator()?.listen_protocol ?? selectedRotator()?.protocol ?? '') }}</p-chip>
-            } @else {
-              <span class="muted">Unavailable</span>
-            }
-          </span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Rotator Transport</span>
-          <span class="value">
-            @if (selectedRotator()?.listen_transport_protocol ?? selectedRotator()?.transport_protocol) {
-              <p-chip class="transport-chip">{{ transportLabel(selectedRotator()?.listen_transport_protocol ?? selectedRotator()?.transport_protocol ?? '') }}</p-chip>
-            } @else {
-              <span class="muted">Unavailable</span>
-            }
-          </span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Serves</span>
-          <span class="value">
-            @if (selectedRotator()?.protocol) {
-              <p-chip class="protocol-chip">{{ protocolLabel(selectedRotator()?.protocol ?? '') }}</p-chip>
-            } @else {
-              <span class="muted">Unavailable</span>
-            }
-          </span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Proxy Transport</span>
-          <span class="value">
-            @if (selectedRotator()?.transport_protocol) {
-              <p-chip class="transport-chip">{{ transportLabel(selectedRotator()?.transport_protocol ?? '') }}</p-chip>
-            } @else {
-              <span class="muted">Unavailable</span>
-            }
-          </span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Reputation Filter</span>
-          <span class="value">{{ reputationFilterSummary(selectedRotator()?.reputation_labels) }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Uptime Filter</span>
-          <span class="value">{{ uptimeFilterSummary(selectedRotator()?.uptime_filter_type, selectedRotator()?.uptime_percentage) }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="label">Authentication</span>
-          @if (selectedRotator()?.auth_required && selectedRotator()?.auth_username && selectedRotator()?.auth_password) {
-            <span class="value">{{ selectedRotator()?.auth_username }} / {{ selectedRotator()?.auth_password }}</span>
-          } @else if (selectedRotator()?.auth_required) {
-            <span class="value muted">Credentials required</span>
-          } @else {
-            <span class="value muted">Not required</span>
-          }
-        </div>
-      </div>
+      </section>
 
-      <div class="details-actions">
-        <button pButton type="button"
-                label="Copy Connection"
-                icon="pi pi-copy"
-                (click)="copyRotatorConnection(selectedRotator())"
-                [disabled]="!rotatorConnectionString(selectedRotator())">
-        </button>
-        <button pButton type="button"
-                label="Copy Username"
-                icon="pi pi-user"
-                (click)="copyRotatorField(selectedRotator()?.auth_username, 'Username')"
-                [disabled]="!selectedRotator()?.auth_username">
-        </button>
-        <button pButton type="button"
-                label="Copy Password"
-                icon="pi pi-lock"
-                (click)="copyRotatorField(selectedRotator()?.auth_password, 'Password')"
-                [disabled]="!selectedRotator()?.auth_password">
-        </button>
+      <div class="details-grid">
+        <section class="detail-card">
+          <h4>Listener</h4>
+          <div class="detail-row">
+            <span class="label">Protocol</span>
+            <span class="value">
+              @if (rotator.listen_protocol ?? rotator.protocol) {
+                <p-chip class="protocol-chip">{{ protocolLabel(rotator.listen_protocol ?? rotator.protocol ?? '') }}</p-chip>
+              } @else {
+                <span class="muted">Unavailable</span>
+              }
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Transport</span>
+            <span class="value">
+              @if (rotator.listen_transport_protocol ?? rotator.transport_protocol) {
+                <p-chip class="transport-chip">{{ transportLabel(rotator.listen_transport_protocol ?? rotator.transport_protocol ?? '') }}</p-chip>
+              } @else {
+                <span class="muted">Unavailable</span>
+              }
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="label">IP / Port</span>
+            <span class="value">
+              <span class="auth-copy-values ip-port-copy-values">
+                @if (rotator.listen_host; as listenHost) {
+                  <button
+                    type="button"
+                    class="auth-copy-value"
+                    [class.auth-copy-value--copied]="isDetailFieldCopied('ip')"
+                    [pTooltip]="isDetailFieldCopied('ip') ? 'Copied' : 'Click to copy'"
+                    tooltipPosition="top"
+                    (click)="copyDetailField('ip', listenHost)"
+                  >
+                    <span class="copy-value__text">{{ listenHost }}</span>
+                    <i class="pi" [ngClass]="isDetailFieldCopied('ip') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+                  </button>
+                } @else {
+                  <span class="muted">Unknown</span>
+                }
+                <span class="auth-copy-divider">/</span>
+                <button
+                  type="button"
+                  class="auth-copy-value"
+                  [class.auth-copy-value--copied]="isDetailFieldCopied('port')"
+                  [pTooltip]="isDetailFieldCopied('port') ? 'Copied' : 'Click to copy'"
+                  tooltipPosition="top"
+                  (click)="copyDetailField('port', '' + rotator.listen_port)"
+                >
+                  <span class="copy-value__text">{{ rotator.listen_port }}</span>
+                  <i class="pi" [ngClass]="isDetailFieldCopied('port') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+                </button>
+              </span>
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Auth</span>
+            @if (rotator.auth_required && rotator.auth_username && rotator.auth_password) {
+              <span class="value auth-copy-values">
+                <button
+                  type="button"
+                  class="auth-copy-value"
+                  [class.auth-copy-value--copied]="isDetailFieldCopied('username')"
+                  [pTooltip]="isDetailFieldCopied('username') ? 'Copied' : 'Click to copy'"
+                  tooltipPosition="top"
+                  (click)="copyDetailField('username', rotator.auth_username)"
+                >
+                  <span class="copy-value__text">{{ rotator.auth_username }}</span>
+                  <i class="pi" [ngClass]="isDetailFieldCopied('username') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+                </button>
+                <span class="auth-copy-divider">/</span>
+                <button
+                  type="button"
+                  class="auth-copy-value"
+                  [class.auth-copy-value--copied]="isDetailFieldCopied('password')"
+                  [pTooltip]="isDetailFieldCopied('password') ? 'Copied' : 'Click to copy'"
+                  tooltipPosition="top"
+                  (click)="copyDetailField('password', rotator.auth_password)"
+                >
+                  <span class="copy-value__text">{{ rotator.auth_password }}</span>
+                  <i class="pi" [ngClass]="isDetailFieldCopied('password') ? 'pi-check' : 'pi-copy'" aria-hidden="true"></i>
+                </button>
+              </span>
+            } @else if (rotator.auth_required) {
+              <span class="value muted">Credentials required</span>
+            } @else {
+              <span class="value muted">Not required</span>
+            }
+          </div>
+        </section>
+
+        <section class="detail-card">
+          <h4>Routing Rules</h4>
+          <div class="detail-row">
+            <span class="label">Serves</span>
+            <span class="value">
+              @if (rotator.protocol) {
+                <p-chip class="protocol-chip">{{ protocolLabel(rotator.protocol ?? '') }}</p-chip>
+              } @else {
+                <span class="muted">Unavailable</span>
+              }
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Proxy transport</span>
+            <span class="value">
+              @if (rotator.transport_protocol) {
+                <p-chip class="transport-chip">{{ transportLabel(rotator.transport_protocol ?? '') }}</p-chip>
+              } @else {
+                <span class="muted">Unavailable</span>
+              }
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Reputation</span>
+            <span class="value">{{ reputationFilterSummary(rotator.reputation_labels) }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Uptime</span>
+            <span class="value">{{ uptimeFilterSummary(rotator.uptime_filter_type, rotator.uptime_percentage) }}</span>
+          </div>
+        </section>
       </div>
     </div>
   } @else {

@@ -78,6 +78,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   authEnabled = signal(false);
   selectedRotator = signal<RotatingProxy | null>(null);
   detailsVisible = signal(false);
+  copiedDetailField = signal<'endpoint' | 'connection' | 'ip' | 'port' | 'username' | 'password' | null>(null);
   readonly reputationOptions = [
     {label: 'Good', value: 'good'},
     {label: 'Neutral', value: 'neutral'},
@@ -99,6 +100,7 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   private readonly defaultRotatorHost = this.resolveDefaultHost();
   rotatorHost = signal(this.loopbackHost);
   private destroy$ = new Subject<void>();
+  private authCopyFeedbackTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(
     private fb: FormBuilder,
@@ -135,6 +137,10 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.authCopyFeedbackTimeout) {
+      clearTimeout(this.authCopyFeedbackTimeout);
+      this.authCopyFeedbackTimeout = undefined;
+    }
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -381,18 +387,23 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
       });
   }
 
-  copyRotatorConnection(proxy: RotatingProxy | null): void {
-    if (!proxy) {
-      this.notification.showWarn('Rotator connection is not available yet.');
+  isDetailFieldCopied(field: 'endpoint' | 'connection' | 'ip' | 'port' | 'username' | 'password'): boolean {
+    return this.copiedDetailField() === field;
+  }
+
+  copyDetailField(field: 'endpoint' | 'connection' | 'ip' | 'port' | 'username' | 'password', value: string | null | undefined): void {
+    const candidate = (value ?? '').toString();
+    if (!candidate) {
       return;
     }
 
-    const connection = this.rotatorConnectionString(proxy);
-    this.copyValueToClipboard(connection, 'Rotator connection copied.', 'Rotator connection is not available yet.');
-  }
-
-  copyRotatorField(value: string | null | undefined, label: string): void {
-    this.copyValueToClipboard(value ?? '', `${label} copied.`, `${label} is not set.`);
+    this.showCopyFeedback(field);
+    this.clipboardService.copyText(candidate).then(copied => {
+      if (!copied) {
+        this.copiedDetailField.set(null);
+        this.notification.showWarn('Could not copy to clipboard.');
+      }
+    });
   }
 
   showRotatorDetails(proxy: RotatingProxy): void {
@@ -401,7 +412,12 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
   }
 
   onDetailsHide(): void {
+    if (this.authCopyFeedbackTimeout) {
+      clearTimeout(this.authCopyFeedbackTimeout);
+      this.authCopyFeedbackTimeout = undefined;
+    }
     this.detailsVisible.set(false);
+    this.copiedDetailField.set(null);
   }
 
   isRotating(id: number): boolean {
@@ -662,19 +678,16 @@ export class RotatingProxiesComponent implements OnInit, OnDestroy {
     return '';
   }
 
-  private copyValueToClipboard(value: string, successMessage: string, emptyMessage: string): void {
-    if (!value) {
-      this.notification.showWarn(emptyMessage);
-      return;
+  private showCopyFeedback(field: 'endpoint' | 'connection' | 'ip' | 'port' | 'username' | 'password'): void {
+    this.copiedDetailField.set(field);
+    if (this.authCopyFeedbackTimeout) {
+      clearTimeout(this.authCopyFeedbackTimeout);
     }
-
-    this.clipboardService.copyText(value).then(copied => {
-      if (copied) {
-        this.notification.showSuccess(successMessage);
-        return;
+    this.authCopyFeedbackTimeout = setTimeout(() => {
+      if (this.copiedDetailField() === field) {
+        this.copiedDetailField.set(null);
       }
-      this.notification.showWarn('Could not copy to clipboard.');
-    });
+    }, 1400);
   }
 
   private resolveDefaultHost(): string {

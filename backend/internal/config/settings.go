@@ -24,6 +24,7 @@ type Config struct {
 		DynamicThreads bool   `json:"dynamic_threads"`
 		Threads        uint32 `json:"threads"`
 		MaxThreads     uint32 `json:"max_threads"`
+		SaveResponses  bool   `json:"save_responses"`
 		Retries        uint32 `json:"retries"`
 		Timeout        uint32 `json:"timeout"`
 		CheckerTimer   Timer  `json:"checker_timer"`
@@ -140,6 +141,7 @@ func ReadSettings() {
 		log.Error("Error unmarshalling settings file:", err)
 		return
 	}
+	applyLegacyDefaults(data, &newConfig)
 
 	if err := applyConfigUpdate(newConfig, configUpdateOptions{source: "file"}); err != nil {
 		log.Error("Error applying configuration from settings file:", err)
@@ -238,6 +240,22 @@ func normalizeMaxThreads(maxThreads uint32, threads uint32, fallback uint32) uin
 		return threads
 	}
 	return fallback
+}
+
+func applyLegacyDefaults(raw []byte, cfg *Config) {
+	var partial struct {
+		Checker struct {
+			SaveResponses *bool `json:"save_responses"`
+		} `json:"checker"`
+	}
+
+	if err := json.Unmarshal(raw, &partial); err != nil {
+		return
+	}
+
+	if partial.Checker.SaveResponses == nil {
+		cfg.Checker.SaveResponses = true
+	}
 }
 
 func GetConfig() Config {

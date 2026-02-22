@@ -149,7 +149,8 @@ func work() {
 		proxy = refreshProxyUsers(proxy)
 
 		judgeRequests, userSuccess, userHasChecks, maxTimeout, maxRetries := buildRequestAssignments(proxy)
-		processJudgeAssignments(proxy, judgeRequests, userSuccess, maxTimeout, maxRetries)
+		saveResponses := config.GetConfig().Checker.SaveResponses
+		processJudgeAssignments(proxy, judgeRequests, userSuccess, maxTimeout, maxRetries, saveResponses)
 
 		removedUsers, orphaned := handleFailureTracking(proxy, userSuccess, userHasChecks)
 		if len(removedUsers) > 0 {
@@ -332,10 +333,13 @@ func determineJudgeScheme(protocol string, protocolID int, useHTTPSForSocks bool
 	return "http"
 }
 
-func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*requestAssignment, userSuccess map[uint]bool, maxTimeout uint16, maxRetries uint8) {
+func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*requestAssignment, userSuccess map[uint]bool, maxTimeout uint16, maxRetries uint8, saveResponses bool) {
 	for _, item := range assignments {
 		html, err, responseTime, attempt := CheckProxyWithRetries(proxy, item.judge, item.proxyProtocol, item.transportProtocol, maxTimeout, maxRetries)
-		truncatedBody := truncateResponseBody(html)
+		truncatedBody := ""
+		if saveResponses {
+			truncatedBody = truncateResponseBody(html)
+		}
 		responseValidByRegex := make(map[string]bool, len(item.checks))
 
 		for _, check := range item.checks {

@@ -525,6 +525,16 @@ func buildProxyHealthSubQuery(userId uint) *gorm.DB {
 		Group("pls.proxy_id")
 }
 
+func buildLatestProxyStatisticSubQuery() *gorm.DB {
+	latestByProxy := DB.Table("proxy_latest_statistics pls").
+		Select("DISTINCT ON (pls.proxy_id) pls.proxy_id, pls.statistic_id, pls.checked_at").
+		Order("pls.proxy_id, pls.checked_at DESC, pls.statistic_id DESC")
+
+	return DB.Table("(?) AS latest", latestByProxy).
+		Select("latest.proxy_id, ps.level_id, ps.response_time, ps.attempt, latest.checked_at AS created_at").
+		Joins("JOIN proxy_statistics ps ON ps.id = latest.statistic_id")
+}
+
 func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search string, filters dto.ProxyListFilters) ([]dto.ProxyInfo, int64) {
 	if page < 1 {
 		page = 1
@@ -533,9 +543,7 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		pageSize = proxiesPerPage
 	}
 
-	subQuery := DB.Model(&domain.ProxyStatistic{}).
-		Select("DISTINCT ON (proxy_id) *").
-		Order("proxy_id, created_at DESC, id DESC")
+	subQuery := buildLatestProxyStatisticSubQuery()
 	healthSubQuery := buildProxyHealthSubQuery(userId)
 
 	query := DB.Model(&domain.Proxy{}).
@@ -778,9 +786,7 @@ func buildProxyListFilterQuery(userId uint, filters dto.ProxyListFilters) *gorm.
 
 	needsLatestStats := len(filters.AnonymityLevels) > 0 || filters.MaxTimeout > 0 || filters.MaxRetries > 0
 	if needsLatestStats {
-		latestStats := DB.Model(&domain.ProxyStatistic{}).
-			Select("DISTINCT ON (proxy_id) proxy_id, level_id, response_time, attempt").
-			Order("proxy_id, created_at DESC, id DESC")
+		latestStats := buildLatestProxyStatisticSubQuery()
 		query = query.Joins("JOIN (?) AS ps ON ps.proxy_id = proxies.id", latestStats)
 
 		if len(filters.AnonymityLevels) > 0 {
@@ -798,16 +804,12 @@ func buildProxyListFilterQuery(userId uint, filters dto.ProxyListFilters) *gorm.
 	}
 
 	if len(selectedProtocols) > 0 {
-		protocolStats := DB.Model(&domain.ProxyStatistic{}).
-			Select("DISTINCT ON (proxy_id, protocol_id) proxy_id, protocol_id, alive").
-			Order("proxy_id, protocol_id, created_at DESC, id DESC")
-
 		aliveOnAllSelectedProtocols := DB.
-			Table("(?) AS ps_proto", protocolStats).
-			Select("ps_proto.proxy_id").
-			Joins("JOIN protocols proto ON proto.id = ps_proto.protocol_id").
-			Where("ps_proto.alive = ? AND LOWER(proto.name) IN ?", true, selectedProtocols).
-			Group("ps_proto.proxy_id").
+			Table("proxy_latest_statistics pls_proto").
+			Select("pls_proto.proxy_id").
+			Joins("JOIN protocols proto ON proto.id = pls_proto.protocol_id").
+			Where("pls_proto.alive = ? AND LOWER(proto.name) IN ?", true, selectedProtocols).
+			Group("pls_proto.proxy_id").
 			Having("COUNT(DISTINCT LOWER(proto.name)) = ?", len(selectedProtocols))
 
 		query = query.Where("proxies.id IN (?)", aliveOnAllSelectedProtocols)

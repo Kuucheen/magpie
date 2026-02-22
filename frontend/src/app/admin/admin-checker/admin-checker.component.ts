@@ -94,6 +94,7 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
       dynamic_threads: false,
       threads: [250],
       max_threads: [250],
+      save_responses: [true],
       retries: [2],
       timeout: [7500],
       protocols: this.fb.group({
@@ -138,6 +139,7 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
       dynamic_threads: checkerSettings.dynamic_threads,
       threads: checkerSettings.threads,
       max_threads: checkerSettings.max_threads ?? checkerSettings.threads ?? 250,
+      save_responses: checkerSettings.save_responses ?? true,
       retries: checkerSettings.retries,
       timeout: checkerSettings.timeout,
       checker_timer: {

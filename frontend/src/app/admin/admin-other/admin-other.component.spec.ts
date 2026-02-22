@@ -14,6 +14,7 @@ const defaultSettings: GlobalSettings = {
     dynamic_threads: true,
     threads: 250,
     max_threads: 250,
+    save_responses: true,
     retries: 2,
     timeout: 7500,
     checker_timer: timer(),

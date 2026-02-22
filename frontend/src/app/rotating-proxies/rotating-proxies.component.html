@@ -336,7 +336,7 @@
       <div class="table-shell">
         <p-table
           [value]="rotatingProxies()"
-          [tableStyle]="{'min-width': '820px'}"
+          [tableStyle]="{'min-width': '760px'}"
           responsiveLayout="scroll"
           class="rotators-table"
           [loading]="loading()"
@@ -345,12 +345,10 @@
           <ng-template pTemplate="header">
             <tr>
               <th>Name</th>
-              <th>Rotator</th>
-              <th>Serves</th>
-              <th>Rotator Access</th>
-              <th>Alive Proxies</th>
-              <th>Last Rotation</th>
-              <th>Last Served Proxy</th>
+              <th>Filters</th>
+              <th>Protocols</th>
+              <th>Access</th>
+              <th>Health</th>
               <th class="actions">Actions</th>
             </tr>
           </ng-template>
@@ -360,21 +358,21 @@
                 <tr class="rotator-skeleton-row">
                   <td>
                     <div class="rotator-skeleton-name">
-                      <p-skeleton width="9rem" height="0.9rem"></p-skeleton>
-                      <p-skeleton width="6rem" height="0.7rem"></p-skeleton>
-                      <p-skeleton width="8rem" height="0.7rem"></p-skeleton>
+                      <p-skeleton width="8.5rem" height="0.9rem"></p-skeleton>
+                      <p-skeleton width="7rem" height="0.7rem"></p-skeleton>
                     </div>
                   </td>
                   <td>
-                    <div class="rotator-skeleton-chips">
-                      <p-skeleton width="4rem" height="1.2rem" borderRadius="999px"></p-skeleton>
-                      <p-skeleton width="3.5rem" height="1.1rem" borderRadius="999px"></p-skeleton>
+                    <div class="rotator-skeleton-access">
+                      <p-skeleton width="12rem" height="0.85rem"></p-skeleton>
+                      <p-skeleton width="12rem" height="0.85rem"></p-skeleton>
+                      <p-skeleton width="10rem" height="0.85rem"></p-skeleton>
                     </div>
                   </td>
                   <td>
-                    <div class="rotator-skeleton-chips">
-                      <p-skeleton width="4rem" height="1.2rem" borderRadius="999px"></p-skeleton>
-                      <p-skeleton width="3.5rem" height="1.1rem" borderRadius="999px"></p-skeleton>
+                    <div class="rotator-skeleton-access">
+                      <p-skeleton width="10rem" height="0.85rem"></p-skeleton>
+                      <p-skeleton width="10rem" height="0.85rem"></p-skeleton>
                     </div>
                   </td>
                   <td>
@@ -384,18 +382,16 @@
                     </div>
                   </td>
                   <td>
-                    <p-skeleton width="2.5rem" height="0.85rem"></p-skeleton>
-                  </td>
-                  <td>
-                    <p-skeleton width="6rem" height="0.85rem"></p-skeleton>
-                  </td>
-                  <td>
-                    <p-skeleton width="7rem" height="0.85rem"></p-skeleton>
+                    <div class="rotator-skeleton-access">
+                      <p-skeleton width="2.5rem" height="0.95rem"></p-skeleton>
+                      <p-skeleton width="5.5rem" height="0.65rem"></p-skeleton>
+                    </div>
                   </td>
                   <td class="actions">
                     <div class="rotator-skeleton-actions">
-                      <p-skeleton width="4.5rem" height="1.5rem"></p-skeleton>
-                      <p-skeleton width="4.5rem" height="1.5rem"></p-skeleton>
+                      <p-skeleton width="2.2rem" height="2.2rem" borderRadius="999px"></p-skeleton>
+                      <p-skeleton width="2.2rem" height="2.2rem" borderRadius="999px"></p-skeleton>
+                      <p-skeleton width="2.2rem" height="2.2rem" borderRadius="999px"></p-skeleton>
                     </div>
                   </td>
                 </tr>
@@ -407,36 +403,42 @@
               <td class="name-cell">
                 <div class="name">{{ proxy.name }}</div>
                 <div class="created">Created {{ proxy.created_at | date:'short' }}</div>
-                <div class="reputation-filter">
+              </td>
+              <td class="filters-cell">
+                <div class="filter-line">
                   <span class="filter-label">Instance</span>
                   <span class="filter-value">{{ proxy.instance_name || proxy.instance_id || 'Unknown' }} · {{ proxy.instance_region || 'Unknown' }}</span>
                 </div>
-                <div class="reputation-filter">
+                <div class="filter-line">
                   <span class="filter-label">Reputation</span>
                   <span class="filter-value">{{ reputationFilterSummary(proxy.reputation_labels) }}</span>
                 </div>
-                <div class="reputation-filter">
+                <div class="filter-line">
                   <span class="filter-label">Uptime</span>
                   <span class="filter-value">{{ uptimeFilterSummary(proxy.uptime_filter_type, proxy.uptime_percentage) }}</span>
                 </div>
               </td>
-              <td>
-                <div class="chip-stack">
-                  <p-chip class="protocol-chip">{{ protocolLabel(proxy.listen_protocol ?? proxy.protocol) }}</p-chip>
-                  @if (proxy.listen_transport_protocol ?? proxy.transport_protocol) {
-                    <p-chip class="transport-chip">{{ transportLabel(proxy.listen_transport_protocol ?? proxy.transport_protocol ?? '') }}</p-chip>
-                  }
+              <td class="protocols-cell">
+                <div class="protocol-line">
+                  <span class="line-label">Clients</span>
+                  <div class="chip-inline">
+                    <p-chip class="protocol-chip">{{ protocolLabel(proxy.listen_protocol ?? proxy.protocol) }}</p-chip>
+                    @if (proxy.listen_transport_protocol ?? proxy.transport_protocol) {
+                      <p-chip class="transport-chip">{{ transportLabel(proxy.listen_transport_protocol ?? proxy.transport_protocol ?? '') }}</p-chip>
+                    }
+                  </div>
+                </div>
+                <div class="protocol-line">
+                  <span class="line-label">Upstream</span>
+                  <div class="chip-inline">
+                    <p-chip class="protocol-chip">{{ protocolLabel(proxy.protocol) }}</p-chip>
+                    @if (proxy.transport_protocol) {
+                      <p-chip class="transport-chip">{{ transportLabel(proxy.transport_protocol ?? '') }}</p-chip>
+                    }
+                  </div>
                 </div>
               </td>
-              <td>
-                <div class="chip-stack">
-                  <p-chip class="protocol-chip">{{ protocolLabel(proxy.protocol) }}</p-chip>
-                  @if (proxy.transport_protocol) {
-                    <p-chip class="transport-chip">{{ transportLabel(proxy.transport_protocol ?? '') }}</p-chip>
-                  }
-                </div>
-              </td>
-              <td>
+              <td class="access-cell">
                 <div class="rotator-cell">
                   <button type="button"
                           pButton
@@ -448,35 +450,37 @@
                   <span class="muted hint-text">Click to view credentials</span>
                 </div>
               </td>
-              <td>
-                <span class="alive-count">{{ proxy.alive_proxy_count }}</span>
-              </td>
-              <td>
-                @if (proxy.last_rotation_at) {
-                  {{ proxy.last_rotation_at | date:'short' }}
-                } @else {
-                  <span class="muted">Never</span>
-                }
-              </td>
-              <td>
-                @if (proxy.last_served_proxy) {
-                  <code>{{ proxy.last_served_proxy }}</code>
-                } @else {
-                  <span class="muted">Not rotated yet</span>
-                }
+              <td class="health-cell">
+                <div class="alive-count">{{ proxy.alive_proxy_count }}</div>
+                <span class="muted health-hint">matching proxies</span>
               </td>
               <td class="actions">
                 <div class="action-buttons">
                   <button pButton type="button"
+                          class="p-button-rounded p-button-text action-icon action-icon-details"
+                          icon="pi pi-eye"
+                          pTooltip="View details"
+                          tooltipPosition="top"
+                          aria-label="Details"
+                          (click)="showRotatorDetails(proxy)"
+                          [disabled]="isRotating(proxy.id)">
+                  </button>
+                  <button pButton type="button"
+                          class="p-button-rounded p-button-text action-icon action-icon-rotate"
                           icon="pi pi-sync"
-                          label="Rotate"
+                          pTooltip="Rotate now"
+                          tooltipPosition="top"
+                          aria-label="Rotate"
                           (click)="rotate(proxy)"
                           [loading]="isRotating(proxy.id)"
                           [disabled]="isRotating(proxy.id)">
                   </button>
                   <button pButton type="button"
+                          class="p-button-rounded p-button-text action-icon action-icon-delete"
                           icon="pi pi-trash"
-                          label="Delete"
+                          pTooltip="Delete rotator"
+                          tooltipPosition="top"
+                          aria-label="Delete"
                           severity="danger"
                           (click)="deleteProxy(proxy)"
                           [disabled]="isRotating(proxy.id)">
@@ -487,7 +491,7 @@
           </ng-template>
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td colspan="8">
+              <td colspan="6">
                 <div class="empty-state">
                   <p>No rotating proxies yet.</p>
                   <p class="field-hint">Create one above to start rotating through healthy proxies.</p>

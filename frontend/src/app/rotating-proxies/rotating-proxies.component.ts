@@ -10,6 +10,7 @@ import {SelectModule} from 'primeng/select';
 import {DialogModule} from 'primeng/dialog';
 import {MultiSelectModule} from 'primeng/multiselect';
 import {Chip} from 'primeng/chip';
+import {TooltipModule} from 'primeng/tooltip';
 
 import {environment} from '../../environments/environment';
 
@@ -42,6 +43,7 @@ type RotatorInstanceOption = {
     DatePipe,
     DialogModule,
     TooltipComponent,
+    TooltipModule,
     SkeletonModule,
   ],
   templateUrl: './rotating-proxies.component.html',

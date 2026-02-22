@@ -349,7 +349,6 @@
               <th>Name</th>
               <th>Filters</th>
               <th>Protocols</th>
-              <th>Access</th>
               <th>Health</th>
               <th class="actions">Actions</th>
             </tr>
@@ -375,12 +374,6 @@
                     <div class="rotator-skeleton-access">
                       <p-skeleton width="10rem" height="0.85rem"></p-skeleton>
                       <p-skeleton width="10rem" height="0.85rem"></p-skeleton>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="rotator-skeleton-access">
-                      <p-skeleton width="8rem" height="0.85rem"></p-skeleton>
-                      <p-skeleton width="6rem" height="0.65rem"></p-skeleton>
                     </div>
                   </td>
                   <td>
@@ -440,18 +433,6 @@
                   </div>
                 </div>
               </td>
-              <td class="access-cell">
-                <div class="rotator-cell">
-                  <button type="button"
-                          pButton
-                          class="p-button-text p-button-sm rotator-link"
-                          [label]="rotatorEndpoint(proxy) || 'View details'"
-                          (click)="showRotatorDetails(proxy)"
-                          [disabled]="!rotatorEndpoint(proxy)">
-                  </button>
-                  <span class="muted hint-text">Click to view credentials</span>
-                </div>
-              </td>
               <td class="health-cell">
                 <div class="alive-count">{{ proxy.alive_proxy_count }}</div>
                 <span class="muted health-hint">matching proxies</span>
@@ -493,7 +474,7 @@
           </ng-template>
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td colspan="6">
+              <td colspan="5">
                 <div class="empty-state">
                   <p>No rotating proxies yet.</p>
                   <p class="field-hint">Create one above to start rotating through healthy proxies.</p>

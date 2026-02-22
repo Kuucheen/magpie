@@ -576,7 +576,7 @@
             <span class="label">Protocol</span>
             <span class="value">
               @if (rotator.listen_protocol ?? rotator.protocol) {
-                <p-chip class="protocol-chip">{{ protocolLabel(rotator.listen_protocol ?? rotator.protocol ?? '') }}</p-chip>
+                <p-chip class="protocol-chip">{{ protocolLabel(rotator.listen_protocol ?? rotator.protocol) }}</p-chip>
               } @else {
                 <span class="muted">Unavailable</span>
               }
@@ -668,7 +668,7 @@
             <span class="label">Serves</span>
             <span class="value">
               @if (rotator.protocol) {
-                <p-chip class="protocol-chip">{{ protocolLabel(rotator.protocol ?? '') }}</p-chip>
+                <p-chip class="protocol-chip">{{ protocolLabel(rotator.protocol) }}</p-chip>
               } @else {
                 <span class="muted">Unavailable</span>
               }
@@ -678,7 +678,7 @@
             <span class="label">Proxy transport</span>
             <span class="value">
               @if (rotator.transport_protocol) {
-                <p-chip class="transport-chip">{{ transportLabel(rotator.transport_protocol ?? '') }}</p-chip>
+                <p-chip class="transport-chip">{{ transportLabel(rotator.transport_protocol) }}</p-chip>
               } @else {
                 <span class="muted">Unavailable</span>
               }

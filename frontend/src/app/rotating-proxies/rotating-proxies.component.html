@@ -28,217 +28,253 @@
           <span class="pill subtle-pill">Ports auto-assigned</span>
         </div>
 
-        <form [formGroup]="createForm" (ngSubmit)="createRotator()" class="create-form flex flex-col gap-5">
-          <div class="field-grid">
-            <div class="field-group">
-              <label class="field-label" for="rotatorName">Name</label>
-              <input id="rotatorName"
-                     type="text"
-                     pInputText
-                     class="p-inputtext-sm w-full"
-                     placeholder="My rotating proxy"
-                     maxlength="120"
-                     formControlName="name">
-              @if (createForm.get('name')?.invalid && (createForm.get('name')?.dirty || createForm.get('name')?.touched)) {
+        <form [formGroup]="createForm" (ngSubmit)="createRotator()" class="create-form">
+          @if (noProtocolsAvailable()) {
+            <div class="form-alert">
+              Enable at least one protocol in your account settings to create a rotator.
+            </div>
+          }
+
+          <div class="create-layout">
+            <div class="flow-column">
+              <section class="form-section">
+                <p class="section-step">Step 1</p>
+                <h4 class="subsection-title">Basics</h4>
+                <p class="subsection-hint">Choose a clear name so this endpoint is easy to find later.</p>
+                <div class="field-group">
+                  <label class="field-label" for="rotatorName">Name</label>
+                  <input id="rotatorName"
+                         type="text"
+                         pInputText
+                         class="p-inputtext-sm w-full"
+                         placeholder="My rotating proxy"
+                         maxlength="120"
+                         formControlName="name">
+                  @if (createForm.get('name')?.invalid && (createForm.get('name')?.dirty || createForm.get('name')?.touched)) {
                     <p class="field-error">Name is required and must be under 120 characters.</p>
-              }
-            </div>
-
-            <div></div>
-            <div></div>
-
-            <div class="field-group">
-              <label class="field-label" for="listenProtocol">Rotator Protocol</label>
-              <p-select inputId="listenProtocol"
-                        class="w-full"
-                        [options]="listenProtocolOptions()"
-                        optionLabel="label"
-                        optionValue="value"
-                        placeholder="Select a protocol"
-                        formControlName="listenProtocol">
-              </p-select>
-              <p class="field-hint">
-                @if (noProtocolsAvailable()) {
-                  Enable at least one protocol in your account settings to create a rotator.
-                } @else {
-                  This is how clients will connect to the rotating proxy itself.
-                }
-              </p>
-            </div>
-
-            <div class="field-group">
-              <label class="field-label" for="listenTransportProtocol">
-                Rotator Transport
-                <app-tooltip [text]="transportProtocolTooltip"></app-tooltip>
-              </label>
-              <p-select inputId="listenTransportProtocol"
-                        class="w-full"
-                        [options]="transportProtocolOptions"
-                        optionLabel="label"
-                        optionValue="value"
-                        placeholder="Select a transport"
-                        formControlName="listenTransportProtocol">
-                <ng-template pTemplate="selectedItem" let-option>
-                  @if (option) {
-                    <div class="transport-option">
-                      <span>{{ option.label }}</span>
-                      @if (option.value === 'tcp') {
-                        <p-chip class="transport-chip">Default</p-chip>
-                      }
-                    </div>
                   }
-                </ng-template>
-                <ng-template pTemplate="item" let-option>
-                  <div class="transport-option">
-                    <span>{{ option.label }}</span>
-                    @if (option.value === 'tcp') {
-                      <p-chip class="transport-chip">Default</p-chip>
-                    }
+                </div>
+              </section>
+
+              <section class="form-section">
+                <p class="section-step">Step 2</p>
+                <h4 class="subsection-title">How Clients Connect</h4>
+                <p class="subsection-hint">Set the protocol and transport clients use for the rotator endpoint.</p>
+                <div class="form-row">
+                  <div class="field-group">
+                    <label class="field-label" for="listenProtocol">Rotator Protocol</label>
+                    <p-select inputId="listenProtocol"
+                              class="w-full"
+                              [options]="listenProtocolOptions()"
+                              optionLabel="label"
+                              optionValue="value"
+                              placeholder="Select a protocol"
+                              formControlName="listenProtocol">
+                    </p-select>
                   </div>
-                </ng-template>
-              </p-select>
-              <p class="field-hint">
-                Choose the transport layer clients will use to reach this rotator.
-              </p>
+                  <div class="field-group">
+                    <label class="field-label" for="listenTransportProtocol">
+                      Rotator Transport
+                      <app-tooltip [text]="transportProtocolTooltip"></app-tooltip>
+                    </label>
+                    <p-select inputId="listenTransportProtocol"
+                              class="w-full"
+                              [options]="transportProtocolOptions"
+                              optionLabel="label"
+                              optionValue="value"
+                              placeholder="Select a transport"
+                              formControlName="listenTransportProtocol">
+                      <ng-template pTemplate="selectedItem" let-option>
+                        @if (option) {
+                          <div class="transport-option">
+                            <span>{{ option.label }}</span>
+                            @if (option.value === 'tcp') {
+                              <p-chip class="transport-chip">Default</p-chip>
+                            }
+                          </div>
+                        }
+                      </ng-template>
+                      <ng-template pTemplate="item" let-option>
+                        <div class="transport-option">
+                          <span>{{ option.label }}</span>
+                          @if (option.value === 'tcp') {
+                            <p-chip class="transport-chip">Default</p-chip>
+                          }
+                        </div>
+                      </ng-template>
+                    </p-select>
+                  </div>
+                </div>
+              </section>
+
+              <section class="form-section">
+                <p class="section-step">Step 3</p>
+                <h4 class="subsection-title">What The Rotator Serves</h4>
+                <p class="subsection-hint">Pick the protocol and transport used when connecting to upstream proxies.</p>
+                <div class="form-row">
+                  <div class="field-group">
+                    <label class="field-label" for="rotatorProtocol">Proxy Protocol</label>
+                    <p-select inputId="rotatorProtocol"
+                              class="w-full"
+                              [options]="protocolOptions()"
+                              optionLabel="label"
+                              optionValue="value"
+                              placeholder="Select a protocol"
+                              formControlName="protocol">
+                    </p-select>
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label" for="transportProtocol">
+                      Proxy Transport
+                      <app-tooltip [text]="transportProtocolTooltip"></app-tooltip>
+                    </label>
+                    <p-select inputId="transportProtocol"
+                              class="w-full"
+                              [options]="transportProtocolOptions"
+                              optionLabel="label"
+                              optionValue="value"
+                              placeholder="Select a transport"
+                              formControlName="transportProtocol">
+                      <ng-template pTemplate="selectedItem" let-option>
+                        @if (option) {
+                          <div class="transport-option">
+                            <span>{{ option.label }}</span>
+                            @if (option.value === 'tcp') {
+                              <p-chip class="transport-chip">Default</p-chip>
+                            }
+                          </div>
+                        }
+                      </ng-template>
+                      <ng-template pTemplate="item" let-option>
+                        <div class="transport-option">
+                          <span>{{ option.label }}</span>
+                          @if (option.value === 'tcp') {
+                            <p-chip class="transport-chip">Default</p-chip>
+                          }
+                        </div>
+                      </ng-template>
+                    </p-select>
+                  </div>
+                </div>
+              </section>
             </div>
 
-            <div></div>
-
-            <div class="field-group">
-              <label class="field-label" for="rotatorProtocol">Proxy Protocol</label>
-              <p-select inputId="rotatorProtocol"
-                        class="w-full"
-                        [options]="protocolOptions()"
-                        optionLabel="label"
-                        optionValue="value"
-                        placeholder="Select a protocol"
-                        formControlName="protocol">
-              </p-select>
-              <p class="field-hint">
-                @if (noProtocolsAvailable()) {
-                  Enable at least one protocol in your account settings to create a rotator.
-                } @else {
-                  Choose which upstream proxy protocol this rotator should serve.
-                }
-              </p>
-            </div>
-
-            <div class="field-group">
-              <label class="field-label" for="transportProtocol">
-                Proxy Transport
-                <app-tooltip [text]="transportProtocolTooltip"></app-tooltip>
-              </label>
-              <p-select inputId="transportProtocol"
-                        class="w-full"
-                        [options]="transportProtocolOptions"
-                        optionLabel="label"
-                        optionValue="value"
-                        placeholder="Select a transport"
-                        formControlName="transportProtocol">
-                <ng-template pTemplate="selectedItem" let-option>
-                  @if (option) {
-                    <div class="transport-option">
-                      <span>{{ option.label }}</span>
-                      @if (option.value === 'tcp') {
-                        <p-chip class="transport-chip">Default</p-chip>
-                      }
-                    </div>
+            <aside class="support-column">
+              <section class="form-section">
+                <p class="section-step">Optional</p>
+                <h4 class="subsection-title">Traffic Filters</h4>
+                <p class="subsection-hint">Skip these if you want the broadest proxy pool.</p>
+                <div class="field-group">
+                  <label class="field-label" for="uptimePercentage">Uptime Filter</label>
+                  <div class="uptime-controls">
+                    <p-select inputId="uptimeFilterType"
+                              class="w-full"
+                              [options]="uptimeFilterTypeOptions"
+                              optionLabel="label"
+                              optionValue="value"
+                              formControlName="uptimeFilterType">
+                    </p-select>
+                    <input id="uptimePercentage"
+                           type="number"
+                           pInputText
+                           class="p-inputtext-sm w-full"
+                           min="0"
+                           max="100"
+                           step="0.1"
+                           placeholder="0-100"
+                           formControlName="uptimePercentage">
+                  </div>
+                  @if (createForm.get('uptimePercentage')?.invalid && (createForm.get('uptimePercentage')?.dirty || createForm.get('uptimePercentage')?.touched)) {
+                    <p class="field-error">Uptime percentage must be between 0 and 100.</p>
+                  } @else {
+                    <p class="field-hint">Leave empty to allow any uptime ratio.</p>
                   }
-                </ng-template>
-                <ng-template pTemplate="item" let-option>
-                  <div class="transport-option">
-                    <span>{{ option.label }}</span>
-                    @if (option.value === 'tcp') {
-                      <p-chip class="transport-chip">Default</p-chip>
-                    }
+                </div>
+                <div class="field-group">
+                  <label class="field-label" for="reputationFilter">Reputation Filter</label>
+                  <p-multiSelect inputId="reputationFilter"
+                                 class="w-full"
+                                 formControlName="reputationLabels"
+                                 [options]="reputationOptions"
+                                 optionLabel="label"
+                                 optionValue="value">
+                  </p-multiSelect>
+                  <p class="field-hint">Choose which proxy reputations this rotator can use.</p>
+                </div>
+              </section>
+
+              <section class="form-section auth-section">
+                <h4 class="subsection-title">Authentication</h4>
+                <p class="subsection-hint">Require credentials before clients can use this rotator.</p>
+                <label class="auth-toggle">
+                  <input type="checkbox" formControlName="authRequired">
+                  <span>Require authentication</span>
+                </label>
+
+                @if (authEnabled()) {
+                  <div class="auth-grid">
+                    <div class="field-group">
+                      <label class="field-label" for="authUsername">Auth Username</label>
+                      <input id="authUsername"
+                             type="text"
+                             pInputText
+                             class="p-inputtext-sm w-full"
+                             maxlength="120"
+                             formControlName="authUsername">
+                    </div>
+
+                    <div class="field-group">
+                      <label class="field-label" for="authPassword">Auth Password</label>
+                      <input id="authPassword"
+                             type="text"
+                             pInputText
+                             class="p-inputtext-sm w-full"
+                             maxlength="120"
+                             formControlName="authPassword">
+                    </div>
                   </div>
-                </ng-template>
-              </p-select>
-              <p class="field-hint">
-                Select the transport layer used to connect to upstream proxies.
-              </p>
-            </div>
+                }
+              </section>
 
-            <div class="field-group">
-              <label class="field-label" for="uptimePercentage">Uptime Filter</label>
-              <div class="uptime-controls">
-                <p-select inputId="uptimeFilterType"
-                          class="w-full"
-                          [options]="uptimeFilterTypeOptions"
-                          optionLabel="label"
-                          optionValue="value"
-                          formControlName="uptimeFilterType">
-                </p-select>
-                <input id="uptimePercentage"
-                       type="number"
-                       pInputText
-                       class="p-inputtext-sm w-full"
-                       min="0"
-                       max="100"
-                       step="0.1"
-                       placeholder="0-100"
-                       formControlName="uptimePercentage">
-              </div>
-              @if (createForm.get('uptimePercentage')?.invalid && (createForm.get('uptimePercentage')?.dirty || createForm.get('uptimePercentage')?.touched)) {
-                <p class="field-error">Uptime percentage must be between 0 and 100.</p>
-              } @else {
-                <p class="field-hint">Leave empty to allow any uptime ratio for the selected proxy protocol.</p>
-              }
-            </div>
-
-            <div class="field-group full">
-              <label class="field-label" for="reputationFilter">Reputation Filter</label>
-              <p-multiSelect inputId="reputationFilter"
-                             class="w-full"
-                             display="chip"
-                             formControlName="reputationLabels"
-                             [options]="reputationOptions"
-                             optionLabel="label"
-                             optionValue="value">
-              </p-multiSelect>
-              <p class="field-hint">Pick which proxy reputations this rotator can serve. Leave empty to use every available proxy.</p>
-            </div>
-          </div>
-
-          <div class="auth-block">
-            <div class="auth-top flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p class="field-label">Authentication</p>
-                <p class="field-hint">Require credentials before a client can use the rotator.</p>
-              </div>
-              <label class="auth-toggle">
-                <input type="checkbox" formControlName="authRequired">
-                <span>Require authentication</span>
-              </label>
-            </div>
-
-            @if (authEnabled()) {
-              <div class="auth-grid">
-                <div class="field-group">
-                  <label class="field-label" for="authUsername">Auth Username</label>
-                  <input id="authUsername"
-                         type="text"
-                         pInputText
-                         class="p-inputtext-sm w-full"
-                         maxlength="120"
-                         formControlName="authUsername">
+              <section class="form-section summary-section">
+                <h4 class="subsection-title">Request Summary</h4>
+                <p class="subsection-hint">Quick sanity check before creating the rotator.</p>
+                <div class="summary-list">
+                  <div class="summary-item">
+                    <span class="summary-label">Rotator</span>
+                    <span class="summary-value">
+                      {{ protocolLabel(createForm.get('listenProtocol')?.value ?? '') || 'Not set' }}
+                      /
+                      {{ transportLabel(createForm.get('listenTransportProtocol')?.value ?? '') || 'Not set' }}
+                    </span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Serves</span>
+                    <span class="summary-value">
+                      {{ protocolLabel(createForm.get('protocol')?.value ?? '') || 'Not set' }}
+                      /
+                      {{ transportLabel(createForm.get('transportProtocol')?.value ?? '') || 'Not set' }}
+                    </span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Reputation</span>
+                    <span class="summary-value">{{ reputationFilterSummary(createForm.get('reputationLabels')?.value) }}</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Uptime</span>
+                    <span class="summary-value">{{ uptimeFilterSummary(createForm.get('uptimeFilterType')?.value, createForm.get('uptimePercentage')?.value) }}</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Auth</span>
+                    <span class="summary-value">{{ createForm.get('authRequired')?.value ? 'Required' : 'Not required' }}</span>
+                  </div>
                 </div>
-
-                <div class="field-group">
-                  <label class="field-label" for="authPassword">Auth Password</label>
-                  <input id="authPassword"
-                         type="text"
-                         pInputText
-                         class="p-inputtext-sm w-full"
-                         maxlength="120"
-                         formControlName="authPassword">
-                </div>
-              </div>
-            }
+              </section>
+            </aside>
           </div>
 
           <div class="form-footer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <p class="field-hint mb-0">Rotators will prefer healthy proxies that match your filters.</p>
+            <p class="field-hint mb-0">Ports are assigned automatically after creation.</p>
             <button pButton
                     type="submit"
                     label="Create Rotator"

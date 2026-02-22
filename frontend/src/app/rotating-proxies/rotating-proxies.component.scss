@@ -28,36 +28,15 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
 }
 
 .panel-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 1.25rem;
   margin-top: 1.5rem;
-  align-items: stretch;
 }
 
 .section-card {
-  position: relative;
-  overflow: hidden;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
-
-  &:before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: radial-gradient(circle at top left, rgba(var(--theme-primary-500-rgb), 0.14), transparent 60%);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-  }
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 
   &:hover {
-    border-color: rgba(var(--theme-primary-500-rgb), 0.35);
-    box-shadow: 0 22px 40px rgba(8, 12, 16, 0.45);
-
-    &:before {
-      opacity: 1;
-    }
+    border-color: rgba(var(--theme-primary-500-rgb), 0.26);
+    background-color: rgba(10, 14, 24, 0.5);
   }
 }
 
@@ -102,23 +81,78 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
 }
 
 .create-form {
-  margin-top: 0.75rem;
+  margin-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
-.field-grid {
+.form-alert {
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.create-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem 1.1rem;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.flow-column,
+.support-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.form-section {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 14px;
+  padding: 0.95rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.section-step {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.subsection-title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 650;
+  color: #f8fafc;
+}
+
+.subsection-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: $muted;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
 }
 
 .field-group {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-
-  &.full {
-    grid-column: span 3;
-  }
 }
 
 .uptime-controls {
@@ -149,22 +183,13 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
   color: #f87171;
 }
 
-.auth-block {
-  border: 1px dashed rgba(148, 163, 184, 0.22);
-  background: rgba(148, 163, 184, 0.05);
-  border-radius: 14px;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
 .auth-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
   color: #f8fafc;
   font-weight: 600;
+  width: fit-content;
 
   input[type='checkbox'] {
     width: 16px;
@@ -179,8 +204,51 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
   gap: 0.85rem;
 }
 
+.summary-section {
+  gap: 0.55rem;
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.4);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.summary-label {
+  color: $muted;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.summary-value {
+  font-size: 0.82rem;
+  color: #e2e8f0;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
 .form-footer {
-  margin-top: 0.5rem;
+  margin-top: 0.2rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .table-shell {
@@ -506,13 +574,25 @@ $accent: rgba(var(--theme-primary-500-rgb), 1);
   background: rgba(148, 163, 184, 0.12);
 }
 
-@media (max-width: 768px) {
-  .field-group.full {
-    grid-column: span 1;
+@media (max-width: 1024px) {
+  .create-layout {
+    grid-template-columns: 1fr;
   }
+}
 
+@media (max-width: 768px) {
+  .form-row,
   .uptime-controls {
     grid-template-columns: 1fr;
+  }
+
+  .summary-item {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .summary-value {
+    text-align: left;
   }
 
   .actions {

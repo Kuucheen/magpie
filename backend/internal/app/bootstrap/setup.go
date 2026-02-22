@@ -22,6 +22,8 @@ import (
 	"magpie/internal/support"
 )
 
+const startupProxyBatchSize = 2000
+
 func Setup() {
 	config.ReadSettings()
 
@@ -105,16 +107,23 @@ func Setup() {
 
 	}()
 
-	proxies, err := database.GetAllProxies()
-	if err != nil {
-		log.Error("Error getting all proxies:", "error", err)
-	} else {
+	queuedProxies := 0
+	err := database.ForEachProxyBatch(startupProxyBatchSize, func(proxies []domain.Proxy) error {
 		missingGeo := database.FilterProxiesMissingGeo(proxies)
 		if len(missingGeo) > 0 {
 			database.AsyncEnrichProxyMetadata(missingGeo)
 		}
-		proxyqueue.PublicProxyQueue.AddToQueue(proxies)
-		log.Infof("Added %d proxies to queue", len(proxies))
+
+		if err := proxyqueue.PublicProxyQueue.AddToQueue(proxies); err != nil {
+			return err
+		}
+		queuedProxies += len(proxies)
+		return nil
+	})
+	if err != nil {
+		log.Error("Error queueing startup proxies", "error", err)
+	} else if queuedProxies > 0 {
+		log.Infof("Added %d proxies to queue", queuedProxies)
 	}
 
 	scrapeSites, err := database.GetAllScrapeSites()

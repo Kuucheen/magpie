@@ -27,6 +27,7 @@ const (
 	minBatchSize               = 100   // Minimum batch size to maintain efficiency
 	deleteChunkSize            = 5000  // Keep large deletes under Postgres parameter limits
 	autoRemoveCleanupBatchSize = 2000
+	proxyIterationBatchSize    = 2000
 
 	proxiesPerPage    = 40
 	maxProxiesPerPage = 100
@@ -476,28 +477,32 @@ func GetAllProxyCountOfUser(userId uint) int64 {
 	return count
 }
 
-func GetAllProxies() ([]domain.Proxy, error) {
-	var allProxies []domain.Proxy
-	const batchSize = maxParamsPerBatch
+func ForEachProxyBatch(batchSize int, fn func([]domain.Proxy) error) error {
+	if fn == nil {
+		return errors.New("for each proxy batch callback is nil")
+	}
+	if batchSize <= 0 {
+		batchSize = proxyIterationBatchSize
+	}
 
-	collectedProxies := make([]domain.Proxy, 0)
-
-	err := DB.
+	var batchProxies []domain.Proxy
+	result := DB.
 		Model(&domain.Proxy{}).
 		Distinct("proxies.*").
 		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id").
 		Preload("Users", preloadCheckerUsers).
 		Order("proxies.id").
-		FindInBatches(&allProxies, batchSize, func(tx *gorm.DB, batch int) error {
-			collectedProxies = append(collectedProxies, allProxies...)
-			return nil
+		FindInBatches(&batchProxies, batchSize, func(tx *gorm.DB, _ int) error {
+			if len(batchProxies) == 0 {
+				return nil
+			}
+
+			currentBatch := make([]domain.Proxy, len(batchProxies))
+			copy(currentBatch, batchProxies)
+			return fn(currentBatch)
 		})
 
-	if err.Error != nil {
-		return nil, err.Error
-	}
-
-	return collectedProxies, nil
+	return result.Error
 }
 
 func GetProxyInfoPage(userId uint, page int) []dto.ProxyInfo {

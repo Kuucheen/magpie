@@ -33,6 +33,10 @@ func NewManager() *Manager {
 var GlobalManager = NewManager()
 
 func (m *Manager) StartAll() {
+	m.Reconcile()
+}
+
+func (m *Manager) Reconcile() {
 	start, end := support.GetRotatingProxyPortRange()
 	rotators, err := database.GetAllRotatingProxies()
 	if err != nil {
@@ -40,13 +44,56 @@ func (m *Manager) StartAll() {
 		return
 	}
 
+	desired := make(map[uint64]domain.RotatingProxy, len(rotators))
 	for _, rotator := range rotators {
 		if rotator.ListenPort == 0 || int(rotator.ListenPort) < start || int(rotator.ListenPort) > end {
 			log.Warn("rotating proxy manager: skipping rotator without valid port", "rotator_id", rotator.ID, "listen_port", rotator.ListenPort)
 			continue
 		}
+		desired[rotator.ID] = rotator
+	}
+
+	m.mu.Lock()
+	for id, server := range m.servers {
+		if _, ok := desired[id]; ok {
+			continue
+		}
+		server.Stop()
+		delete(m.servers, id)
+		log.Info("rotating proxy server stopped", "rotator_id", id)
+	}
+	m.mu.Unlock()
+
+	for _, rotator := range desired {
+		m.mu.RLock()
+		_, alreadyRunning := m.servers[rotator.ID]
+		m.mu.RUnlock()
+		if alreadyRunning {
+			continue
+		}
 		if err := m.startServer(rotator); err != nil {
 			log.Error("rotating proxy manager: failed to start server", "rotator_id", rotator.ID, "port", rotator.ListenPort, "error", err)
+		}
+	}
+}
+
+func (m *Manager) StartSyncLoop(ctx context.Context, interval time.Duration) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.Reconcile()
 		}
 	}
 }

@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"magpie/internal/domain"
@@ -95,6 +96,10 @@ func SetupDB(opts ...Option) (*gorm.DB, error) {
 	if cfg.AutoMigrate {
 		if err := ensureProxyReputationSchema(DB); err != nil {
 			log.Error("Failed to ensure proxy reputation schema", "error", err)
+		}
+
+		if err := ensureRotatingProxySchema(DB); err != nil {
+			log.Error("Failed to ensure rotating proxy schema", "error", err)
 		}
 
 		if err := ensureBlacklistSchema(DB); err != nil {
@@ -300,6 +305,44 @@ func ensureBlacklistSchema(db *gorm.DB) error {
 	for _, stmt := range stmts {
 		if err := db.Exec(stmt).Error; err != nil {
 			return fmt.Errorf("blacklist schema: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func ensureRotatingProxySchema(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("nil database connection")
+	}
+	if !db.Migrator().HasTable(&domain.RotatingProxy{}) {
+		return nil
+	}
+
+	currentInstanceID := support.GetInstanceID()
+	stmts := []string{
+		`ALTER TABLE IF EXISTS rotating_proxies ADD COLUMN IF NOT EXISTS instance_id varchar(191)`,
+		`ALTER TABLE IF EXISTS rotating_proxies ADD COLUMN IF NOT EXISTS instance_name varchar(120)`,
+		`ALTER TABLE IF EXISTS rotating_proxies ADD COLUMN IF NOT EXISTS instance_region varchar(120)`,
+		`UPDATE rotating_proxies SET instance_id = ? WHERE COALESCE(instance_id, '') = ''`,
+		`UPDATE rotating_proxies SET instance_name = instance_id WHERE COALESCE(instance_name, '') = ''`,
+		`UPDATE rotating_proxies SET instance_region = 'Unknown' WHERE COALESCE(instance_region, '') = ''`,
+		`ALTER TABLE IF EXISTS rotating_proxies ALTER COLUMN instance_id SET NOT NULL`,
+		`ALTER TABLE IF EXISTS rotating_proxies ALTER COLUMN instance_name SET NOT NULL`,
+		`ALTER TABLE IF EXISTS rotating_proxies ALTER COLUMN instance_region SET NOT NULL`,
+		`DROP INDEX IF EXISTS idx_rotating_proxies_listen_port`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_rotating_instance_port ON rotating_proxies (instance_id, listen_port)`,
+	}
+
+	for _, stmt := range stmts {
+		if strings.Contains(stmt, "?") {
+			if err := db.Exec(stmt, currentInstanceID).Error; err != nil {
+				return fmt.Errorf("rotating proxy schema: %w", err)
+			}
+			continue
+		}
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("rotating proxy schema: %w", err)
 		}
 	}
 

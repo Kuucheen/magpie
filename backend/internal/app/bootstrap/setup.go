@@ -142,6 +142,11 @@ func Setup() {
 	}
 
 	rotatingproxy.GlobalManager.StartAll()
+	syncIntervalSeconds := support.GetEnvInt("ROTATING_PROXY_SYNC_INTERVAL_SECONDS", 10)
+	if syncIntervalSeconds <= 0 {
+		syncIntervalSeconds = 10
+	}
+	go rotatingproxy.GlobalManager.StartSyncLoop(context.Background(), time.Duration(syncIntervalSeconds)*time.Second)
 
 	// Routines
 

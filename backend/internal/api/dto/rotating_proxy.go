@@ -5,6 +5,9 @@ import "time"
 type RotatingProxy struct {
 	ID                      uint64     `json:"id"`
 	Name                    string     `json:"name"`
+	InstanceID              string     `json:"instance_id,omitempty"`
+	InstanceName            string     `json:"instance_name,omitempty"`
+	InstanceRegion          string     `json:"instance_region,omitempty"`
 	Protocol                string     `json:"protocol"`
 	ListenProtocol          string     `json:"listen_protocol,omitempty"`
 	TransportProtocol       string     `json:"transport_protocol,omitempty"`
@@ -26,6 +29,9 @@ type RotatingProxy struct {
 
 type RotatingProxyCreateRequest struct {
 	Name                    string   `json:"name"`
+	InstanceID              string   `json:"instance_id,omitempty"`
+	InstanceName            string   `json:"instance_name,omitempty"`
+	InstanceRegion          string   `json:"instance_region,omitempty"`
 	Protocol                string   `json:"protocol"`
 	ListenProtocol          string   `json:"listen_protocol,omitempty"`
 	TransportProtocol       string   `json:"transport_protocol,omitempty"`

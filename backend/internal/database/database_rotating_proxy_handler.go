@@ -46,6 +46,7 @@ const (
 	rotatingProxyNameMaxLength = 120
 	uptimeFilterMin            = "min"
 	uptimeFilterMax            = "max"
+	defaultInstanceRegion      = "Unknown"
 )
 
 func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*dto.RotatingProxy, error) {
@@ -73,6 +74,18 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 	listenTransportProtocol := support.NormalizeTransportProtocol(payload.ListenTransportProtocol)
 	if strings.TrimSpace(payload.ListenTransportProtocol) == "" {
 		listenTransportProtocol = transportProtocol
+	}
+	instanceID := strings.TrimSpace(payload.InstanceID)
+	if instanceID == "" {
+		instanceID = support.GetInstanceID()
+	}
+	instanceName := strings.TrimSpace(payload.InstanceName)
+	if instanceName == "" {
+		instanceName = instanceID
+	}
+	instanceRegion := strings.TrimSpace(payload.InstanceRegion)
+	if instanceRegion == "" {
+		instanceRegion = defaultInstanceRegion
 	}
 
 	if payload.AuthRequired {
@@ -123,6 +136,9 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 		entity := domain.RotatingProxy{
 			UserID:                  userID,
 			Name:                    name,
+			InstanceID:              instanceID,
+			InstanceName:            instanceName,
+			InstanceRegion:          instanceRegion,
 			ProtocolID:              proxyProtocol.ID,
 			ListenProtocolID:        listenProtocol.ID,
 			TransportProtocol:       transportProtocol,
@@ -135,7 +151,7 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 			ReputationLabels:        domain.StringList(filters),
 		}
 
-		listenPort, err := allocateListenPort(tx)
+		listenPort, err := allocateListenPort(tx, instanceID)
 		if err != nil {
 			return err
 		}
@@ -156,6 +172,9 @@ func CreateRotatingProxy(userID uint, payload dto.RotatingProxyCreateRequest) (*
 		result = &dto.RotatingProxy{
 			ID:                      entity.ID,
 			Name:                    entity.Name,
+			InstanceID:              entity.InstanceID,
+			InstanceName:            entity.InstanceName,
+			InstanceRegion:          entity.InstanceRegion,
 			Protocol:                proxyProtocol.Name,
 			ListenProtocol:          listenProtocol.Name,
 			TransportProtocol:       transportProtocol,
@@ -217,6 +236,18 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 		}
 		labels := sanitizeRotatorReputationLabels(row.ReputationLabels.Clone())
 		uptimeFilterType, uptimePercentage := normalizeRotatorUptimeFilter(row.UptimeFilterType, row.UptimePercentage)
+		instanceID := strings.TrimSpace(row.InstanceID)
+		if instanceID == "" {
+			instanceID = support.GetInstanceID()
+		}
+		instanceName := strings.TrimSpace(row.InstanceName)
+		if instanceName == "" {
+			instanceName = instanceID
+		}
+		instanceRegion := strings.TrimSpace(row.InstanceRegion)
+		if instanceRegion == "" {
+			instanceRegion = defaultInstanceRegion
+		}
 		proxies, err := getAliveProxiesCached(userID, row.ProtocolID, labels, uptimeFilterType, uptimePercentage, protocolCache)
 		if err != nil {
 			return nil, err
@@ -233,6 +264,9 @@ func ListRotatingProxies(userID uint) ([]dto.RotatingProxy, error) {
 		result = append(result, dto.RotatingProxy{
 			ID:                      row.ID,
 			Name:                    row.Name,
+			InstanceID:              instanceID,
+			InstanceName:            instanceName,
+			InstanceRegion:          instanceRegion,
 			Protocol:                protocolName,
 			ListenProtocol:          listenProtocol,
 			TransportProtocol:       transportProtocol,
@@ -492,7 +526,7 @@ func isUniqueConstraintError(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "duplicate key value violates unique constraint")
 }
 
-func allocateListenPort(tx *gorm.DB) (uint16, error) {
+func allocateListenPort(tx *gorm.DB, instanceID string) (uint16, error) {
 	start, end := support.GetRotatingProxyPortRange()
 	if start <= 0 || end <= 0 {
 		return 0, ErrRotatingProxyPortExhausted
@@ -516,7 +550,7 @@ func allocateListenPort(tx *gorm.DB) (uint16, error) {
 	for _, port := range ports {
 		var existing int64
 		if err := tx.Model(&domain.RotatingProxy{}).
-			Where("listen_port = ?", port).
+			Where("instance_id = ? AND listen_port = ?", instanceID, port).
 			Count(&existing).Error; err != nil {
 			return 0, err
 		}
@@ -630,10 +664,13 @@ func GetAllRotatingProxies() ([]domain.RotatingProxy, error) {
 		return nil, fmt.Errorf("rotating proxy: database connection was not initialised")
 	}
 
+	instanceID := support.GetInstanceID()
+
 	var proxies []domain.RotatingProxy
 	if err := DB.
 		Preload("Protocol").
 		Preload("ListenProtocol").
+		Where("instance_id = ?", instanceID).
 		Order("created_at ASC").
 		Find(&proxies).Error; err != nil {
 		return nil, err
@@ -646,16 +683,65 @@ func GetAllRotatingProxies() ([]domain.RotatingProxy, error) {
 	return proxies, nil
 }
 
+func CountRotatingProxiesByInstanceIDs(instanceIDs []string) (map[string]int, error) {
+	if DB == nil {
+		return nil, fmt.Errorf("rotating proxy: database connection was not initialised")
+	}
+
+	cleanIDs := make([]string, 0, len(instanceIDs))
+	seen := make(map[string]struct{}, len(instanceIDs))
+	for _, raw := range instanceIDs {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		cleanIDs = append(cleanIDs, value)
+	}
+	if len(cleanIDs) == 0 {
+		return map[string]int{}, nil
+	}
+
+	type instanceCount struct {
+		InstanceID string `gorm:"column:instance_id"`
+		Count      int64  `gorm:"column:count"`
+	}
+	var rows []instanceCount
+	if err := DB.
+		Model(&domain.RotatingProxy{}).
+		Select("instance_id, COUNT(*) AS count").
+		Where("instance_id IN ?", cleanIDs).
+		Group("instance_id").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]int, len(rows))
+	for _, row := range rows {
+		id := strings.TrimSpace(row.InstanceID)
+		if id == "" {
+			continue
+		}
+		result[id] = int(row.Count)
+	}
+	return result, nil
+}
+
 func GetRotatingProxyByID(rotatorID uint64) (*domain.RotatingProxy, error) {
 	if DB == nil {
 		return nil, fmt.Errorf("rotating proxy: database connection was not initialised")
 	}
 
+	instanceID := support.GetInstanceID()
+
 	var proxy domain.RotatingProxy
 	if err := DB.
 		Preload("Protocol").
 		Preload("ListenProtocol").
-		Where("id = ?", rotatorID).
+		Where("id = ? AND instance_id = ?", rotatorID, instanceID).
 		First(&proxy).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrRotatingProxyNotFound
@@ -692,4 +778,13 @@ func normalizeRotatingProxyProtocols(rotator *domain.RotatingProxy) {
 	rotator.ListenTransportProtocol = listenTransportProtocol
 	rotator.UptimeFilterType = uptimeFilterType
 	rotator.UptimePercentage = cloneFloat64Ptr(uptimePercentage)
+	if strings.TrimSpace(rotator.InstanceID) == "" {
+		rotator.InstanceID = support.GetInstanceID()
+	}
+	if strings.TrimSpace(rotator.InstanceName) == "" {
+		rotator.InstanceName = rotator.InstanceID
+	}
+	if strings.TrimSpace(rotator.InstanceRegion) == "" {
+		rotator.InstanceRegion = defaultInstanceRegion
+	}
 }

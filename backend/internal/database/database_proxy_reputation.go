@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	reputationSampleLimit     = 50
+	reputationSampleLimit     = 20
 	reputationDefaultProtocol = "unknown"
 	// PostgreSQL allows at most 65535 bind parameters per query, so keep slices below that.
 	reputationBatchSize = 60000

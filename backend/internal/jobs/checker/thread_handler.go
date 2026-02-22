@@ -28,7 +28,7 @@ var (
 )
 
 const (
-	maxResponseBodyLength = 4096
+	maxResponseBodyLength = 512
 	userCacheTTL          = 5 * time.Second
 )
 
@@ -346,7 +346,6 @@ func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*request
 				ProxyID:      proxy.ID,
 				ProtocolID:   check.protocolID,
 				JudgeID:      item.judge.ID,
-				ResponseBody: truncatedBody,
 				CreatedAt:    time.Now().UTC(),
 			}
 
@@ -360,6 +359,8 @@ func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*request
 				statistic.LevelID = &lvl
 				statistic.Alive = true
 				userSuccess[check.userID] = true
+			} else {
+				statistic.ResponseBody = truncatedBody
 			}
 
 			jobruntime.AddProxyStatistic(statistic)

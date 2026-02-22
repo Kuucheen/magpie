@@ -7,15 +7,6 @@
           Spin up protocol-specific rotators, gate them with authentication, and pull fresh proxies on demand.
         </p>
       </div>
-      <p-button
-        type="button"
-        label="Refresh"
-        icon="pi pi-refresh"
-        [disabled]="loading()"
-        (onClick)="loadInitialData()"
-        styleClass="refresh-button"
-      >
-      </p-button>
     </header>
 
     <div class="panel-grid">
@@ -324,12 +315,23 @@
           <h3 class="section-title">Existing Rotators</h3>
           <p class="section-hint">Manage endpoints, rotate them manually, or remove what you no longer need.</p>
         </div>
-        <div class="pill">
-          @if (!hasLoaded()) {
-            <p-skeleton width="3.5rem" height="0.75rem"></p-skeleton>
-          } @else {
-            {{ rotatingProxies().length }} total
-          }
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <div class="pill">
+            @if (!hasLoaded()) {
+              <p-skeleton width="3.5rem" height="0.75rem"></p-skeleton>
+            } @else {
+              {{ rotatingProxies().length }} total
+            }
+          </div>
+          <p-button
+            type="button"
+            label="Refresh"
+            icon="pi pi-refresh"
+            [disabled]="loading()"
+            (onClick)="loadInitialData()"
+            styleClass="refresh-button"
+          >
+          </p-button>
         </div>
       </div>
 

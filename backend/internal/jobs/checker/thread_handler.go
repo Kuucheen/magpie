@@ -113,6 +113,18 @@ func getAutoThreads(cfg config.Config) uint32 {
 		requiredThreads = 1
 	}
 
+	maxThreads := cfg.Checker.MaxThreads
+	if maxThreads == 0 {
+		if cfg.Checker.Threads > 0 {
+			maxThreads = cfg.Checker.Threads
+		} else {
+			maxThreads = 250
+		}
+	}
+	if requiredThreads > uint64(maxThreads) {
+		requiredThreads = uint64(maxThreads)
+	}
+
 	if requiredThreads > math.MaxUint32 {
 		requiredThreads = math.MaxUint32
 	}

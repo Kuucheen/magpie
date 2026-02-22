@@ -23,6 +23,7 @@ type Config struct {
 	Checker struct {
 		DynamicThreads bool   `json:"dynamic_threads"`
 		Threads        uint32 `json:"threads"`
+		MaxThreads     uint32 `json:"max_threads"`
 		Retries        uint32 `json:"retries"`
 		Timeout        uint32 `json:"timeout"`
 		CheckerTimer   Timer  `json:"checker_timer"`
@@ -183,6 +184,7 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 	configMu.Lock()
 	defer configMu.Unlock()
 
+	normalizeThreadSettings(&newConfig)
 	newConfig.WebsiteBlacklist = NormalizeWebsiteBlacklist(newConfig.WebsiteBlacklist)
 
 	configValue.Store(newConfig)
@@ -220,6 +222,16 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func normalizeThreadSettings(cfg *Config) {
+	if cfg.Checker.MaxThreads == 0 {
+		if cfg.Checker.Threads > 0 {
+			cfg.Checker.MaxThreads = cfg.Checker.Threads
+		} else {
+			cfg.Checker.MaxThreads = 250
+		}
+	}
 }
 
 func GetConfig() Config {

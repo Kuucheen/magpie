@@ -9,6 +9,7 @@
   "checker": {
     "dynamic_threads": true,
     "threads": 250,
+    "max_threads": 500,
     "retries": 2,
     "timeout": 7500,
     "checker_timer": {

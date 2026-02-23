@@ -28,6 +28,8 @@ import {
   styleUrl: './add-scrape-source.component.scss'
 })
 export class AddScrapeSourceComponent {
+  private static readonly maxUploadFileBytes = 10 * 1024 * 1024;
+
   @Output() showAddScrapeSourcesMessage = new EventEmitter<boolean>();
   @Output() scrapeSourcesAdded = new EventEmitter<void>();
 
@@ -113,6 +115,14 @@ export class AddScrapeSourceComponent {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
       const file = input.files[0];
+      if (file.size > AddScrapeSourceComponent.maxUploadFileBytes) {
+        this.notification.showError(
+          `Selected file is too large. Maximum allowed size is ${this.formatBytes(AddScrapeSourceComponent.maxUploadFileBytes)}.`
+        );
+        input.value = '';
+        this.onFileClear();
+        return;
+      }
       this.file.set(file);
 
       const reader = new FileReader();
@@ -190,8 +200,9 @@ export class AddScrapeSourceComponent {
         },
         error: (err) => {
           this.popupStatus.set('error');
-          const reason = err?.error?.message ?? err?.error?.error ?? 'Unknown error';
-          this.notification.showError("There has been an error while uploading the scrape sources! " + reason)
+          this.notification.showError(
+            'There has been an error while uploading the scrape sources! ' + this.getUploadErrorMessage(err)
+          );
         },
       });
     } else {
@@ -201,6 +212,21 @@ export class AddScrapeSourceComponent {
 
   onPopupClose() {
     this.showPopup.set(false);
+  }
+
+  private getUploadErrorMessage(err: any): string {
+    if (err?.status === 413) {
+      return err?.error?.error ?? `Upload is too large. Maximum allowed size is ${this.formatBytes(AddScrapeSourceComponent.maxUploadFileBytes)}.`;
+    }
+    return err?.error?.error ?? err?.error?.message ?? err?.message ?? 'Unknown error';
+  }
+
+  private formatBytes(size: number): string {
+    const mb = 1024 * 1024;
+    if (size % mb === 0) {
+      return `${size / mb} MB`;
+    }
+    return `${size} bytes`;
   }
 
   private resetFormState(): void {

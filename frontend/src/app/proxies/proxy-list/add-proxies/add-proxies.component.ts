@@ -23,6 +23,8 @@ import {AddProxiesDetails} from '../../../models/AddProxiesResponse';
     styleUrl: './add-proxies.component.scss'
 })
 export class AddProxiesComponent {
+  private static readonly maxUploadFileBytes = 10 * 1024 * 1024;
+
   @Output() showAddProxiesMessage = new EventEmitter<boolean>();
   @Output() proxiesAdded = new EventEmitter<void>();
 
@@ -119,6 +121,14 @@ export class AddProxiesComponent {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
       const file = input.files[0];
+      if (file.size > AddProxiesComponent.maxUploadFileBytes) {
+        this.notification.showError(
+          `Selected file is too large. Maximum allowed size is ${this.formatBytes(AddProxiesComponent.maxUploadFileBytes)}.`
+        );
+        input.value = '';
+        this.onFileClear();
+        return;
+      }
       this.file.set(file);
 
       const reader = new FileReader();
@@ -206,7 +216,7 @@ export class AddProxiesComponent {
         },
         error: (err) => {
           this.popupStatus.set('error');
-          this.notification.showError("Could not upload proxies: " + err.error.message)
+          this.notification.showError('Could not upload proxies: ' + this.getUploadErrorMessage(err));
         },
       });
     } else {
@@ -234,6 +244,21 @@ export class AddProxiesComponent {
       return `${durationMs} ms`;
     }
     return `${(durationMs / 1000).toFixed(2)} s`;
+  }
+
+  private getUploadErrorMessage(err: any): string {
+    if (err?.status === 413) {
+      return err?.error?.error ?? `Upload is too large. Maximum allowed size is ${this.formatBytes(AddProxiesComponent.maxUploadFileBytes)}.`;
+    }
+    return err?.error?.error ?? err?.error?.message ?? err?.message ?? 'Unknown error';
+  }
+
+  private formatBytes(size: number): string {
+    const mb = 1024 * 1024;
+    if (size % mb === 0) {
+      return `${size / mb} MB`;
+    }
+    return `${size} bytes`;
   }
 
   private resetFormState(): void {

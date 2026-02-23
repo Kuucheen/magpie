@@ -98,6 +98,10 @@ func SetupDB(opts ...Option) (*gorm.DB, error) {
 			log.Error("Failed to ensure proxy reputation schema", "error", err)
 		}
 
+		if err := ensureProxyStatisticsRetentionSchema(DB); err != nil {
+			log.Error("Failed to ensure proxy statistics retention schema", "error", err)
+		}
+
 		if err := ensureRotatingProxySchema(DB); err != nil {
 			log.Error("Failed to ensure rotating proxy schema", "error", err)
 		}
@@ -343,6 +347,30 @@ func ensureRotatingProxySchema(db *gorm.DB) error {
 		}
 		if err := db.Exec(stmt).Error; err != nil {
 			return fmt.Errorf("rotating proxy schema: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func ensureProxyStatisticsRetentionSchema(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("nil database connection")
+	}
+	if !db.Migrator().HasTable(&domain.ProxyStatistic{}) {
+		return nil
+	}
+
+	stmts := []string{
+		`CREATE INDEX IF NOT EXISTS idx_proxy_statistics_created_at_id ON proxy_statistics (created_at, id)`,
+	}
+	if db.Migrator().HasTable(&domain.ProxyLatestStatistic{}) {
+		stmts = append(stmts, `CREATE INDEX IF NOT EXISTS idx_proxy_latest_statistics_statistic_id ON proxy_latest_statistics (statistic_id)`)
+	}
+
+	for _, stmt := range stmts {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("proxy statistics retention schema: %w", err)
 		}
 	}
 

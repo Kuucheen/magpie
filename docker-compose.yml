@@ -8,6 +8,7 @@ services:
       - "20000-20100:20000-20100/udp"
     environment:
       - PROXY_ENCRYPTION_KEY=${PROXY_ENCRYPTION_KEY:?Set PROXY_ENCRYPTION_KEY in .env}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
 
       - redisUrl=redis://redis:6379
       - DB_HOST=postgres

@@ -481,14 +481,12 @@ func TestDialProxyWithFallback_AllowsPlainHTTPProxy(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for i := 0; i < 2; i++ {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
-			_ = conn.Close()
+		conn, err := ln.Accept()
+		if err != nil {
+			return
 		}
+		_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+		_ = conn.Close()
 	}()
 
 	next := &dto.RotatingProxyNext{

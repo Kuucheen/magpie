@@ -72,7 +72,9 @@ all via a web dashboard.
 
    This creates a `magpie/` folder with a `docker-compose.yml` and `.env`, then starts the stack.
 
-3. **Proxy encryption key (important)** – Magpie uses `PROXY_ENCRYPTION_KEY` to encrypt stored secrets. Keep it stable between restarts/updates.
+3. **Required secrets** – Magpie requires:
+   - `PROXY_ENCRYPTION_KEY` to encrypt stored proxy secrets (keep it stable between restarts/updates)
+   - `JWT_SECRET` to sign authentication tokens
 
 > [!WARNING]
 > `PROXY_ENCRYPTION_KEY` locks all stored secrets (proxy auth, passwords, and ip addresses).  
@@ -88,7 +90,7 @@ all via a web dashboard.
    git clone https://github.com/Kuucheen/magpie.git
    cd magpie
    cp .env.example .env
-   # edit .env and set PROXY_ENCRYPTION_KEY
+   # edit .env and set PROXY_ENCRYPTION_KEY and JWT_SECRET
    docker compose up -d
    ```
 5. **Dive in**

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
@@ -359,6 +358,12 @@ func (h *proxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	transport := buildHTTPTransport(next)
 	resp, err := transport.RoundTrip(newReq)
 	if err != nil {
+		log.Warn("rotating proxy: upstream request failed",
+			"rotator_id", h.rotator.ID,
+			"upstream_protocol", next.Protocol,
+			"upstream", fmt.Sprintf("%s:%d", next.IP, next.Port),
+			"error", err,
+		)
 		http.Error(w, "upstream proxy request failed", http.StatusBadGateway)
 		return
 	}
@@ -403,6 +408,13 @@ func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	upConn, err := connectThroughUpstreamFunc(r.Host, next)
 	if err != nil {
+		log.Warn("rotating proxy: upstream connect failed",
+			"rotator_id", h.rotator.ID,
+			"upstream_protocol", next.Protocol,
+			"upstream", fmt.Sprintf("%s:%d", next.IP, next.Port),
+			"target", r.Host,
+			"error", err,
+		)
 		writeHijackedResponse(buf, http.StatusBadGateway, "Upstream CONNECT failed")
 		return
 	}
@@ -476,28 +488,7 @@ func buildHTTPTransport(next *dto.RotatingProxyNext) *http.Transport {
 func dialUpstream(next *dto.RotatingProxyNext) (net.Conn, error) {
 	address := fmt.Sprintf("%s:%d", next.IP, next.Port)
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	conn, err := dialer.Dial("tcp", address)
-	if err != nil {
-		return nil, err
-	}
-
-	if shouldAttemptTLS(next.Protocol) {
-		tlsConn := tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
-		deadline := time.Now().Add(5 * time.Second)
-		_ = conn.SetDeadline(deadline)
-		if err := tlsConn.Handshake(); err != nil {
-			conn.Close()
-			fallback, fallbackErr := dialer.Dial("tcp", address)
-			if fallbackErr != nil {
-				return nil, fallbackErr
-			}
-			return fallback, nil
-		}
-		_ = tlsConn.SetDeadline(time.Time{})
-		return tlsConn, nil
-	}
-
-	return conn, nil
+	return dialer.Dial("tcp", address)
 }
 
 func performUpstreamConnect(conn net.Conn, targetHost string, next *dto.RotatingProxyNext) error {
@@ -521,7 +512,7 @@ func performUpstreamConnect(conn net.Conn, targetHost string, next *dto.Rotating
 
 	if resp.StatusCode != http.StatusOK {
 		io.Copy(io.Discard, resp.Body)
-		return errors.New("upstream returned non-200 response")
+		return fmt.Errorf("upstream returned status %d", resp.StatusCode)
 	}
 
 	return nil
@@ -546,29 +537,9 @@ func pipeConnections(left, right net.Conn) {
 }
 
 func dialProxyWithFallback(ctx context.Context, network, addr string, next *dto.RotatingProxyNext) (net.Conn, error) {
+	_ = next
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	conn, err := dialer.DialContext(ctx, network, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	if shouldAttemptTLS(next.Protocol) {
-		tlsConn := tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
-		deadline := time.Now().Add(5 * time.Second)
-		_ = conn.SetDeadline(deadline)
-		if err := tlsConn.Handshake(); err != nil {
-			conn.Close()
-			return dialer.DialContext(ctx, network, addr)
-		}
-		_ = tlsConn.SetDeadline(time.Time{})
-		return tlsConn, nil
-	}
-
-	return conn, nil
-}
-
-func shouldAttemptTLS(protocol string) bool {
-	return strings.EqualFold(protocol, "https")
+	return dialer.DialContext(ctx, network, addr)
 }
 
 func readSocks5Target(conn net.Conn) (string, error) {

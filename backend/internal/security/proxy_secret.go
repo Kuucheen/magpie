@@ -35,10 +35,8 @@ func getProxyCipher() (*proxyCipher, error) {
 	proxyCipherOnce.Do(func() {
 		rawKey := strings.TrimSpace(os.Getenv(proxyEncryptionKeyEnv))
 		if rawKey == "" {
-			//proxyCipherErr = errors.New("proxy encryption key not set: " + proxyEncryptionKeyEnv)
-			rawKey = "magpie-default-key"
-			log.Warn("proxy encryption key not set, using default")
-			//return
+			proxyCipherErr = errors.New("proxy encryption key not set: " + proxyEncryptionKeyEnv)
+			return
 		}
 
 		key, err := deriveProxyKey(rawKey)
@@ -63,6 +61,14 @@ func getProxyCipher() (*proxyCipher, error) {
 	})
 
 	return proxyCipherInst, proxyCipherErr
+}
+
+func RequireProxyEncryptionKeyConfigured() error {
+	_, err := getProxyCipher()
+	if err != nil {
+		log.Error("proxy encryption key configuration invalid", "error", err)
+	}
+	return err
 }
 
 func deriveProxyKey(raw string) ([]byte, error) {

@@ -171,12 +171,62 @@ if [[ "${key}" == *$'\n'* || "${key}" == *$'\r'* ]]; then
   exit 1
 fi
 
+if [ -n "${JWT_SECRET:-}" ]; then
+  jwt_secret="${JWT_SECRET}"
+else
+  jwt_secret=""
+  jwt_secret2=""
+  fd=0
+  opened_fd=0
+  if [ -t 0 ]; then
+    fd=0
+  elif exec 3</dev/tty; then
+    fd=3
+    opened_fd=3
+  else
+    echo "JWT_SECRET must be set when running non-interactively." >&2
+    exit 1
+  fi
+
+  printf "Enter JWT_SECRET (will be saved to .env):" >&2
+  if ! IFS= read -r -s -u "${fd}" jwt_secret; then
+    echo "Failed to read JWT_SECRET from terminal." >&2
+    exit 1
+  fi
+  printf "\n" >&2
+  if [ -z "${jwt_secret}" ]; then
+    echo "JWT_SECRET cannot be empty." >&2
+    exit 1
+  fi
+  printf "Confirm JWT_SECRET:" >&2
+  if ! IFS= read -r -s -u "${fd}" jwt_secret2; then
+    echo "Failed to read JWT_SECRET confirmation from terminal." >&2
+    exit 1
+  fi
+  printf "\n" >&2
+  if [ "${jwt_secret}" != "${jwt_secret2}" ]; then
+    echo "JWT secrets did not match." >&2
+    exit 1
+  fi
+  if [ "${opened_fd}" -eq 3 ]; then
+    exec 3<&-
+  fi
+fi
+
+if [[ "${jwt_secret}" == *$'\n'* || "${jwt_secret}" == *$'\r'* ]]; then
+  echo "JWT_SECRET must be a single line." >&2
+  exit 1
+fi
+
 escaped_key="${key//\\/\\\\}"
 escaped_key="${escaped_key//\"/\\\"}"
+escaped_jwt_secret="${jwt_secret//\\/\\\\}"
+escaped_jwt_secret="${escaped_jwt_secret//\"/\\\"}"
 
 umask 077
 {
   printf "PROXY_ENCRYPTION_KEY=\"%s\"\n" "${escaped_key}"
+  printf "JWT_SECRET=\"%s\"\n" "${escaped_jwt_secret}"
   if [ -n "${MAGPIE_IMAGE_TAG:-}" ]; then
     printf "MAGPIE_IMAGE_TAG=%s\n" "${MAGPIE_IMAGE_TAG}"
   fi

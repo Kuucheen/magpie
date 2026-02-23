@@ -12,10 +12,12 @@ import (
 
 	"magpie/internal/app/bootstrap"
 	"magpie/internal/app/server"
+	"magpie/internal/auth"
 	"magpie/internal/config"
 	proxyqueue "magpie/internal/jobs/queue/proxy"
 	sitequeue "magpie/internal/jobs/queue/sites"
 	"magpie/internal/jobs/runtime"
+	"magpie/internal/security"
 	"magpie/internal/support"
 )
 
@@ -29,6 +31,12 @@ func Run() error {
 	}
 
 	log.SetLevel(log.DebugLevel)
+	if err := auth.RequireJWTSecretConfigured(); err != nil {
+		return err
+	}
+	if err := security.RequireProxyEncryptionKeyConfigured(); err != nil {
+		return err
+	}
 
 	backendPortFlag := flag.Int("backend-port", defaultBackendPort, "Port for API server")
 	productionFlag := flag.Bool("production", false, "Run in production mode")

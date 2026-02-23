@@ -52,6 +52,7 @@ func createHTTP3Transport(proxyToCheck domain.Proxy, judge *domain.Judge, protoc
 
 	timeout := time.Duration(config.GetConfig().Checker.Timeout) * time.Millisecond
 	enableDatagrams := false
+	insecureUpstreamTLS := AllowInsecureUpstreamTLS()
 	switch NormalizeTransportProtocol(transportProtocol) {
 	case TransportQUIC:
 		enableDatagrams = true
@@ -68,8 +69,8 @@ func createHTTP3Transport(proxyToCheck domain.Proxy, judge *domain.Judge, protoc
 
 	transport := &http3.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
 			ServerName:         proxyHost,
+			InsecureSkipVerify: insecureUpstreamTLS,
 		},
 		QUICConfig:      quicCfg,
 		EnableDatagrams: enableDatagrams,
@@ -80,7 +81,7 @@ func createHTTP3Transport(proxyToCheck domain.Proxy, judge *domain.Judge, protoc
 			} else {
 				localTLS = tlsCfg.Clone()
 			}
-			localTLS.InsecureSkipVerify = true
+			localTLS.InsecureSkipVerify = insecureUpstreamTLS
 			if proxyHost != "" {
 				localTLS.ServerName = proxyHost
 			}

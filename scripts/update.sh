@@ -113,20 +113,36 @@ download() {
 
 cd "${INSTALL_DIR}"
 
+required_secrets=("PROXY_ENCRYPTION_KEY" "JWT_SECRET")
+
 if [ -f .env ]; then
-  if command -v rg >/dev/null 2>&1; then
-    has_key="$(rg -q '^PROXY_ENCRYPTION_KEY=' .env && echo yes || echo no)"
-  else
-    has_key="$(grep -q '^PROXY_ENCRYPTION_KEY=' .env && echo yes || echo no)"
-  fi
-  if [ "${has_key}" != "yes" ]; then
-    echo "Missing PROXY_ENCRYPTION_KEY in ${INSTALL_DIR}/.env" >&2
+  for secret_name in "${required_secrets[@]}"; do
+    if command -v rg >/dev/null 2>&1; then
+      has_secret="$(rg -q "^${secret_name}=" .env && echo yes || echo no)"
+    else
+      has_secret="$(grep -q "^${secret_name}=" .env && echo yes || echo no)"
+    fi
+
+    env_fallback="${!secret_name-}"
+    if [ "${has_secret}" != "yes" ] && [ -z "${env_fallback}" ]; then
+      echo "Missing ${secret_name} in ${INSTALL_DIR}/.env" >&2
+      echo "Add ${secret_name} to .env or export ${secret_name} and rerun." >&2
+      exit 1
+    fi
+  done
+else
+  missing=()
+  for secret_name in "${required_secrets[@]}"; do
+    if [ -z "${!secret_name-}" ]; then
+      missing+=("${secret_name}")
+    fi
+  done
+
+  if [ "${#missing[@]}" -gt 0 ]; then
+    echo "Missing ${INSTALL_DIR}/.env (required secrets: ${missing[*]})." >&2
+    echo "Restore it or export ${missing[*]} and rerun." >&2
     exit 1
   fi
-elif [ -z "${PROXY_ENCRYPTION_KEY:-}" ]; then
-  echo "Missing ${INSTALL_DIR}/.env (required for PROXY_ENCRYPTION_KEY)." >&2
-  echo "Restore it or export PROXY_ENCRYPTION_KEY and rerun." >&2
-  exit 1
 fi
 
 tmp_compose="docker-compose.yml.new.$$"

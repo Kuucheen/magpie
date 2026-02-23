@@ -108,13 +108,28 @@ if ((Invoke-NativeCommand -FilePath "docker" -Arguments @("info") -Quiet) -ne 0)
 
 Set-Location -LiteralPath $installDir
 
+$requiredSecrets = @("PROXY_ENCRYPTION_KEY", "JWT_SECRET")
+
 if (Test-Path -LiteralPath ".env") {
   $envContent = Get-Content -LiteralPath ".env" -Raw
-  if ($envContent -notmatch "(?m)^PROXY_ENCRYPTION_KEY=") {
-    throw "Missing PROXY_ENCRYPTION_KEY in $installDir\\.env"
+  foreach ($secretName in $requiredSecrets) {
+    $hasSecretInDotenv = $envContent -match "(?m)^$secretName="
+    $hasSecretInProcess = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($secretName))
+    if (-not $hasSecretInDotenv -and -not $hasSecretInProcess) {
+      throw "Missing $secretName in $installDir\\.env. Add $secretName to .env or set it in your environment and rerun."
+    }
   }
-} elseif (-not $env:PROXY_ENCRYPTION_KEY) {
-  throw "Missing $installDir\\.env (required for PROXY_ENCRYPTION_KEY). Restore it or set PROXY_ENCRYPTION_KEY and rerun."
+} else {
+  $missing = @()
+  foreach ($secretName in $requiredSecrets) {
+    if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($secretName))) {
+      $missing += $secretName
+    }
+  }
+
+  if ($missing.Count -gt 0) {
+    throw "Missing $installDir\\.env (required secrets: $($missing -join ', ')). Restore it or set $($missing -join ', ') and rerun."
+  }
 }
 
 function Download-File([string]$url, [string]$dest) {

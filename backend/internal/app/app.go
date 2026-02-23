@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
@@ -46,16 +48,20 @@ func Run() error {
 	config.SetProductionMode(*productionFlag)
 
 	backendPort := resolvePort("BACKEND_PORT", "backend-port", *backendPortFlag)
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	redisClient, err := support.GetRedisClient()
 	if err != nil {
 		return fmt.Errorf("failed to get redis client: %w", err)
 	}
 
-	heartbeatCancel := runtime.LaunchInstanceHeartbeat(context.Background(), redisClient)
+	heartbeatCancel := runtime.LaunchInstanceHeartbeat(rootCtx, redisClient)
 	defer heartbeatCancel()
 
-	bootstrap.Setup()
+	if err := bootstrap.Setup(rootCtx); err != nil {
+		return err
+	}
 
 	defer func() {
 		if err := proxyqueue.PublicProxyQueue.Close(); err != nil {
@@ -66,7 +72,7 @@ func Run() error {
 		}
 	}()
 
-	return server.OpenRoutes(backendPort)
+	return server.OpenRoutes(rootCtx, backendPort)
 }
 
 func resolvePort(primaryEnv, legacyEnv string, fallback int) int {

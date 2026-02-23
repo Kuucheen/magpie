@@ -54,8 +54,21 @@ func init() {
 
 /* ─────────────────────────────  dispatcher  ─────────────────────────────── */
 
-func ThreadDispatcher() {
+func ThreadDispatcher(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		cfg := config.GetConfig()
 
 		var target uint32
@@ -66,7 +79,7 @@ func ThreadDispatcher() {
 		}
 
 		for currentThreads.Load() < target {
-			go scrapeWorker()
+			go scrapeWorker(ctx)
 			currentThreads.Add(1)
 		}
 		for currentThreads.Load() > target {
@@ -75,14 +88,22 @@ func ThreadDispatcher() {
 		}
 
 		log.Debug("Scraper threads", "active", currentThreads.Load())
-		time.Sleep(15 * time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
 /* ─────────────────────────────  worker  ─────────────────────────────────── */
 
-func scrapeWorker() {
-	ctx, cancel := context.WithCancel(context.Background())
+func scrapeWorker(parent context.Context) {
+	if parent == nil {
+		parent = context.Background()
+	}
+
+	ctx, cancel := context.WithCancel(parent)
 	done := make(chan struct{})
 
 	go func() {

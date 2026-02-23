@@ -12,6 +12,7 @@
 - `SERVER_READ_HEADER_TIMEOUT_SECONDS` (default `10`)
 - `SERVER_WRITE_TIMEOUT_SECONDS` (default `30`)
 - `SERVER_IDLE_TIMEOUT_SECONDS` (default `120`)
+- `SERVER_SHUTDOWN_TIMEOUT_SECONDS` (default `20`): graceful shutdown timeout used by the API server.
 - `API_UPLOAD_MAX_BODY_BYTES` (default `10485760`, 10 MiB): max request size for multipart upload endpoints.
 - `API_JSON_MAX_BODY_BYTES` (default `1048576`, 1 MiB): max request size for JSON endpoints.
 - `API_MULTIPART_MEMORY_BYTES` (default `1048576`, 1 MiB): in-memory budget used by multipart parsing before temp-file spillover.

@@ -50,8 +50,21 @@ type requestAssignment struct {
 	checks            []userCheck
 }
 
-func ThreadDispatcher() {
+func ThreadDispatcher(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		cfg := config.GetConfig()
 
 		var targetThreads uint32
@@ -63,7 +76,7 @@ func ThreadDispatcher() {
 
 		// Start threads if currentThreads is less than targetThreads
 		for currentThreads.Load() < targetThreads {
-			go work()
+			go work(ctx)
 			currentThreads.Add(1)
 		}
 
@@ -74,7 +87,11 @@ func ThreadDispatcher() {
 		}
 
 		log.Debug("Checker threads", "active", currentThreads.Load())
-		time.Sleep(15 * time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
@@ -132,8 +149,8 @@ func getAutoThreads(cfg config.Config) uint32 {
 	return uint32(requiredThreads)
 }
 
-func work() {
-	ctx, cleanup := createWorkerContext()
+func work(parent context.Context) {
+	ctx, cleanup := createWorkerContext(parent)
 	defer cleanup()
 
 	for {
@@ -182,8 +199,12 @@ func work() {
 	}
 }
 
-func createWorkerContext() (context.Context, func()) {
-	ctx, cancel := context.WithCancel(context.Background())
+func createWorkerContext(parent context.Context) (context.Context, func()) {
+	if parent == nil {
+		parent = context.Background()
+	}
+
+	ctx, cancel := context.WithCancel(parent)
 	done := make(chan struct{})
 
 	go func() {

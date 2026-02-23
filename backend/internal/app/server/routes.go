@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -52,7 +53,10 @@ func enableCORS(next http.Handler) http.Handler {
 	})
 }
 
-func OpenRoutes(port int) error {
+func OpenRoutes(ctx context.Context, port int) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	router := http.NewServeMux()
 
@@ -118,8 +122,25 @@ func OpenRoutes(port int) error {
 	}
 
 	log.Infof("Starting magpie backend on port :%d", port)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("api server failed: %w", err)
+	serverErrCh := make(chan error, 1)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErrCh <- fmt.Errorf("api server failed: %w", err)
+			return
+		}
+		serverErrCh <- nil
+	}()
+
+	select {
+	case err := <-serverErrCh:
+		return err
+	case <-ctx.Done():
+		log.Info("Shutting down API server")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), resolveServerShutdownTimeout())
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("api server shutdown failed: %w", err)
+		}
+		return <-serverErrCh
 	}
-	return nil
 }

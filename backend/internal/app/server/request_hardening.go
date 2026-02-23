@@ -22,6 +22,7 @@ const (
 	envServerReadHeaderTimeoutSeconds = "SERVER_READ_HEADER_TIMEOUT_SECONDS"
 	envServerWriteTimeoutSeconds      = "SERVER_WRITE_TIMEOUT_SECONDS"
 	envServerIdleTimeoutSeconds       = "SERVER_IDLE_TIMEOUT_SECONDS"
+	envServerShutdownTimeoutSeconds   = "SERVER_SHUTDOWN_TIMEOUT_SECONDS"
 	envCORSAllowedOrigins             = "CORS_ALLOWED_ORIGINS"
 	envAPIUploadMaxBodyBytes          = "API_UPLOAD_MAX_BODY_BYTES"
 	envAPIJSONMaxBodyBytes            = "API_JSON_MAX_BODY_BYTES"
@@ -31,6 +32,7 @@ const (
 	defaultServerReadHeaderTimeout = 10 * time.Second
 	defaultServerWriteTimeout      = 30 * time.Second
 	defaultServerIdleTimeout       = 120 * time.Second
+	defaultServerShutdownTimeout   = 20 * time.Second
 
 	defaultCORSAllowedOrigins = "http://localhost:5050,http://127.0.0.1:5050,http://localhost:4200,http://127.0.0.1:4200"
 
@@ -58,6 +60,14 @@ func resolveServerTimeouts() serverTimeouts {
 		writeTimeout:      time.Duration(resolvePositiveEnvInt(envServerWriteTimeoutSeconds, int(defaultServerWriteTimeout/time.Second))) * time.Second,
 		idleTimeout:       time.Duration(resolvePositiveEnvInt(envServerIdleTimeoutSeconds, int(defaultServerIdleTimeout/time.Second))) * time.Second,
 	}
+}
+
+func resolveServerShutdownTimeout() time.Duration {
+	seconds := resolvePositiveEnvInt(
+		envServerShutdownTimeoutSeconds,
+		int(defaultServerShutdownTimeout/time.Second),
+	)
+	return time.Duration(seconds) * time.Second
 }
 
 func resolveCORSConfig() corsConfig {

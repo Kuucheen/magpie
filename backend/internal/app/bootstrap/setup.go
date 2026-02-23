@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -24,35 +25,39 @@ import (
 
 const startupProxyBatchSize = 2000
 
-func Setup() {
+func Setup(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	config.ReadSettings()
 
 	if redisClient, err := support.GetRedisClient(); err != nil {
 		log.Warn("Redis synchronization disabled", "error", err)
 	} else {
-		config.EnableRedisSynchronization(context.Background(), redisClient)
-		judges.EnableRedisSynchronization(context.Background(), redisClient)
-		geolite.EnableRedisDistribution(context.Background(), redisClient)
+		config.EnableRedisSynchronization(ctx, redisClient)
+		judges.EnableRedisSynchronization(ctx, redisClient)
+		geolite.EnableRedisDistribution(ctx, redisClient)
 	}
 
 	if _, err := database.SetupDB(); err != nil {
-		log.Fatalf("failed to set up database: %v", err)
+		return fmt.Errorf("failed to set up database: %w", err)
 	}
 	config.SetBetweenTime()
 
-	if err := blacklist.Initialize(context.Background()); err != nil {
+	if err := blacklist.Initialize(ctx); err != nil {
 		log.Warn("Blacklist initialisation failed", "error", err)
 	}
 
 	if redisClient, err := support.GetRedisClient(); err != nil {
 		log.Warn("Blacklist synchronization disabled", "error", err)
 	} else {
-		blacklist.EnableRedisSynchronization(context.Background(), redisClient)
+		blacklist.EnableRedisSynchronization(ctx, redisClient)
 	}
 
 	judgeSetup()
 
-	cleanedRelations, orphanedProxies, cleanupErr := database.CleanupAutoRemovalViolations(context.Background())
+	cleanedRelations, orphanedProxies, cleanupErr := database.CleanupAutoRemovalViolations(ctx)
 	if cleanupErr != nil {
 		log.Error("auto-remove cleanup failed", "error", cleanupErr)
 	} else if cleanedRelations > 0 {
@@ -68,7 +73,7 @@ func Setup() {
 		}
 	}
 
-	limitCleanedRelations, limitOrphanedProxies, limitCleanupErr := database.CleanupProxyLimitViolations(context.Background())
+	limitCleanedRelations, limitOrphanedProxies, limitCleanupErr := database.CleanupProxyLimitViolations(ctx)
 	if limitCleanupErr != nil {
 		log.Error("proxy-limit cleanup failed", "error", limitCleanupErr)
 	} else if limitCleanedRelations > 0 {
@@ -92,9 +97,20 @@ func Setup() {
 		}
 
 		for config.GetCurrentIp() == "" {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
 			html, err := checker.DefaultRequest(cfg.Checker.IpLookup)
 			if err != nil {
 				log.Error("Error checking IP address:", err)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(3 * time.Second):
+				}
 				continue
 			}
 
@@ -102,7 +118,11 @@ func Setup() {
 			config.SetCurrentIp(currentIp)
 			log.Infof("Found IP! Current IP: %s", currentIp)
 
-			time.Sleep(3 * time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(3 * time.Second):
+			}
 		}
 
 	}()
@@ -151,25 +171,31 @@ func Setup() {
 	}
 
 	rotatingproxy.GlobalManager.StartAll()
+	go func() {
+		<-ctx.Done()
+		rotatingproxy.GlobalManager.StopAll()
+	}()
 	syncIntervalSeconds := support.GetEnvInt("ROTATING_PROXY_SYNC_INTERVAL_SECONDS", 10)
 	if syncIntervalSeconds <= 0 {
 		syncIntervalSeconds = 10
 	}
-	go rotatingproxy.GlobalManager.StartSyncLoop(context.Background(), time.Duration(syncIntervalSeconds)*time.Second)
+	go rotatingproxy.GlobalManager.StartSyncLoop(ctx, time.Duration(syncIntervalSeconds)*time.Second)
 
 	// Routines
 
-	go judges.StartJudgeRoutine()
-	go jobruntime.StartProxyStatisticsRoutine(context.Background())
-	go jobruntime.StartProxyStatisticsRetentionRoutine(context.Background())
-	go jobruntime.StartProxyHistoryRoutine(context.Background())
-	go jobruntime.StartProxySnapshotRoutine(context.Background())
-	go jobruntime.StartProxyGeoRefreshRoutine(context.Background())
-	go maintenance.StartOrphanCleanupRoutine(context.Background())
-	go jobruntime.StartGeoLiteUpdateRoutine(context.Background())
-	go blacklist.StartRefreshRoutine(context.Background())
-	go checker.ThreadDispatcher()
-	go scraper.ThreadDispatcher()
+	go judges.StartJudgeRoutine(ctx)
+	go jobruntime.StartProxyStatisticsRoutine(ctx)
+	go jobruntime.StartProxyStatisticsRetentionRoutine(ctx)
+	go jobruntime.StartProxyHistoryRoutine(ctx)
+	go jobruntime.StartProxySnapshotRoutine(ctx)
+	go jobruntime.StartProxyGeoRefreshRoutine(ctx)
+	go maintenance.StartOrphanCleanupRoutine(ctx)
+	go jobruntime.StartGeoLiteUpdateRoutine(ctx)
+	go blacklist.StartRefreshRoutine(ctx)
+	go checker.ThreadDispatcher(ctx)
+	go scraper.ThreadDispatcher(ctx)
+
+	return nil
 }
 
 func judgeSetup() {

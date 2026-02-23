@@ -1,23 +1,48 @@
 package judges
 
 import (
+	"context"
 	"magpie/internal/config"
 	"time"
 )
 
-func StartJudgeRoutine() {
+func StartJudgeRoutine(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		judgeList := GetSortedJudgesByID()
 		if len(judgeList) > 0 {
 			betweenTime := getTimeBetweenJudgeChecks(uint64(len(judgeList)))
 
 			for _, judge := range judgeList {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
 				judge.UpdateIp()
 
-				time.Sleep(betweenTime)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(betweenTime):
+				}
 			}
 		} else {
-			time.Sleep(2 * time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(2 * time.Second):
+			}
 		}
 	}
 }

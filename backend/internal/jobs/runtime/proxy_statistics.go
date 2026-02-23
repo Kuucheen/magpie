@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"magpie/internal/database"
@@ -14,6 +15,7 @@ const (
 	statisticsFlushInterval  = 15 * time.Second
 	statisticsBatchThreshold = 5000
 	statisticsQueueCapacity  = 20_000
+	statisticsDropLogEvery   = 15 * time.Second
 	statisticsInsertTimeout  = 30 * time.Second
 	reputationRecalcTimeout  = 10 * time.Second
 	reputationRecalcInterval = 1 * time.Minute
@@ -22,11 +24,37 @@ const (
 )
 
 var (
-	proxyStatisticQueue = make(chan domain.ProxyStatistic, statisticsQueueCapacity)
+	proxyStatisticQueue       = make(chan domain.ProxyStatistic, statisticsQueueCapacity)
+	proxyStatisticDropCount   atomic.Uint64
+	proxyStatisticLastDropLog atomic.Int64
 )
 
 func AddProxyStatistic(proxyStatistic domain.ProxyStatistic) {
-	proxyStatisticQueue <- proxyStatistic
+	select {
+	case proxyStatisticQueue <- proxyStatistic:
+		return
+	default:
+		recordDroppedProxyStatistic()
+	}
+}
+
+func recordDroppedProxyStatistic() {
+	droppedTotal := proxyStatisticDropCount.Add(1)
+	nowUnix := time.Now().Unix()
+	last := proxyStatisticLastDropLog.Load()
+	if nowUnix-last < int64(statisticsDropLogEvery/time.Second) {
+		return
+	}
+	if !proxyStatisticLastDropLog.CompareAndSwap(last, nowUnix) {
+		return
+	}
+
+	log.Warn(
+		"Proxy statistics queue is full; dropping statistics to protect checker throughput",
+		"dropped_total", droppedTotal,
+		"queue_len", len(proxyStatisticQueue),
+		"queue_capacity", cap(proxyStatisticQueue),
+	)
 }
 
 func StartProxyStatisticsRoutine(ctx context.Context) {

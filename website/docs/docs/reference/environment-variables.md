@@ -6,6 +6,14 @@
 - `JWT_SECRET`: JWT signing key
 - `BACKEND_PORT` (default `5656`): API listen port
 - `backend-port`: legacy port env fallback
+- `CORS_ALLOWED_ORIGINS` (default `http://localhost:5050,http://127.0.0.1:5050`): comma-separated CORS origin allowlist.
+- `SERVER_READ_TIMEOUT_SECONDS` (default `30`)
+- `SERVER_READ_HEADER_TIMEOUT_SECONDS` (default `10`)
+- `SERVER_WRITE_TIMEOUT_SECONDS` (default `30`)
+- `SERVER_IDLE_TIMEOUT_SECONDS` (default `120`)
+- `API_UPLOAD_MAX_BODY_BYTES` (default `10485760`, 10 MiB): max request size for multipart upload endpoints.
+- `API_JSON_MAX_BODY_BYTES` (default `1048576`, 1 MiB): max request size for JSON endpoints.
+- `API_MULTIPART_MEMORY_BYTES` (default `1048576`, 1 MiB): in-memory budget used by multipart parsing before temp-file spillover.
 
 ## Redis
 

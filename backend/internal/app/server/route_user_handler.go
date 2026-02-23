@@ -29,8 +29,7 @@ func checkLogin(w http.ResponseWriter, r *http.Request) {
 
 func registerUser(w http.ResponseWriter, r *http.Request) {
 	var credentials dto.Credentials
-	if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
-		writeError(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &credentials, resolveJSONMaxBodyBytes()) {
 		return
 	}
 
@@ -111,8 +110,7 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 
 func loginUser(w http.ResponseWriter, r *http.Request) {
 	var credentials dto.Credentials
-	if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
-		writeError(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &credentials, resolveJSONMaxBodyBytes()) {
 		return
 	}
 
@@ -147,9 +145,7 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 	previousCfg := config.GetConfig()
 
 	var newConfig config.Config
-	if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
-		log.Error("Error decoding request body:", err)
-		writeError(w, "Invalid JSON", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &newConfig, resolveJSONMaxBodyBytes()) {
 		return
 	}
 
@@ -253,8 +249,7 @@ func saveUserSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var userSettings dto.UserSettings
-	if err := json.NewDecoder(r.Body).Decode(&userSettings); err != nil {
-		writeError(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &userSettings, resolveJSONMaxBodyBytes()) {
 		return
 	}
 
@@ -310,8 +305,7 @@ func changePassword(w http.ResponseWriter, r *http.Request) {
 	user := database.GetUserFromId(userID)
 
 	var changeUserPassword dto.ChangePassword
-	if err := json.NewDecoder(r.Body).Decode(&changeUserPassword); err != nil {
-		writeError(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &changeUserPassword, resolveJSONMaxBodyBytes()) {
 		return
 	}
 
@@ -350,8 +344,7 @@ func deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload dto.DeleteAccount
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeError(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &payload, resolveJSONMaxBodyBytes()) {
 		return
 	}
 

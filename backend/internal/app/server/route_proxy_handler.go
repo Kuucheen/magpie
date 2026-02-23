@@ -29,6 +29,10 @@ func addProxies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	startedAt := time.Now()
+	maxBodyBytes := resolveUploadMaxBodyBytes()
+	if !prepareMultipartForm(w, r, maxBodyBytes, resolveMultipartMemoryBytes()) {
+		return
+	}
 
 	textareaContent := r.FormValue("proxyTextarea") // "proxyTextarea" matches the key sent by the frontend
 	clipboardContent := r.FormValue("clipboardProxies")
@@ -43,10 +47,16 @@ func addProxies(w http.ResponseWriter, r *http.Request) {
 
 		fileContent, err = io.ReadAll(file)
 		if err != nil {
+			if isRequestBodyTooLarge(err) {
+				writeError(w, requestBodyTooLargeMessage(maxBodyBytes), http.StatusRequestEntityTooLarge)
+				return
+			}
 			writeError(w, "Failed to read file", http.StatusInternalServerError)
 			return
 		}
-
+	} else if !errors.Is(err, http.ErrMissingFile) {
+		writeError(w, "Failed to retrieve file", http.StatusBadRequest)
+		return
 	} else if len(textareaContent) == 0 && len(clipboardContent) == 0 {
 		writeError(w, "Failed to retrieve file", http.StatusBadRequest)
 		return
@@ -306,13 +316,11 @@ func deleteProxies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawBody, readErr := io.ReadAll(r.Body)
-	if readErr != nil {
-		writeError(w, "Invalid request", http.StatusBadRequest)
+	var body json.RawMessage
+	if !decodeJSONBodyLimited(w, r, &body, resolveJSONMaxBodyBytes()) {
 		return
 	}
-
-	body := bytes.TrimSpace(rawBody)
+	body = bytes.TrimSpace(body)
 
 	if len(body) == 0 {
 		writeError(w, "Invalid request", http.StatusBadRequest)
@@ -397,8 +405,7 @@ func exportProxies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var settings dto.ExportSettings
-	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
-		writeError(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &settings, resolveJSONMaxBodyBytes()) {
 		return
 	}
 

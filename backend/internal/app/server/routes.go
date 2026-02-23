@@ -21,19 +21,33 @@ func writeError(w http.ResponseWriter, msg string, status int) {
 }
 
 func enableCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set CORS headers
-		w.Header().Set("Access-Control-Allow-Origin", "*") // Allow any origin
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	cors := resolveCORSConfig()
+	allowedMethods := "GET, POST, OPTIONS, PUT, DELETE"
+	allowedHeaders := "Content-Type, Authorization"
 
-		// Handle preflight request
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			if !cors.isAllowed(origin) && !isSameHostOrigin(origin, r.Host) {
+				log.Warn("Blocked CORS origin", "origin", origin, "request_host", r.Host)
+				writeError(w, "CORS origin is not allowed", http.StatusForbidden)
+				return
+			}
+
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", allowedMethods)
+			w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
+			w.Header().Set("Access-Control-Max-Age", "600")
+			w.Header().Add("Vary", "Origin")
+			w.Header().Add("Vary", "Access-Control-Request-Method")
+			w.Header().Add("Vary", "Access-Control-Request-Headers")
+		}
+
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		// Pass the request to the next handler
 		next.ServeHTTP(w, r)
 	})
 }
@@ -48,7 +62,7 @@ func OpenRoutes(port int) error {
 	}
 
 	apiMux := http.NewServeMux()
-	apiMux.Handle("/graphql", gqlHandler)
+	apiMux.Handle("/graphql", applyRequestBodyLimit(gqlHandler, resolveJSONMaxBodyBytes()))
 	apiMux.HandleFunc("POST /register", registerUser)
 	apiMux.HandleFunc("POST /login", loginUser)
 	apiMux.Handle("GET /checkLogin", auth.RequireAuth(http.HandlerFunc(checkLogin)))
@@ -92,10 +106,15 @@ func OpenRoutes(port int) error {
 	router.Handle("/api/", http.StripPrefix("/api", apiMux))
 
 	log.Debug("Routes opened")
+	timeouts := resolveServerTimeouts()
 
 	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: enableCORS(router),
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           enableCORS(router),
+		ReadTimeout:       timeouts.readTimeout,
+		ReadHeaderTimeout: timeouts.readHeaderTimeout,
+		WriteTimeout:      timeouts.writeTimeout,
+		IdleTimeout:       timeouts.idleTimeout,
 	}
 
 	log.Infof("Starting magpie backend on port :%d", port)

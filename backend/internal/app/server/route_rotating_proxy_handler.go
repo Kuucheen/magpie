@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -65,8 +64,7 @@ func createRotatingProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload dto.RotatingProxyCreateRequest
-	if decodeErr := json.NewDecoder(r.Body).Decode(&payload); decodeErr != nil {
-		writeError(w, "Invalid request payload", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &payload, resolveJSONMaxBodyBytes()) {
 		return
 	}
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -147,8 +148,7 @@ func deleteScrapingSources(w http.ResponseWriter, r *http.Request) {
 
 	var scrapingSource []int
 
-	if err := json.NewDecoder(r.Body).Decode(&scrapingSource); err != nil {
-		writeError(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSONBodyLimited(w, r, &scrapingSource, resolveJSONMaxBodyBytes()) {
 		return
 	}
 
@@ -179,6 +179,10 @@ func saveScrapingSources(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+	maxBodyBytes := resolveUploadMaxBodyBytes()
+	if !prepareMultipartForm(w, r, maxBodyBytes, resolveMultipartMemoryBytes()) {
+		return
+	}
 
 	textareaContent := r.FormValue("scrapeSourceTextarea") // Match the key sent by frontend
 	clipboardContent := r.FormValue("clipboardScrapeSources")
@@ -193,10 +197,16 @@ func saveScrapingSources(w http.ResponseWriter, r *http.Request) {
 
 		fileContent, err = io.ReadAll(file)
 		if err != nil {
+			if isRequestBodyTooLarge(err) {
+				writeError(w, requestBodyTooLargeMessage(maxBodyBytes), http.StatusRequestEntityTooLarge)
+				return
+			}
 			writeError(w, "Failed to read file", http.StatusInternalServerError)
 			return
 		}
-
+	} else if !errors.Is(err, http.ErrMissingFile) {
+		writeError(w, "Failed to retrieve file", http.StatusBadRequest)
+		return
 	} else if len(textareaContent) == 0 && len(clipboardContent) == 0 {
 		writeError(w, "Failed to retrieve sources from any input method", http.StatusBadRequest)
 		return

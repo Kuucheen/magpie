@@ -3,7 +3,7 @@
 ## Core backend
 
 - `PROXY_ENCRYPTION_KEY`: encryption key for stored proxy secrets
-- `JWT_SECRET` (default `magpie3-secret`): JWT signing key
+- `JWT_SECRET`: JWT signing key
 - `BACKEND_PORT` (default `5656`): API listen port
 - `backend-port`: legacy port env fallback
 
@@ -39,6 +39,12 @@ In default Docker Compose this is set to `redis://redis:6379`.
 
 - `PROXY_ORPHAN_CLEAN_INTERVAL` duration string (example `30m`)
 - `PROXY_ORPHAN_CLEAN_INTERVAL_MINUTES` integer fallback (default `60`)
+- `PROXY_STATISTICS_RETENTION_DAYS` (default `30`): delete `proxy_statistics` rows older than this many days. Set `0` to disable row deletion.
+- `PROXY_STATISTICS_RESPONSE_RETENTION_DAYS` (default `7`): clear old `proxy_statistics.response_body` values. Set `0` to disable body pruning.
+- `PROXY_STATISTICS_RETENTION_INTERVAL` duration string (example `1h`): preferred retention routine schedule.
+- `PROXY_STATISTICS_RETENTION_INTERVAL_MINUTES` integer fallback (default `60`)
+- `PROXY_STATISTICS_RETENTION_BATCH_SIZE` integer per batch (default `5000`)
+- `PROXY_STATISTICS_RETENTION_MAX_BATCHES` integer per run (default `12`)
 
 ## Releases endpoint
 

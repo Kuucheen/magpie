@@ -91,6 +91,7 @@ all via a web dashboard.
    cd magpie
    cp .env.example .env
    # edit .env and set PROXY_ENCRYPTION_KEY and JWT_SECRET
+   # optional: tune proxy statistics retention (PROXY_STATISTICS_RETENTION_*)
    docker compose up -d
    ```
 5. **Dive in**

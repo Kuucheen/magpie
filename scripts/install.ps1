@@ -137,6 +137,21 @@ function Escape-DotenvValue([string]$value) {
   return $escaped
 }
 
+function New-RandomAlnum([int]$length, [string]$alphabet) {
+  if ($length -le 0) { return "" }
+
+  $bytes = New-Object byte[] $length
+  [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+
+  $builder = New-Object System.Text.StringBuilder
+  $alphaLength = $alphabet.Length
+  foreach ($b in $bytes) {
+    $null = $builder.Append($alphabet[$b % $alphaLength])
+  }
+
+  return $builder.ToString()
+}
+
 if ($env:PROXY_ENCRYPTION_KEY) {
   $key = $env:PROXY_ENCRYPTION_KEY
 } else {
@@ -181,12 +196,43 @@ $jwtSecret = $jwtSecret.Trim()
 if ([string]::IsNullOrEmpty($jwtSecret)) { throw "JWT_SECRET cannot be empty." }
 if ($jwtSecret.Contains("`n") -or $jwtSecret.Contains("`r")) { throw "JWT_SECRET must be a single line." }
 
+if ($env:DB_USERNAME) {
+  $dbUsername = $env:DB_USERNAME
+} else {
+  $dbUsername = "magpie_" + (New-RandomAlnum -length 12 -alphabet "abcdefghijklmnopqrstuvwxyz0123456789")
+}
+
+if ($env:DB_PASSWORD) {
+  $dbPassword = $env:DB_PASSWORD
+} else {
+  $dbPassword = New-RandomAlnum -length 40 -alphabet "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+}
+
+$dbName = if ($env:DB_NAME) { $env:DB_NAME } else { "magpie" }
+
+$dbUsername = $dbUsername.Trim()
+$dbPassword = $dbPassword.Trim()
+$dbName = $dbName.Trim()
+
+if ([string]::IsNullOrEmpty($dbUsername)) { throw "DB_USERNAME cannot be empty." }
+if ([string]::IsNullOrEmpty($dbPassword)) { throw "DB_PASSWORD cannot be empty." }
+if ([string]::IsNullOrEmpty($dbName)) { throw "DB_NAME cannot be empty." }
+if ($dbUsername.Contains("`n") -or $dbUsername.Contains("`r")) { throw "DB_USERNAME must be a single line." }
+if ($dbPassword.Contains("`n") -or $dbPassword.Contains("`r")) { throw "DB_PASSWORD must be a single line." }
+if ($dbName.Contains("`n") -or $dbName.Contains("`r")) { throw "DB_NAME must be a single line." }
+
 $escapedKey = Escape-DotenvValue $key
 $escapedJWTSecret = Escape-DotenvValue $jwtSecret
+$escapedDBName = Escape-DotenvValue $dbName
+$escapedDBUsername = Escape-DotenvValue $dbUsername
+$escapedDBPassword = Escape-DotenvValue $dbPassword
 
 $envLines = @()
 $envLines += "PROXY_ENCRYPTION_KEY=""$escapedKey"""
 $envLines += "JWT_SECRET=""$escapedJWTSecret"""
+$envLines += "DB_NAME=""$escapedDBName"""
+$envLines += "DB_USERNAME=""$escapedDBUsername"""
+$envLines += "DB_PASSWORD=""$escapedDBPassword"""
 if ($env:MAGPIE_IMAGE_TAG) {
   $envLines += "MAGPIE_IMAGE_TAG=$($env:MAGPIE_IMAGE_TAG)"
 }

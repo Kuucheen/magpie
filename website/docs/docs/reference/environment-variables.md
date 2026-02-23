@@ -28,8 +28,8 @@ In default Docker Compose this is set to `redis://redis:6379`.
 - `DB_HOST` (default `localhost`)
 - `DB_PORT` (default `5434`)
 - `DB_NAME` (default `magpie`)
-- `DB_USERNAME` (default `admin`)
-- `DB_PASSWORD` (default `admin`)
+- `DB_USERNAME` (default `magpie_user` in Docker Compose): PostgreSQL username.
+- `DB_PASSWORD` (default `ChangeMeToAStrongDbPassword` in Docker Compose): PostgreSQL password.
 - `DB_SSLMODE` (default `require`): PostgreSQL TLS mode (`disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full`).
 - `DB_AUTO_MIGRATE` (default `true`)
 - `DB_MAX_OPEN_CONNS` (default `32`)
@@ -45,6 +45,25 @@ In default Docker Compose this is set to `redis://redis:6379`.
 - `MAGPIE_INSTANCE_ID` (default hostname): stable identifier for the backend instance that owns/listens for its rotators.
 - `MAGPIE_INSTANCE_NAME` (default `MAGPIE_INSTANCE_ID`): human-readable instance label returned by the rotating instances API.
 - `MAGPIE_INSTANCE_REGION` (default `Unknown`): region label returned by the rotating instances API.
+
+## Docker Compose resources
+
+- `BACKEND_CPU_LIMIT` (default `2.00`)
+- `BACKEND_MEMORY_LIMIT` (default `1G`)
+- `BACKEND_CPU_RESERVATION` (default `0.50`)
+- `BACKEND_MEMORY_RESERVATION` (default `256M`)
+- `FRONTEND_CPU_LIMIT` (default `1.00`)
+- `FRONTEND_MEMORY_LIMIT` (default `512M`)
+- `FRONTEND_CPU_RESERVATION` (default `0.25`)
+- `FRONTEND_MEMORY_RESERVATION` (default `128M`)
+- `POSTGRES_CPU_LIMIT` (default `1.50`)
+- `POSTGRES_MEMORY_LIMIT` (default `1G`)
+- `POSTGRES_CPU_RESERVATION` (default `0.50`)
+- `POSTGRES_MEMORY_RESERVATION` (default `256M`)
+- `REDIS_CPU_LIMIT` (default `1.00`)
+- `REDIS_MEMORY_LIMIT` (default `512M`)
+- `REDIS_CPU_RESERVATION` (default `0.25`)
+- `REDIS_MEMORY_RESERVATION` (default `128M`)
 
 ## Maintenance
 

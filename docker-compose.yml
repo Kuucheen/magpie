@@ -9,14 +9,24 @@ services:
     environment:
       - PROXY_ENCRYPTION_KEY=${PROXY_ENCRYPTION_KEY:?Set PROXY_ENCRYPTION_KEY in .env}
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
-
       - redisUrl=redis://redis:6379
       - DB_HOST=postgres
       - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-magpie}
+      - DB_USERNAME=${DB_USERNAME:-magpie_user}
+      - DB_PASSWORD=${DB_PASSWORD:-ChangeMeToAStrongDbPassword}
       - DB_SSLMODE=disable
     depends_on:
       - postgres
       - redis
+    deploy:
+      resources:
+        limits:
+          cpus: "${BACKEND_CPU_LIMIT:-2.00}"
+          memory: "${BACKEND_MEMORY_LIMIT:-1G}"
+        reservations:
+          cpus: "${BACKEND_CPU_RESERVATION:-0.50}"
+          memory: "${BACKEND_MEMORY_RESERVATION:-256M}"
     restart: unless-stopped
 
   frontend:
@@ -26,26 +36,50 @@ services:
       - "5050:80"
     depends_on:
       - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "${FRONTEND_CPU_LIMIT:-1.00}"
+          memory: "${FRONTEND_MEMORY_LIMIT:-512M}"
+        reservations:
+          cpus: "${FRONTEND_CPU_RESERVATION:-0.25}"
+          memory: "${FRONTEND_MEMORY_RESERVATION:-128M}"
     restart: unless-stopped
 
   postgres:
     image: postgres:17
     container_name: magpie_db
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: magpie
+      POSTGRES_USER: ${DB_USERNAME:-magpie_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ChangeMeToAStrongDbPassword}
+      POSTGRES_DB: ${DB_NAME:-magpie}
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "${POSTGRES_CPU_LIMIT:-1.50}"
+          memory: "${POSTGRES_MEMORY_LIMIT:-1G}"
+        reservations:
+          cpus: "${POSTGRES_CPU_RESERVATION:-0.50}"
+          memory: "${POSTGRES_MEMORY_RESERVATION:-256M}"
     restart: unless-stopped
 
   redis:
     image: redis:latest
     container_name: magpie_redis
     ports:
-      - "8946:6379"
+      - "127.0.0.1:8946:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: "${REDIS_CPU_LIMIT:-1.00}"
+          memory: "${REDIS_MEMORY_LIMIT:-512M}"
+        reservations:
+          cpus: "${REDIS_CPU_RESERVATION:-0.25}"
+          memory: "${REDIS_MEMORY_RESERVATION:-128M}"
     restart: unless-stopped
 
 volumes:

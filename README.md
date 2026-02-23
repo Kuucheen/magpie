@@ -91,6 +91,7 @@ all via a web dashboard.
    cd magpie
    cp .env.example .env
    # edit .env and set PROXY_ENCRYPTION_KEY and JWT_SECRET
+   # optional: override DB_USERNAME/DB_PASSWORD/DB_NAME
    # optional: tune proxy statistics retention (PROXY_STATISTICS_RETENTION_*)
    docker compose up -d
    ```

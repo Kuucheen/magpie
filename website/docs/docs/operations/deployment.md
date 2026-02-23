@@ -22,11 +22,14 @@ Services:
 
 ## Production recommendations
 
-1. Set a strong `PROXY_ENCRYPTION_KEY` and `JWT_SECRET`.
-2. Use persistent volumes for Postgres and backend settings if needed.
-3. Put reverse proxy/TLS in front of frontend and backend.
-4. Restrict database and redis exposure to private network.
-5. Back up Postgres regularly.
+1. Set strong `PROXY_ENCRYPTION_KEY` and `JWT_SECRET`.
+2. Optionally override `DB_USERNAME`, `DB_PASSWORD`, and `DB_NAME` (Compose provides defaults).
+3. Use persistent volumes for Postgres and backend settings if needed.
+4. Put reverse proxy/TLS in front of frontend and backend.
+5. Restrict database and redis exposure to private network.
+6. Back up Postgres regularly.
+
+Default Compose includes CPU/memory limits and reservations per service. Tune them with `*_CPU_LIMIT`, `*_MEMORY_LIMIT`, `*_CPU_RESERVATION`, and `*_MEMORY_RESERVATION` env vars.
 
 ## Multi-instance considerations
 

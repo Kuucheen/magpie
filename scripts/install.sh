@@ -114,6 +114,17 @@ download() {
   fi
 }
 
+generate_random_hex() {
+  local bytes="$1"
+
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex "${bytes}"
+    return
+  fi
+
+  od -An -N "${bytes}" -tx1 /dev/urandom | tr -d ' \n'
+}
+
 echo "Downloading docker-compose.yml..."
 download "${COMPOSE_URL}" "${INSTALL_DIR}/docker-compose.yml"
 
@@ -218,15 +229,63 @@ if [[ "${jwt_secret}" == *$'\n'* || "${jwt_secret}" == *$'\r'* ]]; then
   exit 1
 fi
 
+if [ -n "${DB_USERNAME:-}" ]; then
+  db_username="${DB_USERNAME}"
+else
+  db_username="magpie_$(generate_random_hex 6)"
+fi
+
+if [ -n "${DB_PASSWORD:-}" ]; then
+  db_password="${DB_PASSWORD}"
+else
+  db_password="$(generate_random_hex 20)"
+fi
+
+db_name="${DB_NAME:-magpie}"
+
+if [[ -z "${db_username}" ]]; then
+  echo "DB_USERNAME cannot be empty." >&2
+  exit 1
+fi
+if [[ -z "${db_password}" ]]; then
+  echo "DB_PASSWORD cannot be empty." >&2
+  exit 1
+fi
+if [[ -z "${db_name}" ]]; then
+  echo "DB_NAME cannot be empty." >&2
+  exit 1
+fi
+if [[ "${db_username}" == *$'\n'* || "${db_username}" == *$'\r'* ]]; then
+  echo "DB_USERNAME must be a single line." >&2
+  exit 1
+fi
+if [[ "${db_password}" == *$'\n'* || "${db_password}" == *$'\r'* ]]; then
+  echo "DB_PASSWORD must be a single line." >&2
+  exit 1
+fi
+if [[ "${db_name}" == *$'\n'* || "${db_name}" == *$'\r'* ]]; then
+  echo "DB_NAME must be a single line." >&2
+  exit 1
+fi
+
 escaped_key="${key//\\/\\\\}"
 escaped_key="${escaped_key//\"/\\\"}"
 escaped_jwt_secret="${jwt_secret//\\/\\\\}"
 escaped_jwt_secret="${escaped_jwt_secret//\"/\\\"}"
+escaped_db_name="${db_name//\\/\\\\}"
+escaped_db_name="${escaped_db_name//\"/\\\"}"
+escaped_db_username="${db_username//\\/\\\\}"
+escaped_db_username="${escaped_db_username//\"/\\\"}"
+escaped_db_password="${db_password//\\/\\\\}"
+escaped_db_password="${escaped_db_password//\"/\\\"}"
 
 umask 077
 {
   printf "PROXY_ENCRYPTION_KEY=\"%s\"\n" "${escaped_key}"
   printf "JWT_SECRET=\"%s\"\n" "${escaped_jwt_secret}"
+  printf "DB_NAME=\"%s\"\n" "${escaped_db_name}"
+  printf "DB_USERNAME=\"%s\"\n" "${escaped_db_username}"
+  printf "DB_PASSWORD=\"%s\"\n" "${escaped_db_password}"
   if [ -n "${MAGPIE_IMAGE_TAG:-}" ]; then
     printf "MAGPIE_IMAGE_TAG=%s\n" "${MAGPIE_IMAGE_TAG}"
   fi

@@ -14,9 +14,20 @@ Rotating proxy listener ports are also mapped by default:
 - TCP: `20000-20100`
 - UDP: `20000-20100`
 
-## Required secret
+## Required secrets/config
 
-Set `PROXY_ENCRYPTION_KEY` before starting Magpie.
+Set these before starting Magpie:
+
+- `PROXY_ENCRYPTION_KEY`
+- `JWT_SECRET`
+
+Optional DB overrides:
+
+- `DB_USERNAME`
+- `DB_PASSWORD`
+- `DB_NAME`
+
+If omitted, Docker Compose uses built-in DB defaults. Installer scripts auto-generate strong DB credentials.
 
 Why it matters:
 
@@ -29,7 +40,8 @@ Why it matters:
 git clone https://github.com/Kuucheen/magpie.git
 cd magpie
 cp .env.example .env
-# edit .env and set PROXY_ENCRYPTION_KEY
+# edit .env and set PROXY_ENCRYPTION_KEY and JWT_SECRET
+# optional: override DB_USERNAME/DB_PASSWORD/DB_NAME
 docker compose up -d
 ```
 

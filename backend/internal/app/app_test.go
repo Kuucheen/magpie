@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/charmbracelet/log"
+)
 
 func TestReadPort(t *testing.T) {
 	t.Setenv("MAGPIE_PORT_VALID", "12345")
@@ -37,6 +41,32 @@ func TestResolvePort(t *testing.T) {
 	t.Run("fallback used when env unset", func(t *testing.T) {
 		if got := resolvePort("UNSET_PRIMARY", "UNSET_LEGACY", 9090); got != 9090 {
 			t.Fatalf("resolvePort returned %d, want 9090", got)
+		}
+	})
+}
+
+func TestConfigureLogLevel(t *testing.T) {
+	t.Run("defaults to info when unset", func(t *testing.T) {
+		t.Setenv("LOG_LEVEL", "")
+		configureLogLevel()
+		if got := log.GetLevel(); got != log.InfoLevel {
+			t.Fatalf("configureLogLevel() level = %v, want %v", got, log.InfoLevel)
+		}
+	})
+
+	t.Run("supports debug", func(t *testing.T) {
+		t.Setenv("LOG_LEVEL", "debug")
+		configureLogLevel()
+		if got := log.GetLevel(); got != log.DebugLevel {
+			t.Fatalf("configureLogLevel() level = %v, want %v", got, log.DebugLevel)
+		}
+	})
+
+	t.Run("invalid value falls back to info", func(t *testing.T) {
+		t.Setenv("LOG_LEVEL", "not-a-level")
+		configureLogLevel()
+		if got := log.GetLevel(); got != log.InfoLevel {
+			t.Fatalf("configureLogLevel() level = %v, want %v", got, log.InfoLevel)
 		}
 	})
 }

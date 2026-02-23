@@ -4,6 +4,7 @@
 
 - `PROXY_ENCRYPTION_KEY`: encryption key for stored proxy secrets
 - `JWT_SECRET`: JWT signing key
+- `LOG_LEVEL` (default `info`): backend logger level (`debug`, `info`, `warn`, `error`, `fatal`)
 - `BACKEND_PORT` (default `5656`): API listen port
 - `backend-port`: legacy port env fallback
 - `CORS_ALLOWED_ORIGINS` (default `http://localhost:5050,http://127.0.0.1:5050`): comma-separated CORS origin allowlist.
@@ -28,6 +29,7 @@ In default Docker Compose this is set to `redis://redis:6379`.
 - `DB_NAME` (default `magpie`)
 - `DB_USERNAME` (default `admin`)
 - `DB_PASSWORD` (default `admin`)
+- `DB_SSLMODE` (default `require`): PostgreSQL TLS mode (`disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full`).
 - `DB_AUTO_MIGRATE` (default `true`)
 - `DB_MAX_OPEN_CONNS` (default `32`)
 - `DB_MAX_IDLE_CONNS` (default `DB_MAX_OPEN_CONNS`)

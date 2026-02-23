@@ -134,17 +134,31 @@ func buildDSN() string {
 	dbName := support.GetEnv("DB_NAME", "magpie")
 	dbUser := support.GetEnv("DB_USERNAME", "admin")
 	dbPassword := support.GetEnv("DB_PASSWORD", "admin")
+	dbSSLMode := resolveDBSSLMode()
 
 	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		dbHost,
 		dbPort,
 		dbUser,
 		dbPassword,
 		dbName,
+		dbSSLMode,
 	)
 
 	return dsn
+}
+
+func resolveDBSSLMode() string {
+	raw := strings.ToLower(strings.TrimSpace(support.GetEnv("DB_SSLMODE", "require")))
+
+	switch raw {
+	case "disable", "allow", "prefer", "require", "verify-ca", "verify-full":
+		return raw
+	default:
+		log.Warn("invalid DB_SSLMODE value, defaulting to secure mode", "value", raw, "default", "require")
+		return "require"
+	}
 }
 
 func silentLogger() logger.Interface {

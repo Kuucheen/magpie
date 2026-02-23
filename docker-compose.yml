@@ -13,6 +13,7 @@ services:
       - redisUrl=redis://redis:6379
       - DB_HOST=postgres
       - DB_PORT=5432
+      - DB_SSLMODE=disable
     depends_on:
       - postgres
       - redis

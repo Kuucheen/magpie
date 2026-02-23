@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/log"
 	"github.com/joho/godotenv"
@@ -30,7 +31,7 @@ func Run() error {
 		log.Warn("No .env file found. Falling back to system environment variables.")
 	}
 
-	log.SetLevel(log.DebugLevel)
+	configureLogLevel()
 	if err := auth.RequireJWTSecretConfigured(); err != nil {
 		return err
 	}
@@ -89,4 +90,24 @@ func readPort(envKey string) int {
 		return 0
 	}
 	return port
+}
+
+func configureLogLevel() {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL")))
+
+	switch raw {
+	case "", "info":
+		log.SetLevel(log.InfoLevel)
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	case "warn", "warning":
+		log.SetLevel(log.WarnLevel)
+	case "error":
+		log.SetLevel(log.ErrorLevel)
+	case "fatal":
+		log.SetLevel(log.FatalLevel)
+	default:
+		log.SetLevel(log.InfoLevel)
+		log.Warn("invalid LOG_LEVEL value, defaulting to info", "value", raw)
+	}
 }

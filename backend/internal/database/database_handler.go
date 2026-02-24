@@ -136,8 +136,8 @@ func buildDSN() string {
 	dbHost := support.GetEnv("DB_HOST", "localhost")
 	dbPort := support.GetEnv("DB_PORT", "5434")
 	dbName := support.GetEnv("DB_NAME", "magpie")
-	dbUser := support.GetEnv("DB_USERNAME", "admin")
-	dbPassword := support.GetEnv("DB_PASSWORD", "admin")
+	dbUser := support.GetEnv("DB_USERNAME", "magpie_user")
+	dbPassword := support.GetEnv("DB_PASSWORD", "ChangeMeToAStrongDbPassword")
 	dbSSLMode := resolveDBSSLMode()
 
 	dsn := fmt.Sprintf(

@@ -32,6 +32,8 @@ Services:
 
 Default Compose includes CPU/memory limits and reservations per service. Tune them with `*_CPU_LIMIT`, `*_MEMORY_LIMIT`, `*_CPU_RESERVATION`, and `*_MEMORY_RESERVATION` env vars.
 
+Before production rollout, run the load/soak gate documented in [Performance Validation](./performance-validation.md).
+
 ## Multi-instance considerations
 
 Leader-based routines use Redis locks. If running multiple backend instances, ensure all instances share the same Redis and database.

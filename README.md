@@ -132,6 +132,11 @@ Use the helper scripts to pull the latest code and rebuild just the frontend/bac
 - Backend: `cd backend && go run ./cmd/magpie`
 - Frontend: `cd frontend && npm install && npm run start`
 
+## Performance Validation
+- Harness: `scripts/perf/`
+- Quick gate run: `cd scripts/perf && ./run-gate.sh`
+- Include long soak: `cd scripts/perf && PERF_SOAK_DURATION=24h ./run-gate.sh`
+
 Magpie targets Go 1.24.x, Angular 20, PostgreSQL, and Redis. Keep those versions handy for parity.
 
 ## Attributions & External Sources

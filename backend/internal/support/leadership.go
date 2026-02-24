@@ -21,6 +21,8 @@ const (
 	defaultRenewalFraction = 3
 )
 
+var ErrLeaderLockNotAcquired = errors.New("support: leader lock not acquired")
+
 var (
 	leaderCounter atomic.Uint64
 
@@ -94,6 +96,53 @@ func RunWithLeader(ctx context.Context, key string, ttl time.Duration, run func(
 	}
 }
 
+// RunLeaderTaskOnce tries to acquire a Redis-based leadership lock exactly once.
+// If lock acquisition succeeds, run is invoked while the lock is renewed in the
+// background. If another instance already holds the lock, ErrLeaderLockNotAcquired
+// is returned.
+func RunLeaderTaskOnce(ctx context.Context, key string, ttl time.Duration, run func(context.Context) error) error {
+	if run == nil {
+		return errors.New("support: leader run function cannot be nil")
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if ttl <= 0 {
+		ttl = DefaultLeadershipTTL
+	}
+
+	client, err := GetRedisClient()
+	if err != nil {
+		return fmt.Errorf("support: leader lock redis client: %w", err)
+	}
+
+	value := generateLeaderID()
+	ok, err := client.SetNX(ctx, key, value, ttl).Result()
+	if err != nil {
+		return fmt.Errorf("support: leader lock setnx: %w", err)
+	}
+	if !ok {
+		return ErrLeaderLockNotAcquired
+	}
+
+	sessionCtx, cancel := context.WithCancel(ctx)
+	session := &leaderSession{
+		client:    client,
+		key:       key,
+		value:     value,
+		ttl:       ttl,
+		ctx:       sessionCtx,
+		cancel:    cancel,
+		stopRenew: make(chan struct{}),
+	}
+	go session.renewLoop()
+
+	defer session.Close()
+	return run(sessionCtx)
+}
+
 type leaderSession struct {
 	client    *redis.Client
 	key       string
@@ -148,6 +197,7 @@ func acquireLeaderSession(ctx context.Context, client *redis.Client, key string,
 
 func (ls *leaderSession) Close() {
 	ls.closeOnce.Do(func() {
+		ls.cancel()
 		close(ls.stopRenew)
 		if err := ls.releaseLock(); err != nil {
 			log.Warn("leader lock: release failed", "key", ls.key, "error", err)

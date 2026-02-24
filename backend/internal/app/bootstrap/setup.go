@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 )
 
 const startupProxyBatchSize = 2000
+const startupQueueBootstrapLockKey = "magpie:leader:startup_queue_bootstrap"
 
 func Setup(ctx context.Context) error {
 	if ctx == nil {
@@ -127,48 +129,7 @@ func Setup(ctx context.Context) error {
 
 	}()
 
-	queuedProxies := 0
-	err := database.ForEachProxyBatch(startupProxyBatchSize, func(proxies []domain.Proxy) error {
-		missingGeo := database.FilterProxiesMissingGeo(proxies)
-		if len(missingGeo) > 0 {
-			database.AsyncEnrichProxyMetadata(missingGeo)
-		}
-
-		if err := proxyqueue.PublicProxyQueue.AddToQueue(proxies); err != nil {
-			return err
-		}
-		queuedProxies += len(proxies)
-		return nil
-	})
-	if err != nil {
-		log.Error("Error queueing startup proxies", "error", err)
-	} else if queuedProxies > 0 {
-		log.Infof("Added %d proxies to queue", queuedProxies)
-	}
-
-	scrapeSites, err := database.GetAllScrapeSites()
-	if err != nil {
-		log.Error("Error getting all scrape sites:", "error", err)
-	} else {
-		filtered := make([]domain.ScrapeSite, 0, len(scrapeSites))
-		blocked := 0
-		for _, site := range scrapeSites {
-			if config.IsWebsiteBlocked(site.URL) {
-				blocked++
-				continue
-			}
-			filtered = append(filtered, site)
-		}
-
-		if blocked > 0 {
-			log.Info("Skipped blocked scrape sites", "count", blocked)
-		}
-
-		if len(filtered) > 0 {
-			sitequeue.PublicScrapeSiteQueue.AddToQueue(filtered)
-			log.Infof("Added %d scrape sites to queue", len(filtered))
-		}
-	}
+	bootstrapStartupQueues(ctx)
 
 	rotatingproxy.GlobalManager.StartAll()
 	go func() {
@@ -201,4 +162,75 @@ func Setup(ctx context.Context) error {
 func judgeSetup() {
 	addJudgeRelationsToCache()
 	AddDefaultJudgesToUsers()
+}
+
+func bootstrapStartupQueues(ctx context.Context) {
+	err := support.RunLeaderTaskOnce(ctx, startupQueueBootstrapLockKey, support.DefaultLeadershipTTL, func(context.Context) error {
+		if err := queueStartupProxies(); err != nil {
+			return err
+		}
+		return queueStartupScrapeSites()
+	})
+	if err == nil {
+		return
+	}
+	if errors.Is(err, support.ErrLeaderLockNotAcquired) {
+		log.Info("Skipped startup queue bootstrap on follower instance")
+		return
+	}
+	log.Error("Startup queue bootstrap failed", "error", err)
+}
+
+func queueStartupProxies() error {
+	queuedProxies := 0
+	err := database.ForEachProxyBatch(startupProxyBatchSize, func(proxies []domain.Proxy) error {
+		missingGeo := database.FilterProxiesMissingGeo(proxies)
+		if len(missingGeo) > 0 {
+			database.AsyncEnrichProxyMetadata(missingGeo)
+		}
+
+		if err := proxyqueue.PublicProxyQueue.AddToQueue(proxies); err != nil {
+			return err
+		}
+		queuedProxies += len(proxies)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("queue startup proxies: %w", err)
+	}
+	if queuedProxies > 0 {
+		log.Infof("Added %d proxies to queue", queuedProxies)
+	}
+	return nil
+}
+
+func queueStartupScrapeSites() error {
+	scrapeSites, err := database.GetAllScrapeSites()
+	if err != nil {
+		return fmt.Errorf("load startup scrape sites: %w", err)
+	}
+
+	filtered := make([]domain.ScrapeSite, 0, len(scrapeSites))
+	blocked := 0
+	for _, site := range scrapeSites {
+		if config.IsWebsiteBlocked(site.URL) {
+			blocked++
+			continue
+		}
+		filtered = append(filtered, site)
+	}
+
+	if blocked > 0 {
+		log.Info("Skipped blocked scrape sites", "count", blocked)
+	}
+
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	if err := sitequeue.PublicScrapeSiteQueue.AddToQueue(filtered); err != nil {
+		return fmt.Errorf("queue startup scrape sites: %w", err)
+	}
+	log.Infof("Added %d scrape sites to queue", len(filtered))
+	return nil
 }

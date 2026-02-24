@@ -102,10 +102,10 @@ func configureLogLevel() {
 	raw := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL")))
 
 	switch raw {
-	case "", "info":
-		log.SetLevel(log.InfoLevel)
-	case "debug":
+	case "", "debug":
 		log.SetLevel(log.DebugLevel)
+	case "info":
+		log.SetLevel(log.InfoLevel)
 	case "warn", "warning":
 		log.SetLevel(log.WarnLevel)
 	case "error":

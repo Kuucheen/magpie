@@ -31,16 +31,18 @@ func CreateTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol st
 }
 
 func createTCPTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol string) (http.RoundTripper, func(), error) {
-	// Base configuration with keep-alives disabled
+	timeout := time.Duration(config.GetConfig().Checker.Timeout) * time.Millisecond
+
+	// Base configuration tuned for connection reuse under checker load.
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout:   time.Duration(config.GetConfig().Checker.Timeout) * time.Millisecond,
-			KeepAlive: 0, // KeepAlive disabled
+			Timeout:   timeout,
+			KeepAlive: 30 * time.Second,
 		}).DialContext,
-		DisableKeepAlives:     true,
-		MaxIdleConns:          0,
-		MaxIdleConnsPerHost:   0,
-		IdleConnTimeout:       0,
+		DisableKeepAlives:     false,
+		MaxIdleConns:          256,
+		MaxIdleConnsPerHost:   64,
+		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
@@ -58,7 +60,10 @@ func createTCPTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol
 		transport.Proxy = http.ProxyURL(proxyURL)
 
 		// Override dialer to resolve judge's host to pre-defined IP
-		dialer := &net.Dialer{Timeout: time.Duration(config.GetConfig().Checker.Timeout) * time.Millisecond}
+		dialer := &net.Dialer{
+			Timeout:   timeout,
+			KeepAlive: 30 * time.Second,
+		}
 		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if host, port, err := net.SplitHostPort(addr); err == nil && host == judge.GetHostname() {
 				addr = net.JoinHostPort(judge.GetIp(), port)
@@ -73,7 +78,8 @@ func createTCPTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol
 			auth = &proxy.Auth{User: proxyToCheck.Username, Password: proxyToCheck.Password}
 		}
 		socksDialer, err := proxy.SOCKS5("tcp", proxyToCheck.GetFullProxy(), auth, &net.Dialer{
-			Timeout: time.Duration(config.GetConfig().Checker.Timeout) * time.Millisecond,
+			Timeout:   timeout,
+			KeepAlive: 30 * time.Second,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -83,7 +89,6 @@ func createTCPTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol
 		}
 
 	case "socks4":
-		timeout := time.Duration(config.GetConfig().Checker.Timeout) * time.Millisecond
 		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return dialSOCKS4(ctx, proxyToCheck, addr, timeout)
 		}

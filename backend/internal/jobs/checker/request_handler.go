@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -33,28 +34,25 @@ var (
 
 // ProxyCheckRequest makes a request to the provided siteUrl with the provided proxy
 func ProxyCheckRequest(proxyToCheck domain.Proxy, judge *domain.Judge, protocol string, transportProtocol string, timeout uint16) (string, error) {
-	if judge != nil && config.IsWebsiteBlocked(judge.FullString) {
+	if judge == nil {
+		return "Invalid judge", fmt.Errorf("judge is required")
+	}
+	if config.IsWebsiteBlocked(judge.FullString) {
 		return "Blocked judge website", fmt.Errorf("judge website is blocked: %s", judge.FullString)
 	}
 
-	transport, closeFunc, err := support.CreateTransport(proxyToCheck, judge, protocol, transportProtocol)
+	client, err := getCheckerHTTPClient(proxyToCheck, judge, protocol, transportProtocol)
 	if err != nil {
 		return "Failed to create transport", err
 	}
-	if closeFunc != nil {
-		defer closeFunc() // Release resources immediately
-	}
 
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   time.Duration(timeout) * time.Millisecond,
-	}
+	reqCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Millisecond)
+	defer cancel()
 
-	req, err := http.NewRequest("GET", judge.FullString, nil)
+	req, err := http.NewRequestWithContext(reqCtx, "GET", judge.FullString, nil)
 	if err != nil {
 		return "Error creating request", err
 	}
-	req.Header.Set("Connection", "close")
 	if support.IsHTTP3Transport(transportProtocol) && proxyToCheck.HasAuth() && (protocol == "http" || protocol == "https") {
 		auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", proxyToCheck.Username, proxyToCheck.Password)))
 		req.Header.Set("Proxy-Authorization", "Basic "+auth)

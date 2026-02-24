@@ -269,7 +269,9 @@ func saveUserSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := database.UpdateUserSettings(userID, userSettings); err != nil {
+		log.Error("failed to update user settings", "user_id", userID, "error", err)
 		writeError(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
 
 	jwrList, err := database.GetUserJudgesWithRegex(userID)

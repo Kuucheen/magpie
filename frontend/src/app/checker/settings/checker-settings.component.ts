@@ -115,7 +115,8 @@ export class CheckerSettingsComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Error saving settings:', err);
-        this.notification.showError('Failed to save settings!');
+        const reason = err?.error?.message ?? err?.error?.error ?? 'Failed to save settings!';
+        this.notification.showError(reason);
       }
     });
   }

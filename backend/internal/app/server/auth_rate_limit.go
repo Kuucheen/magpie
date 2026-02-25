@@ -31,6 +31,7 @@ const (
 	defaultAuthLoginFailureWindowSeconds = 15 * 60
 	defaultAuthLoginFailuresPerIP        = 30
 	defaultAuthLoginFailuresPerEmail     = 10
+	authRedisFailureBackoff              = 5 * time.Second
 )
 
 const (
@@ -79,6 +80,8 @@ type loginFailureLimiter struct {
 var (
 	authRateLimitsOnce sync.Once
 	globalAuthLimits   authRateLimits
+	authRedisMu        sync.Mutex
+	authRedisRetryAt   time.Time
 )
 
 func withLoginRateLimit(next http.Handler) http.Handler {
@@ -217,7 +220,11 @@ func (l *fixedWindowLimiter) reset(key string) {
 	if client := redisClient(); client != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = client.Del(ctx, l.redisKey(key)).Err()
+		if err := client.Del(ctx, l.redisKey(key)).Err(); err != nil {
+			markAuthRedisFailure()
+		} else {
+			markAuthRedisSuccess()
+		}
 	}
 
 	l.mu.Lock()
@@ -237,8 +244,10 @@ func (l *fixedWindowLimiter) incrementRedis(key string) (int64, time.Duration, b
 	windowMS := strconv.FormatInt(l.window.Milliseconds(), 10)
 	result, err := authRateLimitIncrementScript.Run(ctx, client, []string{l.redisKey(key)}, windowMS).Result()
 	if err != nil {
+		markAuthRedisFailure()
 		return 0, 0, false
 	}
+	markAuthRedisSuccess()
 
 	values, ok := result.([]interface{})
 	if !ok || len(values) < 2 {
@@ -273,15 +282,19 @@ func (l *fixedWindowLimiter) currentRedis(key string) (int64, time.Duration, boo
 	count, err := client.Get(ctx, l.redisKey(key)).Int64()
 	if err != nil {
 		if err == redis.Nil {
+			markAuthRedisSuccess()
 			return 0, 0, true
 		}
+		markAuthRedisFailure()
 		return 0, 0, false
 	}
 
 	ttl, err := client.PTTL(ctx, l.redisKey(key)).Result()
 	if err != nil {
+		markAuthRedisFailure()
 		return 0, 0, false
 	}
+	markAuthRedisSuccess()
 	if ttl < 0 {
 		ttl = 0
 	}
@@ -471,9 +484,44 @@ func toInt64(value interface{}) (int64, bool) {
 }
 
 func redisClient() *redis.Client {
-	client, err := support.GetRedisClient()
-	if err != nil {
+	if !authRedisAttemptAllowed() {
 		return nil
 	}
+
+	client, err := support.GetRedisClient()
+	if err != nil {
+		markAuthRedisFailure()
+		return nil
+	}
+
+	markAuthRedisSuccess()
 	return client
+}
+
+func authRedisAttemptAllowed() bool {
+	authRedisMu.Lock()
+	defer authRedisMu.Unlock()
+
+	if authRedisRetryAt.IsZero() {
+		return true
+	}
+
+	if time.Now().After(authRedisRetryAt) {
+		authRedisRetryAt = time.Time{}
+		return true
+	}
+
+	return false
+}
+
+func markAuthRedisFailure() {
+	authRedisMu.Lock()
+	authRedisRetryAt = time.Now().Add(authRedisFailureBackoff)
+	authRedisMu.Unlock()
+}
+
+func markAuthRedisSuccess() {
+	authRedisMu.Lock()
+	authRedisRetryAt = time.Time{}
+	authRedisMu.Unlock()
 }

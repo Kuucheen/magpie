@@ -128,6 +128,7 @@ func resetJWTStateForTests(t *testing.T) {
 	tokenRevocationMu.Lock()
 	localRevokedTokenByID = make(map[string]time.Time)
 	localUserRevokedBefore = make(map[uint]time.Time)
+	redisRetryAfter = time.Time{}
 	tokenRevocationMu.Unlock()
 
 	if err := support.CloseRedisClient(); err != nil {

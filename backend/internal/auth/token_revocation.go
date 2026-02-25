@@ -16,12 +16,14 @@ const (
 	authUserRevokedBeforePrefix = "magpie:auth:revoked_before:user:"
 	authRedisOperationTimeout   = 2 * time.Second
 	authUserRevokeTTL           = jwtTTL + 24*time.Hour
+	authRedisFailureBackoff     = 5 * time.Second
 )
 
 var (
 	tokenRevocationMu      sync.Mutex
 	localRevokedTokenByID  = make(map[string]time.Time)
 	localUserRevokedBefore = make(map[uint]time.Time)
+	redisRetryAfter        time.Time
 )
 
 func revokeTokenID(tokenID string, until time.Time) error {
@@ -39,7 +41,10 @@ func revokeTokenID(tokenID string, until time.Time) error {
 		defer cancel()
 
 		if err := client.Set(ctx, authRevokedTokenPrefix+tokenID, "1", time.Until(until)).Err(); err == nil {
+			markRedisSuccess()
 			return nil
+		} else {
+			markRedisFailure()
 		}
 	}
 
@@ -61,7 +66,10 @@ func isTokenIDRevoked(tokenID string) bool {
 
 		exists, err := client.Exists(ctx, authRevokedTokenPrefix+tokenID).Result()
 		if err == nil {
+			markRedisSuccess()
 			return exists > 0
+		} else {
+			markRedisFailure()
 		}
 	}
 
@@ -86,7 +94,10 @@ func revokeUserTokensBefore(userID uint, instant time.Time) error {
 
 		err := client.Set(ctx, authUserRevokedBeforePrefix+strconv.FormatUint(uint64(userID), 10), strconv.FormatInt(instant.UnixNano(), 10), authUserRevokeTTL).Err()
 		if err == nil {
+			markRedisSuccess()
 			return nil
+		} else {
+			markRedisFailure()
 		}
 	}
 
@@ -107,10 +118,13 @@ func userTokensRevokedBefore(userID uint) (time.Time, bool) {
 
 		value, err := client.Get(ctx, authUserRevokedBeforePrefix+strconv.FormatUint(uint64(userID), 10)).Result()
 		if err == nil {
+			markRedisSuccess()
 			parsed, parseErr := strconv.ParseInt(value, 10, 64)
 			if parseErr == nil && parsed > 0 {
 				return time.Unix(0, parsed).UTC(), true
 			}
+		} else {
+			markRedisFailure()
 		}
 	}
 
@@ -129,9 +143,44 @@ func purgeExpiredRevocationsLocked(now time.Time) {
 }
 
 func redisClient() *redis.Client {
-	client, err := support.GetRedisClient()
-	if err != nil {
+	if !redisAttemptAllowed() {
 		return nil
 	}
+
+	client, err := support.GetRedisClient()
+	if err != nil {
+		markRedisFailure()
+		return nil
+	}
+
+	markRedisSuccess()
 	return client
+}
+
+func redisAttemptAllowed() bool {
+	tokenRevocationMu.Lock()
+	defer tokenRevocationMu.Unlock()
+
+	if redisRetryAfter.IsZero() {
+		return true
+	}
+
+	if time.Now().After(redisRetryAfter) {
+		redisRetryAfter = time.Time{}
+		return true
+	}
+
+	return false
+}
+
+func markRedisFailure() {
+	tokenRevocationMu.Lock()
+	redisRetryAfter = time.Now().Add(authRedisFailureBackoff)
+	tokenRevocationMu.Unlock()
+}
+
+func markRedisSuccess() {
+	tokenRevocationMu.Lock()
+	redisRetryAfter = time.Time{}
+	tokenRevocationMu.Unlock()
 }

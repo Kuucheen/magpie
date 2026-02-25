@@ -13,3 +13,4 @@ coverage/
 .env
 .env.*
 data/settings*.json
+GeoLite2*.mmdb

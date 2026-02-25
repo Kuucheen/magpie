@@ -12,3 +12,4 @@ tmp/
 coverage/
 .env
 .env.*
+data/settings*.json

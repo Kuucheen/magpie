@@ -92,6 +92,12 @@ type ProxyLimitConfig struct {
 
 const settingsFilePath = "data/settings.json"
 
+const (
+	settingsDirectoryPath = "data"
+	settingsDirectoryMode = 0o700
+	settingsFileMode      = 0o600
+)
+
 var (
 	//go:embed default_settings.json
 	defaultConfig []byte
@@ -116,13 +122,13 @@ func ReadSettings() {
 		if os.IsNotExist(err) {
 			log.Warn("Settings file not found, creating with default configuration")
 
-			err = os.MkdirAll("data", os.ModePerm)
+			err = ensureSettingsStoragePermissions()
 			if err != nil {
 				log.Error("Error creating directory for settings file:", err)
 				return
 			}
 
-			err = os.WriteFile(settingsFilePath, defaultConfig, os.ModePerm)
+			err = os.WriteFile(settingsFilePath, defaultConfig, settingsFileMode)
 			if err != nil {
 				log.Error("Error writing default settings file:", err)
 				return
@@ -133,6 +139,10 @@ func ReadSettings() {
 			log.Error("Error reading settings file:", err)
 			return
 		}
+	}
+
+	if err := enforceSettingsFilePermissions(); err != nil {
+		log.Warn("Error enforcing settings file permissions", "error", err)
 	}
 
 	var newConfig Config
@@ -201,9 +211,17 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 		if err != nil {
 			log.Error("Error marshalling new configuration:", err)
 			errs = append(errs, err)
-		} else if err := os.WriteFile(settingsFilePath, data, os.ModePerm); err != nil {
-			log.Error("Error writing new configuration to file:", err)
-			errs = append(errs, err)
+		} else {
+			if err := ensureSettingsStoragePermissions(); err != nil {
+				log.Error("Error ensuring settings storage permissions:", err)
+				errs = append(errs, err)
+			} else if err := os.WriteFile(settingsFilePath, data, settingsFileMode); err != nil {
+				log.Error("Error writing new configuration to file:", err)
+				errs = append(errs, err)
+			} else if err := enforceSettingsFilePermissions(); err != nil {
+				log.Error("Error enforcing settings file permissions:", err)
+				errs = append(errs, err)
+			}
 		}
 	}
 
@@ -256,6 +274,38 @@ func applyLegacyDefaults(raw []byte, cfg *Config) {
 	if partial.Checker.SaveResponses == nil {
 		cfg.Checker.SaveResponses = true
 	}
+}
+
+func ensureSettingsStoragePermissions() error {
+	if err := os.MkdirAll(settingsDirectoryPath, settingsDirectoryMode); err != nil {
+		return err
+	}
+
+	if err := os.Chmod(settingsDirectoryPath, settingsDirectoryMode); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func enforceSettingsFilePermissions() error {
+	info, err := os.Stat(settingsFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	if info.IsDir() {
+		return errors.New("settings path points to a directory")
+	}
+
+	if info.Mode().Perm() == settingsFileMode {
+		return nil
+	}
+
+	return os.Chmod(settingsFilePath, settingsFileMode)
 }
 
 func GetConfig() Config {

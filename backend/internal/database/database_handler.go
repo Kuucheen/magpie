@@ -181,6 +181,8 @@ func defaultMigrations() []any {
 		domain.BlacklistedRange{},
 		domain.ProxyReputation{},
 		domain.UserProxy{},
+		domain.ProxyDailyCheck{},
+		domain.ProxyDailyCheckProxyBackfill{},
 		domain.RotatingProxy{},
 		domain.ProxyHistory{},
 		domain.ProxySnapshot{},

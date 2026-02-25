@@ -319,21 +319,14 @@ func GetDashboardInfo(userid uint) dto.DashboardInfo {
 	// cut‑off for “this week”
 	weekAgo := time.Now().AddDate(0, 0, -7)
 
-	type checkCounts struct {
-		TotalChecks     int64 `gorm:"column:total_checks"`
-		TotalChecksWeek int64 `gorm:"column:total_checks_week"`
+	checks, err := loadDashboardCheckCounts(userid, weekAgo)
+	if err != nil {
+		log.Error("dashboard: failed to load pre-aggregated check counts", "user_id", userid, "error", err)
+		checks, err = loadDashboardCheckCountsDirect(userid, weekAgo)
+		if err != nil {
+			log.Error("dashboard: failed to load fallback check counts", "user_id", userid, "error", err)
+		}
 	}
-
-	var checks checkCounts
-	DB.Model(&domain.ProxyStatistic{}).
-		Select(
-			"COUNT(*) AS total_checks, "+
-				"COALESCE(SUM(CASE WHEN proxy_statistics.created_at >= ? THEN 1 ELSE 0 END), 0) AS total_checks_week",
-			weekAgo,
-		).
-		Joins("JOIN user_proxies up ON up.proxy_id = proxy_statistics.proxy_id").
-		Where("up.user_id = ?", userid).
-		Scan(&checks)
 	info.TotalChecks = checks.TotalChecks
 	info.TotalChecksWeek = checks.TotalChecksWeek
 
@@ -395,18 +388,19 @@ func GetDashboardInfo(userid uint) dto.DashboardInfo {
 	}
 	var tmp []jvp
 
-	DB.Model(&domain.ProxyStatistic{}).
+	DB.Table("proxy_latest_statistics pls").
 		Select(
 			"j.full_string AS judge_url, "+
 				"SUM(CASE WHEN al.name = 'elite' THEN 1 ELSE 0 END)       AS elite_proxies, "+
 				"SUM(CASE WHEN al.name = 'anonymous' THEN 1 ELSE 0 END)   AS anonymous_proxies, "+
 				"SUM(CASE WHEN al.name = 'transparent' THEN 1 ELSE 0 END) AS transparent_proxies",
 		).
-		Joins("JOIN user_proxies up ON up.proxy_id = proxy_statistics.proxy_id AND up.user_id = ?", userid).
-		Joins("JOIN user_judges uj ON uj.judge_id = proxy_statistics.judge_id AND uj.user_id = ?", userid).
-		Joins("JOIN judges j ON j.id = proxy_statistics.judge_id").
-		Joins("JOIN anonymity_levels al ON al.id = proxy_statistics.level_id").
-		Where("proxy_statistics.alive = TRUE").
+		Joins("JOIN proxy_statistics ps ON ps.id = pls.statistic_id").
+		Joins("JOIN user_proxies up ON up.proxy_id = pls.proxy_id AND up.user_id = ?", userid).
+		Joins("JOIN user_judges uj ON uj.judge_id = ps.judge_id AND uj.user_id = ?", userid).
+		Joins("JOIN judges j ON j.id = ps.judge_id").
+		Joins("JOIN anonymity_levels al ON al.id = ps.level_id").
+		Where("ps.alive = TRUE").
 		Group("j.id, j.full_string").
 		Scan(&tmp)
 

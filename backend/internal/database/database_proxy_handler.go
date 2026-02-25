@@ -568,6 +568,7 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
 		Joins("LEFT JOIN (?) AS stats ON stats.proxy_id = proxies.id", healthSubQuery).
 		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
+		Joins("LEFT JOIN proxy_reputations pr_overall ON pr_overall.proxy_id = proxies.id AND pr_overall.kind = ?", domain.ProxyReputationKindOverall).
 		Order("alive DESC, latest_check DESC")
 
 	filterQuery := buildProxyListFilterQuery(userId, filters)
@@ -726,23 +727,17 @@ func buildIPIntSearchRange(search string) (uint32, uint32, bool) {
 func applyProxySearchQuery(query *gorm.DB, pattern string) *gorm.DB {
 	return query.Where(
 		`(
-			CAST(proxies.port AS TEXT) ILIKE ? OR
-			CAST(COALESCE(ps.response_time, 0) AS TEXT) ILIKE ? OR
-			LOWER(COALESCE(NULLIF(proxies.estimated_type, ''), 'n/a')) ILIKE ? OR
-			LOWER(COALESCE(NULLIF(proxies.country, ''), 'n/a')) ILIKE ? OR
-			LOWER(COALESCE(al.name, 'n/a')) ILIKE ? OR
-			LOWER(CASE WHEN COALESCE(pos.overall_alive, false) THEN 'alive' ELSE 'dead' END) ILIKE ? OR
-			CAST(COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS TEXT) ILIKE ? OR
-			EXISTS (
-				SELECT 1
-				FROM proxy_reputations pr
-				WHERE pr.proxy_id = proxies.id AND (
-					LOWER(COALESCE(pr.kind, '')) ILIKE ? OR
-					LOWER(COALESCE(pr.label, '')) ILIKE ? OR
-					CAST(pr.score AS TEXT) ILIKE ?
-				)
-			)
-		)`,
+				CAST(proxies.port AS TEXT) ILIKE ? OR
+				CAST(COALESCE(ps.response_time, 0) AS TEXT) ILIKE ? OR
+				LOWER(COALESCE(NULLIF(proxies.estimated_type, ''), 'n/a')) ILIKE ? OR
+				LOWER(COALESCE(NULLIF(proxies.country, ''), 'n/a')) ILIKE ? OR
+				LOWER(COALESCE(al.name, 'n/a')) ILIKE ? OR
+				LOWER(CASE WHEN COALESCE(pos.overall_alive, false) THEN 'alive' ELSE 'dead' END) ILIKE ? OR
+				CAST(COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS TEXT) ILIKE ? OR
+				LOWER(COALESCE(pr_overall.kind, '')) ILIKE ? OR
+				LOWER(COALESCE(pr_overall.label, '')) ILIKE ? OR
+				CAST(COALESCE(pr_overall.score, 0) AS TEXT) ILIKE ?
+			)`,
 		pattern,
 		pattern,
 		pattern,
@@ -903,9 +898,10 @@ func loadDistinctProxyInfoValue(userId uint, column string) ([]string, error) {
 
 func loadDistinctAnonymityLevels(userId uint) ([]string, error) {
 	var rows []proxyFilterValueRow
-	latestStats := DB.Model(&domain.ProxyStatistic{}).
-		Select("DISTINCT ON (proxy_id) proxy_id, level_id").
-		Order("proxy_id, created_at DESC, id DESC")
+	latestStats := DB.Table("proxy_latest_statistics pls").
+		Select("DISTINCT ON (pls.proxy_id) pls.proxy_id, ps.level_id").
+		Joins("JOIN proxy_statistics ps ON ps.id = pls.statistic_id").
+		Order("pls.proxy_id, pls.checked_at DESC, pls.statistic_id DESC")
 
 	if err := DB.Model(&domain.Proxy{}).
 		Select("DISTINCT COALESCE(al.name, 'N/A') AS value").

@@ -9,13 +9,12 @@ import (
 
 func IsAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
+		token, err := ExtractBearerToken(r.Header.Get("Authorization"))
+		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		token := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := ValidateJWT(token)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -78,12 +77,25 @@ func GetUserIDFromRequest(r *http.Request) (uint, error) {
 }
 
 func extractClaims(r *http.Request) (map[string]interface{}, error) {
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return nil, errors.New("missing or malformed Authorization header")
+	token, err := ExtractBearerToken(r.Header.Get("Authorization"))
+	if err != nil {
+		return nil, err
 	}
-	token := strings.TrimPrefix(authHeader, "Bearer ")
+
 	return ValidateJWT(token)
+}
+
+func ExtractBearerToken(authHeader string) (string, error) {
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return "", errors.New("missing or malformed Authorization header")
+	}
+
+	token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if token == "" {
+		return "", errors.New("missing or malformed Authorization header")
+	}
+
+	return token, nil
 }
 
 func IsValidEmail(email string) bool {

@@ -1,17 +1,33 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"time"
 )
 
 const jwtSecretEnv = "JWT_SECRET"
+
+const (
+	jwtTTL           = 24 * 7 * time.Hour
+	jwtClaimUserID   = "user_id"
+	jwtClaimRole     = "role"
+	jwtClaimExpiry   = "exp"
+	jwtClaimIssuedAt = "iat"
+	jwtClaimTokenID  = "jti"
+	jwtClaimIssuedNs = "iat_ns"
+	jwtTokenIDBytes  = 16
+)
 
 var (
 	jwtSecretOnce sync.Once
@@ -47,10 +63,19 @@ func GenerateJWT(userId uint, role string) (string, error) {
 		return "", err
 	}
 
+	tokenID, err := generateTokenID()
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
 	claims := jwt.MapClaims{
-		"user_id": userId,
-		"role":    role,
-		"exp":     time.Now().Add(24 * 7 * time.Hour).Unix(),
+		jwtClaimUserID:   userId,
+		jwtClaimRole:     role,
+		jwtClaimIssuedAt: now.Unix(),
+		jwtClaimIssuedNs: strconv.FormatInt(now.UnixNano(), 10),
+		jwtClaimExpiry:   now.Add(jwtTTL).Unix(),
+		jwtClaimTokenID:  tokenID,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -58,25 +83,208 @@ func GenerateJWT(userId uint, role string) (string, error) {
 }
 
 func ValidateJWT(tokenString string) (map[string]interface{}, error) {
+	claims, err := parseSignedJWT(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := validateTokenRevocation(claims); err != nil {
+		return nil, err
+	}
+
+	return claims, nil
+}
+
+func RevokeJWT(tokenString string) error {
+	claims, err := parseSignedJWT(tokenString)
+	if err != nil {
+		return err
+	}
+	return RevokeJWTClaims(claims)
+}
+
+func RevokeJWTClaims(claims map[string]interface{}) error {
+	tokenID, ok := claimString(claims, jwtClaimTokenID)
+	if !ok || tokenID == "" {
+		return errors.New("token missing jti claim")
+	}
+
+	expiryUnix, ok := claimInt64(claims, jwtClaimExpiry)
+	if !ok {
+		return errors.New("token missing exp claim")
+	}
+
+	revokeUntil := time.Unix(expiryUnix, 0).UTC()
+	if !revokeUntil.After(time.Now().UTC()) {
+		return nil
+	}
+
+	return revokeTokenID(tokenID, revokeUntil)
+}
+
+func RevokeAllUserJWTs(userID uint) error {
+	if userID == 0 {
+		return errors.New("invalid user id")
+	}
+	return revokeUserTokensBefore(userID, time.Now().UTC())
+}
+
+func RotateJWT(tokenString string) (string, string, error) {
+	claims, err := ValidateJWT(tokenString)
+	if err != nil {
+		return "", "", err
+	}
+
+	userID, ok := claimUint(claims, jwtClaimUserID)
+	if !ok || userID == 0 {
+		return "", "", errors.New("token missing user_id claim")
+	}
+
+	role, ok := claimString(claims, jwtClaimRole)
+	if !ok || role == "" {
+		return "", "", errors.New("token missing role claim")
+	}
+
+	if err := RevokeJWTClaims(claims); err != nil {
+		return "", "", err
+	}
+
+	token, err := GenerateJWT(userID, role)
+	if err != nil {
+		return "", "", err
+	}
+
+	return token, role, nil
+}
+
+func parseSignedJWT(tokenString string) (map[string]interface{}, error) {
 	signingKey, err := jwtSigningKey()
 	if err != nil {
 		return nil, err
 	}
 
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
+	claims := jwt.MapClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return signingKey, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return nil, err
 	}
 
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+	if token.Valid {
 		return claims, nil
 	}
 
 	return nil, errors.New("invalid token")
+}
+
+func validateTokenRevocation(claims map[string]interface{}) error {
+	tokenID, ok := claimString(claims, jwtClaimTokenID)
+	if !ok || tokenID == "" {
+		return errors.New("invalid token")
+	}
+
+	if isTokenIDRevoked(tokenID) {
+		return errors.New("invalid token")
+	}
+
+	userID, ok := claimUint(claims, jwtClaimUserID)
+	if !ok || userID == 0 {
+		return errors.New("invalid token")
+	}
+
+	issuedAtNs, ok := claimIssuedAtUnixNano(claims)
+	if !ok {
+		return errors.New("invalid token")
+	}
+
+	revokedBefore, exists := userTokensRevokedBefore(userID)
+	if exists && issuedAtNs <= revokedBefore.UnixNano() {
+		return errors.New("invalid token")
+	}
+
+	return nil
+}
+
+func claimString(claims map[string]interface{}, key string) (string, bool) {
+	raw, ok := claims[key]
+	if !ok {
+		return "", false
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	return value, true
+}
+
+func claimInt64(claims map[string]interface{}, key string) (int64, bool) {
+	raw, ok := claims[key]
+	if !ok {
+		return 0, false
+	}
+
+	switch value := raw.(type) {
+	case float64:
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return 0, false
+		}
+		return int64(value), true
+	case int64:
+		return value, true
+	case int:
+		return int64(value), true
+	case json.Number:
+		out, err := value.Int64()
+		return out, err == nil
+	case string:
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return 0, false
+		}
+		out, err := strconv.ParseInt(trimmed, 10, 64)
+		return out, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func claimUint(claims map[string]interface{}, key string) (uint, bool) {
+	value, ok := claimInt64(claims, key)
+	if !ok || value <= 0 {
+		return 0, false
+	}
+	return uint(value), true
+}
+
+func claimIssuedAtUnixNano(claims map[string]interface{}) (int64, bool) {
+	if nsRaw, ok := claims[jwtClaimIssuedNs]; ok {
+		if nsString, ok := nsRaw.(string); ok {
+			nsString = strings.TrimSpace(nsString)
+			if nsString != "" {
+				ns, err := strconv.ParseInt(nsString, 10, 64)
+				if err == nil && ns > 0 {
+					return ns, true
+				}
+			}
+		}
+	}
+
+	issuedAt, ok := claimInt64(claims, jwtClaimIssuedAt)
+	if !ok || issuedAt <= 0 {
+		return 0, false
+	}
+	return issuedAt * int64(time.Second), true
+}
+
+func generateTokenID() (string, error) {
+	buffer := make([]byte, jwtTokenIDBytes)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", fmt.Errorf("failed to generate token id: %w", err)
+	}
+	return hex.EncodeToString(buffer), nil
 }

@@ -67,8 +67,10 @@ func OpenRoutes(ctx context.Context, port int) error {
 
 	apiMux := http.NewServeMux()
 	apiMux.Handle("/graphql", applyRequestBodyLimit(gqlHandler, resolveJSONMaxBodyBytes()))
-	apiMux.HandleFunc("POST /register", registerUser)
-	apiMux.HandleFunc("POST /login", loginUser)
+	apiMux.Handle("POST /register", withRegisterRateLimit(http.HandlerFunc(registerUser)))
+	apiMux.Handle("POST /login", withLoginRateLimit(http.HandlerFunc(loginUser)))
+	apiMux.Handle("POST /logout", auth.RequireAuth(http.HandlerFunc(logoutUser)))
+	apiMux.Handle("POST /refreshToken", auth.RequireAuth(http.HandlerFunc(refreshToken)))
 	apiMux.Handle("GET /checkLogin", auth.RequireAuth(http.HandlerFunc(checkLogin)))
 	apiMux.Handle("POST /changePassword", auth.RequireAuth(http.HandlerFunc(changePassword)))
 	apiMux.Handle("POST /deleteAccount", auth.RequireAuth(http.HandlerFunc(deleteAccount)))

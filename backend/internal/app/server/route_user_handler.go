@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"magpie/internal/api/dto"
 	"magpie/internal/app/bootstrap"
 	"magpie/internal/auth"
@@ -18,9 +19,22 @@ import (
 	"magpie/internal/support"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/log"
 	"gorm.io/gorm"
+)
+
+const (
+	firstUserAdminAdvisoryLockKey int64 = 941_843_229_541
+	invalidAuthCredentialsMessage       = "Invalid email or password"
+)
+
+var (
+	errEmailAlreadyInUse = errors.New("email already in use")
+
+	loginFallbackPasswordHashOnce sync.Once
+	loginFallbackPasswordHash     string
 )
 
 func checkLogin(w http.ResponseWriter, r *http.Request) {
@@ -58,23 +72,6 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user.Password = hashedPassword
 
-	// Check if email already exists
-	var existingUser domain.User
-	if err = database.DB.Where("email = ?", user.Email).First(&existingUser).Error; err == nil {
-		writeError(w, "Email already in use", http.StatusConflict)
-		return
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		writeError(w, "Failed to query database", http.StatusInternalServerError)
-		return
-	}
-
-	// Check if there are no users in the database and assign admin role
-	if err = database.DB.Select("id").Take(&existingUser).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		user.Role = "admin"
-	} else {
-		user.Role = "user" // just to make sure
-	}
-
 	//Set default values
 	cfg := config.GetConfig()
 	user.HTTPProtocol = cfg.Protocols.HTTP
@@ -85,7 +82,11 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	user.TransportProtocol = support.TransportTCP
 
 	// Save user to the database
-	if err = database.DB.Create(&user).Error; err != nil {
+	if err = createUserWithFirstAdminRole(&user); err != nil {
+		if errors.Is(err, errEmailAlreadyInUse) {
+			writeError(w, "Email already in use", http.StatusConflict)
+			return
+		}
 		writeError(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
@@ -104,7 +105,6 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, http.StatusCreated, map[string]string{"token": token})
 }
 
@@ -114,17 +114,33 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if blocked, retryAfter := loginFailuresBlocked(r, credentials.Email); blocked {
+		setRetryAfterHeader(w, retryAfter)
+		writeError(w, authLoginBlockedMessage, http.StatusTooManyRequests)
+		return
+	}
+
 	var user domain.User
 	if err := database.DB.Where("email = ?", credentials.Email).First(&user).Error; err != nil {
-		writeError(w, "User not found", http.StatusUnauthorized)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			consumeInvalidPasswordWork(credentials.Password)
+			recordLoginFailure(r, credentials.Email)
+			writeError(w, invalidAuthCredentialsMessage, http.StatusUnauthorized)
+			return
+		}
+
+		writeError(w, "Failed to query database", http.StatusInternalServerError)
 		return
 	}
 
 	// Compare passwords
 	if !support.CheckPasswordHash(credentials.Password, user.Password) {
-		writeError(w, "Invalid password", http.StatusUnauthorized)
+		recordLoginFailure(r, credentials.Email)
+		writeError(w, invalidAuthCredentialsMessage, http.StatusUnauthorized)
 		return
 	}
+
+	clearLoginFailures(r, credentials.Email)
 
 	// Generate token
 	token, err := auth.GenerateJWT(user.ID, user.Role)
@@ -133,7 +149,38 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"token": token, "role": user.Role})
+	writeJSON(w, http.StatusOK, map[string]string{"token": token, "role": user.Role})
+}
+
+func refreshToken(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.ExtractBearerToken(r.Header.Get("Authorization"))
+	if err != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	rotatedToken, role, err := auth.RotateJWT(token)
+	if err != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"token": rotatedToken, "role": role})
+}
+
+func logoutUser(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.ExtractBearerToken(r.Header.Get("Authorization"))
+	if err != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := auth.RevokeJWT(token); err != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func saveSettings(w http.ResponseWriter, r *http.Request) {
@@ -329,6 +376,11 @@ func changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := auth.RevokeAllUserJWTs(userID); err != nil {
+		writeError(w, "Failed to revoke active sessions", http.StatusInternalServerError)
+		return
+	}
+
 	json.NewEncoder(w).Encode("Password changed successfully")
 }
 
@@ -360,6 +412,11 @@ func deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := auth.RevokeAllUserJWTs(userID); err != nil {
+		writeError(w, "Failed to revoke active sessions", http.StatusInternalServerError)
+		return
+	}
+
 	orphanedProxies, orphanedScrapeSites, err := database.DeleteUserAccount(context.Background(), userID)
 	if err != nil {
 		log.Error("failed to delete user account", "error", err)
@@ -382,6 +439,72 @@ func deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode("Account deleted successfully")
+}
+
+func createUserWithFirstAdminRole(user *domain.User) error {
+	if user == nil {
+		return errors.New("user cannot be nil")
+	}
+
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		// Serialize first-user role assignment across instances.
+		if tx.Dialector.Name() == "postgres" {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", firstUserAdminAdvisoryLockKey).Error; err != nil {
+				return fmt.Errorf("failed to acquire first-user role lock: %w", err)
+			}
+		}
+
+		var userCount int64
+		if err := tx.Model(&domain.User{}).Count(&userCount).Error; err != nil {
+			return err
+		}
+
+		if userCount == 0 {
+			user.Role = "admin"
+		} else {
+			user.Role = "user"
+		}
+
+		if err := tx.Create(user).Error; err != nil {
+			if isUniqueConstraintError(err) {
+				return errEmailAlreadyInUse
+			}
+			return err
+		}
+
+		return nil
+	})
+}
+
+func consumeInvalidPasswordWork(password string) {
+	fallback := getLoginFallbackPasswordHash()
+	if fallback == "" {
+		return
+	}
+	_ = support.CheckPasswordHash(password, fallback)
+}
+
+func getLoginFallbackPasswordHash() string {
+	loginFallbackPasswordHashOnce.Do(func() {
+		hash, err := support.HashPassword("magpie-invalid-login-password")
+		if err != nil {
+			return
+		}
+		loginFallbackPasswordHash = hash
+	})
+
+	return loginFallbackPasswordHash
+}
+
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	normalized := strings.ToLower(err.Error())
+	return strings.Contains(normalized, "duplicate key value violates unique constraint") ||
+		strings.Contains(normalized, "unique constraint failed") ||
+		strings.Contains(normalized, "duplicate entry")
 }
 
 func refreshUserJudgeCache(updates map[uint][]database.UserJudgeAssignment) {

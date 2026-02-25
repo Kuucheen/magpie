@@ -1,0 +1,479 @@
+package server
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"net"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"magpie/internal/support"
+
+	"github.com/redis/go-redis/v9"
+)
+
+const (
+	envAuthRequestWindowSeconds      = "AUTH_REQUEST_RATE_LIMIT_WINDOW_SECONDS"
+	envAuthLoginRequestsPerWindow    = "AUTH_LOGIN_RATE_LIMIT_PER_WINDOW"
+	envAuthRegisterRequestsPerWindow = "AUTH_REGISTER_RATE_LIMIT_PER_WINDOW"
+	envAuthLoginFailureWindowSeconds = "AUTH_LOGIN_FAILURE_WINDOW_SECONDS"
+	envAuthLoginFailuresPerIP        = "AUTH_LOGIN_FAILURE_LIMIT_PER_IP"
+	envAuthLoginFailuresPerEmail     = "AUTH_LOGIN_FAILURE_LIMIT_PER_EMAIL"
+
+	defaultAuthRequestWindowSeconds      = 60
+	defaultAuthLoginRequestsPerWindow    = 60
+	defaultAuthRegisterRequestsPerWindow = 20
+	defaultAuthLoginFailureWindowSeconds = 15 * 60
+	defaultAuthLoginFailuresPerIP        = 30
+	defaultAuthLoginFailuresPerEmail     = 10
+)
+
+const (
+	authLoginRateExceededMessage    = "Too many login requests. Please try again later."
+	authRegisterRateExceededMessage = "Too many registration requests. Please try again later."
+	authLoginBlockedMessage         = "Too many login attempts. Please try again later."
+)
+
+var authRateLimitIncrementScript = redis.NewScript(`
+local count = redis.call("INCR", KEYS[1])
+if count == 1 then
+	redis.call("PEXPIRE", KEYS[1], ARGV[1])
+end
+local ttl = redis.call("PTTL", KEYS[1])
+if ttl < 0 then
+	ttl = ARGV[1]
+end
+return {count, ttl}
+`)
+
+type authRateLimits struct {
+	loginRequests    *fixedWindowLimiter
+	registerRequests *fixedWindowLimiter
+	loginFailures    *loginFailureLimiter
+}
+
+type fixedWindowLimiter struct {
+	prefix string
+	limit  int64
+	window time.Duration
+
+	mu       sync.Mutex
+	counters map[string]localCounter
+}
+
+type localCounter struct {
+	count     int64
+	expiresAt time.Time
+}
+
+type loginFailureLimiter struct {
+	perIP    *fixedWindowLimiter
+	perEmail *fixedWindowLimiter
+}
+
+var (
+	authRateLimitsOnce sync.Once
+	globalAuthLimits   authRateLimits
+)
+
+func withLoginRateLimit(next http.Handler) http.Handler {
+	limits := getAuthRateLimits()
+	return limits.loginRequests.wrap(next, authLoginRateExceededMessage)
+}
+
+func withRegisterRateLimit(next http.Handler) http.Handler {
+	limits := getAuthRateLimits()
+	return limits.registerRequests.wrap(next, authRegisterRateExceededMessage)
+}
+
+func loginFailuresBlocked(r *http.Request, email string) (bool, time.Duration) {
+	limits := getAuthRateLimits()
+	return limits.loginFailures.isBlocked(getAuthClientIP(r), email)
+}
+
+func recordLoginFailure(r *http.Request, email string) {
+	limits := getAuthRateLimits()
+	limits.loginFailures.recordFailure(getAuthClientIP(r), email)
+}
+
+func clearLoginFailures(r *http.Request, email string) {
+	limits := getAuthRateLimits()
+	limits.loginFailures.recordSuccess(getAuthClientIP(r), email)
+}
+
+func getAuthRateLimits() *authRateLimits {
+	authRateLimitsOnce.Do(func() {
+		requestWindow := time.Duration(resolvePositiveEnvInt(envAuthRequestWindowSeconds, defaultAuthRequestWindowSeconds)) * time.Second
+		loginFailureWindow := time.Duration(resolvePositiveEnvInt(envAuthLoginFailureWindowSeconds, defaultAuthLoginFailureWindowSeconds)) * time.Second
+
+		globalAuthLimits = authRateLimits{
+			loginRequests: newFixedWindowLimiter(
+				"magpie:ratelimit:login:request",
+				int64(resolvePositiveEnvInt(envAuthLoginRequestsPerWindow, defaultAuthLoginRequestsPerWindow)),
+				requestWindow,
+			),
+			registerRequests: newFixedWindowLimiter(
+				"magpie:ratelimit:register:request",
+				int64(resolvePositiveEnvInt(envAuthRegisterRequestsPerWindow, defaultAuthRegisterRequestsPerWindow)),
+				requestWindow,
+			),
+			loginFailures: &loginFailureLimiter{
+				perIP: newFixedWindowLimiter(
+					"magpie:ratelimit:login:fail:ip",
+					int64(resolvePositiveEnvInt(envAuthLoginFailuresPerIP, defaultAuthLoginFailuresPerIP)),
+					loginFailureWindow,
+				),
+				perEmail: newFixedWindowLimiter(
+					"magpie:ratelimit:login:fail:email",
+					int64(resolvePositiveEnvInt(envAuthLoginFailuresPerEmail, defaultAuthLoginFailuresPerEmail)),
+					loginFailureWindow,
+				),
+			},
+		}
+	})
+
+	return &globalAuthLimits
+}
+
+func newFixedWindowLimiter(prefix string, limit int64, window time.Duration) *fixedWindowLimiter {
+	return &fixedWindowLimiter{
+		prefix:   prefix,
+		limit:    limit,
+		window:   window,
+		counters: make(map[string]localCounter),
+	}
+}
+
+func (l *fixedWindowLimiter) wrap(next http.Handler, message string) http.Handler {
+	if l == nil || next == nil || l.limit <= 0 || l.window <= 0 {
+		return next
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := getAuthClientIP(r)
+		key := l.key(ip)
+
+		allowed, retryAfter := l.allow(key)
+		if !allowed {
+			setRetryAfterHeader(w, retryAfter)
+			writeError(w, message, http.StatusTooManyRequests)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (l *fixedWindowLimiter) allow(key string) (bool, time.Duration) {
+	if l == nil || l.limit <= 0 || l.window <= 0 {
+		return true, 0
+	}
+
+	count, ttl := l.increment(key)
+	if count <= l.limit {
+		return true, 0
+	}
+
+	if ttl <= 0 {
+		ttl = l.window
+	}
+	return false, ttl
+}
+
+func (l *fixedWindowLimiter) increment(key string) (int64, time.Duration) {
+	if l == nil {
+		return 0, 0
+	}
+
+	if count, ttl, ok := l.incrementRedis(key); ok {
+		return count, ttl
+	}
+
+	return l.incrementLocal(key)
+}
+
+func (l *fixedWindowLimiter) current(key string) (int64, time.Duration) {
+	if l == nil {
+		return 0, 0
+	}
+
+	if count, ttl, ok := l.currentRedis(key); ok {
+		return count, ttl
+	}
+
+	return l.currentLocal(key)
+}
+
+func (l *fixedWindowLimiter) reset(key string) {
+	if l == nil {
+		return
+	}
+
+	if client := redisClient(); client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = client.Del(ctx, l.redisKey(key)).Err()
+	}
+
+	l.mu.Lock()
+	delete(l.counters, key)
+	l.mu.Unlock()
+}
+
+func (l *fixedWindowLimiter) incrementRedis(key string) (int64, time.Duration, bool) {
+	client := redisClient()
+	if client == nil {
+		return 0, 0, false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	windowMS := strconv.FormatInt(l.window.Milliseconds(), 10)
+	result, err := authRateLimitIncrementScript.Run(ctx, client, []string{l.redisKey(key)}, windowMS).Result()
+	if err != nil {
+		return 0, 0, false
+	}
+
+	values, ok := result.([]interface{})
+	if !ok || len(values) < 2 {
+		return 0, 0, false
+	}
+
+	count, ok := toInt64(values[0])
+	if !ok {
+		return 0, 0, false
+	}
+
+	ttlMS, ok := toInt64(values[1])
+	if !ok {
+		return 0, 0, false
+	}
+	if ttlMS <= 0 {
+		ttlMS = l.window.Milliseconds()
+	}
+
+	return count, time.Duration(ttlMS) * time.Millisecond, true
+}
+
+func (l *fixedWindowLimiter) currentRedis(key string) (int64, time.Duration, bool) {
+	client := redisClient()
+	if client == nil {
+		return 0, 0, false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	count, err := client.Get(ctx, l.redisKey(key)).Int64()
+	if err != nil {
+		if err == redis.Nil {
+			return 0, 0, true
+		}
+		return 0, 0, false
+	}
+
+	ttl, err := client.PTTL(ctx, l.redisKey(key)).Result()
+	if err != nil {
+		return 0, 0, false
+	}
+	if ttl < 0 {
+		ttl = 0
+	}
+
+	return count, ttl, true
+}
+
+func (l *fixedWindowLimiter) incrementLocal(key string) (int64, time.Duration) {
+	now := time.Now()
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.purgeExpiredLocalLocked(now)
+
+	entry, exists := l.counters[key]
+	if !exists {
+		entry = localCounter{count: 1, expiresAt: now.Add(l.window)}
+		l.counters[key] = entry
+		return entry.count, time.Until(entry.expiresAt)
+	}
+
+	entry.count++
+	l.counters[key] = entry
+	return entry.count, time.Until(entry.expiresAt)
+}
+
+func (l *fixedWindowLimiter) currentLocal(key string) (int64, time.Duration) {
+	now := time.Now()
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.purgeExpiredLocalLocked(now)
+
+	entry, exists := l.counters[key]
+	if !exists {
+		return 0, 0
+	}
+
+	return entry.count, time.Until(entry.expiresAt)
+}
+
+func (l *fixedWindowLimiter) purgeExpiredLocalLocked(now time.Time) {
+	for key, entry := range l.counters {
+		if !entry.expiresAt.After(now) {
+			delete(l.counters, key)
+		}
+	}
+}
+
+func (l *fixedWindowLimiter) redisKey(key string) string {
+	return fmt.Sprintf("%s:%s", l.prefix, key)
+}
+
+func (l *fixedWindowLimiter) key(parts ...string) string {
+	filtered := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		filtered = append(filtered, part)
+	}
+	if len(filtered) == 0 {
+		return "unknown"
+	}
+	return strings.Join(filtered, ":")
+}
+
+func (l *loginFailureLimiter) isBlocked(ip string, email string) (bool, time.Duration) {
+	ipKey := l.perIP.key(normalizeRateLimitIP(ip))
+	ipCount, ipTTL := l.perIP.current(ipKey)
+	if ipCount >= l.perIP.limit {
+		return true, ipTTL
+	}
+
+	emailKey := l.perEmail.key(hashIdentifier(strings.ToLower(strings.TrimSpace(email))))
+	emailCount, emailTTL := l.perEmail.current(emailKey)
+	if emailCount >= l.perEmail.limit {
+		return true, emailTTL
+	}
+
+	return false, 0
+}
+
+func (l *loginFailureLimiter) recordFailure(ip string, email string) {
+	l.perIP.increment(l.perIP.key(normalizeRateLimitIP(ip)))
+	l.perEmail.increment(l.perEmail.key(hashIdentifier(strings.ToLower(strings.TrimSpace(email)))))
+}
+
+func (l *loginFailureLimiter) recordSuccess(ip string, email string) {
+	l.perIP.reset(l.perIP.key(normalizeRateLimitIP(ip)))
+	l.perEmail.reset(l.perEmail.key(hashIdentifier(strings.ToLower(strings.TrimSpace(email)))))
+}
+
+func setRetryAfterHeader(w http.ResponseWriter, retryAfter time.Duration) {
+	if retryAfter <= 0 {
+		return
+	}
+
+	seconds := int(retryAfter / time.Second)
+	if retryAfter%time.Second != 0 {
+		seconds++
+	}
+	if seconds < 1 {
+		seconds = 1
+	}
+
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+}
+
+func getAuthClientIP(r *http.Request) string {
+	if r == nil {
+		return "unknown"
+	}
+
+	forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+	if forwardedFor != "" {
+		for _, part := range strings.Split(forwardedFor, ",") {
+			if ip := parseIP(strings.TrimSpace(part)); ip != "" {
+				return ip
+			}
+		}
+	}
+
+	if realIP := parseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); realIP != "" {
+		return realIP
+	}
+
+	if remoteIP := parseIP(strings.TrimSpace(r.RemoteAddr)); remoteIP != "" {
+		return remoteIP
+	}
+
+	return "unknown"
+}
+
+func parseIP(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	}
+
+	parsed := net.ParseIP(raw)
+	if parsed == nil {
+		return ""
+	}
+
+	return parsed.String()
+}
+
+func normalizeRateLimitIP(ip string) string {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		return "unknown"
+	}
+	return ip
+}
+
+func hashIdentifier(value string) string {
+	if value == "" {
+		return "unknown"
+	}
+
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
+}
+
+func toInt64(value interface{}) (int64, bool) {
+	switch typed := value.(type) {
+	case int64:
+		return typed, true
+	case int:
+		return int64(typed), true
+	case float64:
+		return int64(typed), true
+	case string:
+		parsed, err := strconv.ParseInt(typed, 10, 64)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func redisClient() *redis.Client {
+	client, err := support.GetRedisClient()
+	if err != nil {
+		return nil
+	}
+	return client
+}

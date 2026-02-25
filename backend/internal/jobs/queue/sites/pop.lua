@@ -1,20 +1,54 @@
-local result = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
-if #result == 0 then return nil end
+local queue_heads_key = KEYS[1]
+local current_time = tonumber(ARGV[1])
+local lease_milliseconds = tonumber(ARGV[2])
+local site_key_prefix = ARGV[3]
 
-local member = result[1]
-local score = tonumber(result[2])
-local now = tonumber(ARGV[1])
-local lease_seconds = tonumber(ARGV[2])
+local function refresh_head(queue_key)
+  local current = redis.call('ZRANGE', queue_key, 0, 0, 'WITHSCORES')
+  if #current == 0 then
+    redis.call('ZREM', queue_heads_key, queue_key)
+    return nil
+  end
 
-if score > now then return nil end
-
-local site_key = KEYS[2] .. member
-local site_data = redis.call('GET', site_key)
-if not site_data then
-  redis.call('ZREM', KEYS[1], member)
-  return nil
+  local score = tonumber(current[2])
+  redis.call('ZADD', queue_heads_key, score, queue_key)
+  return score
 end
 
-redis.call('ZADD', KEYS[1], now + lease_seconds, member)
+for _ = 1, 8 do
+  local head = redis.call('ZRANGE', queue_heads_key, 0, 0, 'WITHSCORES')
+  if #head == 0 then
+    return {0, "", "", -1, -1}
+  end
 
-return {member, site_data, score}
+  local queue_key = head[1]
+  local indexed_score = tonumber(head[2])
+  local entry = redis.call('ZRANGE', queue_key, 0, 0, 'WITHSCORES')
+
+  if #entry == 0 then
+    redis.call('ZREM', queue_heads_key, queue_key)
+  else
+    local member = entry[1]
+    local score = tonumber(entry[2])
+
+    if score ~= indexed_score then
+      redis.call('ZADD', queue_heads_key, score, queue_key)
+    elseif score > current_time then
+      return {0, "", "", score, -1}
+    else
+      local site_key = site_key_prefix .. member
+      local site_data = redis.call('GET', site_key)
+      if not site_data then
+        redis.call('ZREM', queue_key, member)
+        refresh_head(queue_key)
+      else
+        local lease_score = current_time + lease_milliseconds
+        redis.call('ZADD', queue_key, lease_score, member)
+        refresh_head(queue_key)
+        return {1, member, site_data, score, -1}
+      end
+    end
+  end
+end
+
+return {0, "", "", -1, -1}

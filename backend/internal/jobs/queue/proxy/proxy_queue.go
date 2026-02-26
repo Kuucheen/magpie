@@ -54,27 +54,18 @@ type proxyPopResult struct {
 }
 
 type queuedProxyUser struct {
-	ID                         uint
-	HTTPProtocol               bool
-	HTTPSProtocol              bool
-	SOCKS4Protocol             bool
-	SOCKS5Protocol             bool
-	Timeout                    uint16
-	Retries                    uint8
-	UseHttpsForSocks           bool
-	TransportProtocol          string
-	AutoRemoveFailingProxies   bool
-	AutoRemoveFailureThreshold uint8
+	ID uint `json:"ID"`
 }
 
 type queuedProxy struct {
-	ID       uint64
-	IP       string
-	Port     uint16
-	Username string
-	Password string
-	Hash     []byte
-	Users    []queuedProxyUser
+	ID       uint64            `json:"ID"`
+	IP       string            `json:"IP"`
+	Port     uint16            `json:"Port"`
+	Username string            `json:"Username"`
+	Password string            `json:"Password"`
+	Hash     []byte            `json:"Hash"`
+	UserIDs  []uint            `json:"UserIDs,omitempty"`
+	Users    []queuedProxyUser `json:"Users,omitempty"` // Legacy payload compatibility
 }
 
 var PublicProxyQueue RedisProxyQueue
@@ -512,23 +503,6 @@ func marshalQueuedProxy(proxy domain.Proxy) ([]byte, error) {
 }
 
 func newQueuedProxy(proxy domain.Proxy) queuedProxy {
-	users := make([]queuedProxyUser, 0, len(proxy.Users))
-	for _, user := range proxy.Users {
-		users = append(users, queuedProxyUser{
-			ID:                         user.ID,
-			HTTPProtocol:               user.HTTPProtocol,
-			HTTPSProtocol:              user.HTTPSProtocol,
-			SOCKS4Protocol:             user.SOCKS4Protocol,
-			SOCKS5Protocol:             user.SOCKS5Protocol,
-			Timeout:                    user.Timeout,
-			Retries:                    user.Retries,
-			UseHttpsForSocks:           user.UseHttpsForSocks,
-			TransportProtocol:          user.TransportProtocol,
-			AutoRemoveFailingProxies:   user.AutoRemoveFailingProxies,
-			AutoRemoveFailureThreshold: user.AutoRemoveFailureThreshold,
-		})
-	}
-
 	return queuedProxy{
 		ID:       proxy.ID,
 		IP:       proxy.GetIp(),
@@ -536,26 +510,33 @@ func newQueuedProxy(proxy domain.Proxy) queuedProxy {
 		Username: proxy.Username,
 		Password: proxy.Password,
 		Hash:     proxy.Hash,
-		Users:    users,
+		UserIDs:  collectQueuedUserIDs(proxy.Users),
 	}
 }
 
 func (qp queuedProxy) toDomainProxy() domain.Proxy {
-	users := make([]domain.User, 0, len(qp.Users))
-	for _, user := range qp.Users {
-		users = append(users, domain.User{
-			ID:                         user.ID,
-			HTTPProtocol:               user.HTTPProtocol,
-			HTTPSProtocol:              user.HTTPSProtocol,
-			SOCKS4Protocol:             user.SOCKS4Protocol,
-			SOCKS5Protocol:             user.SOCKS5Protocol,
-			Timeout:                    user.Timeout,
-			Retries:                    user.Retries,
-			UseHttpsForSocks:           user.UseHttpsForSocks,
-			TransportProtocol:          user.TransportProtocol,
-			AutoRemoveFailingProxies:   user.AutoRemoveFailingProxies,
-			AutoRemoveFailureThreshold: user.AutoRemoveFailureThreshold,
-		})
+	userIDs := qp.UserIDs
+	if len(userIDs) == 0 && len(qp.Users) > 0 {
+		userIDs = make([]uint, 0, len(qp.Users))
+		for _, user := range qp.Users {
+			if user.ID == 0 {
+				continue
+			}
+			userIDs = append(userIDs, user.ID)
+		}
+	}
+
+	users := make([]domain.User, 0, len(userIDs))
+	seen := make(map[uint]struct{}, len(userIDs))
+	for _, userID := range userIDs {
+		if userID == 0 {
+			continue
+		}
+		if _, ok := seen[userID]; ok {
+			continue
+		}
+		seen[userID] = struct{}{}
+		users = append(users, domain.User{ID: userID})
 	}
 
 	return domain.Proxy{
@@ -567,6 +548,31 @@ func (qp queuedProxy) toDomainProxy() domain.Proxy {
 		Hash:     qp.Hash,
 		Users:    users,
 	}
+}
+
+func collectQueuedUserIDs(users []domain.User) []uint {
+	if len(users) == 0 {
+		return nil
+	}
+
+	out := make([]uint, 0, len(users))
+	seen := make(map[uint]struct{}, len(users))
+	for _, user := range users {
+		if user.ID == 0 {
+			continue
+		}
+		if _, ok := seen[user.ID]; ok {
+			continue
+		}
+		seen[user.ID] = struct{}{}
+		out = append(out, user.ID)
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+
+	return out
 }
 
 func (rpq *RedisProxyQueue) GetProxyCount() (int64, error) {

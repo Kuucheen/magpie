@@ -1,6 +1,12 @@
 package proxyqueue
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"magpie/internal/domain"
+)
 
 func TestQueueKeyForMember_DeterministicShard(t *testing.T) {
 	q := &RedisProxyQueue{
@@ -49,5 +55,73 @@ func TestParseProxyPopResult(t *testing.T) {
 	}
 	if empty.Found || empty.NextReadyMs != 5555 {
 		t.Fatalf("unexpected empty parse result: %#v", empty)
+	}
+}
+
+func TestNewQueuedProxy_StoresUserIDsOnly(t *testing.T) {
+	proxy := domain.Proxy{
+		ID:       12,
+		IP:       "192.0.2.10",
+		Port:     8080,
+		Username: "u",
+		Password: "p",
+		Hash:     []byte("hash"),
+		Users: []domain.User{
+			{ID: 5, Timeout: 1000, Retries: 2},
+			{ID: 9, Timeout: 2500, Retries: 5},
+			{ID: 5, Timeout: 9999, Retries: 9},
+		},
+	}
+
+	queued := newQueuedProxy(proxy)
+	if len(queued.UserIDs) != 2 || queued.UserIDs[0] != 5 || queued.UserIDs[1] != 9 {
+		t.Fatalf("unexpected queued user IDs: %#v", queued.UserIDs)
+	}
+	if len(queued.Users) != 0 {
+		t.Fatalf("expected no legacy user payload, got %#v", queued.Users)
+	}
+
+	raw, err := json.Marshal(queued)
+	if err != nil {
+		t.Fatalf("marshal queued proxy: %v", err)
+	}
+	payload := string(raw)
+	if !strings.Contains(payload, "\"UserIDs\":[5,9]") {
+		t.Fatalf("expected compact UserIDs payload, got %s", payload)
+	}
+	if strings.Contains(payload, "\"Users\"") {
+		t.Fatalf("expected Users field to be omitted in new payload, got %s", payload)
+	}
+}
+
+func TestQueuedProxyToDomainProxy_HandlesLegacyUsersAndUserIDs(t *testing.T) {
+	fromUserIDs := queuedProxy{
+		ID:      1,
+		IP:      "198.51.100.2",
+		Port:    9000,
+		Hash:    []byte("h"),
+		UserIDs: []uint{8, 4, 8},
+	}
+	got := fromUserIDs.toDomainProxy()
+	if len(got.Users) != 2 || got.Users[0].ID != 8 || got.Users[1].ID != 4 {
+		t.Fatalf("unexpected users from UserIDs payload: %#v", got.Users)
+	}
+	if got.Users[0].Timeout != 0 || got.Users[1].Retries != 0 {
+		t.Fatalf("expected compact payload to not include checker settings, got %#v", got.Users)
+	}
+
+	fromLegacy := queuedProxy{
+		ID:   2,
+		IP:   "203.0.113.5",
+		Port: 1080,
+		Hash: []byte("legacy"),
+		Users: []queuedProxyUser{
+			{ID: 11},
+			{ID: 7},
+		},
+	}
+	gotLegacy := fromLegacy.toDomainProxy()
+	if len(gotLegacy.Users) != 2 || gotLegacy.Users[0].ID != 11 || gotLegacy.Users[1].ID != 7 {
+		t.Fatalf("unexpected users from legacy payload: %#v", gotLegacy.Users)
 	}
 }

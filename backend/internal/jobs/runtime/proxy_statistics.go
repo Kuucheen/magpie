@@ -12,21 +12,20 @@ import (
 )
 
 const (
-	statisticsFlushInterval  = 15 * time.Second
-	statisticsBatchThreshold = 5000
-	statisticsQueueCapacity  = 20_000
-	statisticsDropLogEvery   = 15 * time.Second
-	statisticsInsertTimeout  = 30 * time.Second
-	reputationRecalcTimeout  = 10 * time.Second
-	reputationRecalcInterval = 1 * time.Minute
-	reputationRecalcBatch    = 5000
-	reputationRecalcPerTick  = 4
+	statisticsFlushInterval        = 15 * time.Second
+	statisticsBatchThreshold       = 5000
+	statisticsQueueCapacity        = 20_000
+	statisticsBackpressureLogEvery = 15 * time.Second
+	statisticsInsertTimeout        = 30 * time.Second
+	reputationRecalcTimeout        = 10 * time.Second
+	reputationRecalcInterval       = 1 * time.Minute
+	reputationRecalcBatch          = 5000
+	reputationRecalcPerTick        = 4
 )
 
 var (
-	proxyStatisticQueue       = make(chan domain.ProxyStatistic, statisticsQueueCapacity)
-	proxyStatisticDropCount   atomic.Uint64
-	proxyStatisticLastDropLog atomic.Int64
+	proxyStatisticQueue               = make(chan domain.ProxyStatistic, statisticsQueueCapacity)
+	proxyStatisticLastBackpressureLog atomic.Int64
 )
 
 func AddProxyStatistic(proxyStatistic domain.ProxyStatistic) {
@@ -34,24 +33,26 @@ func AddProxyStatistic(proxyStatistic domain.ProxyStatistic) {
 	case proxyStatisticQueue <- proxyStatistic:
 		return
 	default:
-		recordDroppedProxyStatistic()
 	}
+
+	waitStarted := time.Now()
+	proxyStatisticQueue <- proxyStatistic
+	recordProxyStatisticBackpressure(waitStarted)
 }
 
-func recordDroppedProxyStatistic() {
-	droppedTotal := proxyStatisticDropCount.Add(1)
+func recordProxyStatisticBackpressure(waitStarted time.Time) {
 	nowUnix := time.Now().Unix()
-	last := proxyStatisticLastDropLog.Load()
-	if nowUnix-last < int64(statisticsDropLogEvery/time.Second) {
+	last := proxyStatisticLastBackpressureLog.Load()
+	if nowUnix-last < int64(statisticsBackpressureLogEvery/time.Second) {
 		return
 	}
-	if !proxyStatisticLastDropLog.CompareAndSwap(last, nowUnix) {
+	if !proxyStatisticLastBackpressureLog.CompareAndSwap(last, nowUnix) {
 		return
 	}
 
 	log.Warn(
-		"Proxy statistics queue is full; dropping statistics to protect checker throughput",
-		"dropped_total", droppedTotal,
+		"Proxy statistics queue is full; applying backpressure to avoid dropping statistics",
+		"blocked_for_seconds", time.Since(waitStarted).Seconds(),
 		"queue_len", len(proxyStatisticQueue),
 		"queue_capacity", cap(proxyStatisticQueue),
 	)

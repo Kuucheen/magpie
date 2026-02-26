@@ -13,8 +13,28 @@ func ensureProxyReputationSchema(db *gorm.DB) error {
 		return fmt.Errorf("nil database connection")
 	}
 
+	indexExists, err := hasProxyReputationIndex(db)
+	if err != nil {
+		return fmt.Errorf("check proxy reputation index: %w", err)
+	}
+	if indexExists {
+		return nil
+	}
+
 	if err := removeDuplicateProxyReputations(db); err != nil {
 		return fmt.Errorf("deduplicate proxy reputations: %w", err)
+	}
+
+	if err := ensureProxyReputationIndex(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ensureProxyReputationIndex(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("nil database connection")
 	}
 
 	query := fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS %s ON proxy_reputations (proxy_id, kind)", proxyReputationIndexName)
@@ -23,6 +43,20 @@ func ensureProxyReputationSchema(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+func hasProxyReputationIndex(db *gorm.DB) (bool, error) {
+	if db == nil {
+		return false, fmt.Errorf("nil database connection")
+	}
+
+	var exists bool
+	query := "SELECT to_regclass(?) IS NOT NULL"
+	if err := db.Raw(query, proxyReputationIndexName).Scan(&exists).Error; err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func removeDuplicateProxyReputations(db *gorm.DB) error {

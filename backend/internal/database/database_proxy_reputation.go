@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"time"
 
@@ -369,25 +370,37 @@ func upsertProxyReputations(ctx context.Context, reputations []domain.ProxyReput
 	}
 
 	db := DB.WithContext(ctx)
-
-	if err := ensureProxyReputationSchema(db); err != nil {
-		log.Error("reputation: ensure unique index", "error", err)
-	}
+	useConstraintlessFallback := false
 
 	for start := 0; start < len(reputations); start += reputationUpsertBatchSize {
 		end := start + reputationUpsertBatchSize
 		if end > len(reputations) {
 			end = len(reputations)
 		}
+		chunk := reputations[start:end]
 
-		if err := upsertProxyReputationsChunk(db, reputations[start:end]); err != nil {
+		if useConstraintlessFallback {
+			if err := upsertProxyReputationsChunkWithoutConstraint(db, chunk); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := upsertProxyReputationsChunk(db, chunk); err != nil {
 			if isMissingUniqueConstraintError(err) {
-				if ensureErr := ensureProxyReputationSchema(db); ensureErr != nil {
-					log.Error("reputation: re-ensure unique index", "error", ensureErr)
-					return err
-				}
-				if retryErr := upsertProxyReputationsChunk(db, reputations[start:end]); retryErr != nil {
+				// Avoid full-table dedupe in the hot path. Try creating the index without cleanup.
+				if ensureErr := ensureProxyReputationIndex(db); ensureErr != nil {
+					log.Warn("reputation: ensure unique index failed; falling back to constraintless upsert", "error", ensureErr)
+				} else if retryErr := upsertProxyReputationsChunk(db, chunk); retryErr == nil {
+					continue
+				} else if !isMissingUniqueConstraintError(retryErr) {
 					return retryErr
+				}
+
+				useConstraintlessFallback = true
+				log.Warn("reputation: missing unique constraint; using fallback upsert strategy")
+				if fallbackErr := upsertProxyReputationsChunkWithoutConstraint(db, chunk); fallbackErr != nil {
+					return fallbackErr
 				}
 				continue
 			}
@@ -407,6 +420,86 @@ func upsertProxyReputationsChunk(db *gorm.DB, reps []domain.ProxyReputation) err
 		Columns:   []clause.Column{{Name: "proxy_id"}, {Name: "kind"}},
 		DoUpdates: clause.AssignmentColumns([]string{"score", "label", "signals", "calculated_at", "updated_at"}),
 	}).Create(&reps).Error
+}
+
+func upsertProxyReputationsChunkWithoutConstraint(db *gorm.DB, reps []domain.ProxyReputation) error {
+	if len(reps) == 0 {
+		return nil
+	}
+	if db == nil {
+		return fmt.Errorf("database not initialised")
+	}
+
+	deduped := dedupeProxyReputationsForUpsert(reps)
+	now := time.Now().UTC()
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, rep := range deduped {
+			lockKey := proxyReputationAdvisoryLockKey(rep.ProxyID, rep.Kind)
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", lockKey).Error; err != nil {
+				return err
+			}
+
+			result := tx.Model(&domain.ProxyReputation{}).
+				Where("proxy_id = ? AND kind = ?", rep.ProxyID, rep.Kind).
+				Updates(map[string]any{
+					"score":         rep.Score,
+					"label":         rep.Label,
+					"signals":       rep.Signals,
+					"calculated_at": rep.CalculatedAt,
+					"updated_at":    now,
+				})
+			if result.Error != nil {
+				return result.Error
+			}
+
+			if result.RowsAffected > 0 {
+				continue
+			}
+
+			if err := tx.Create(&rep).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func proxyReputationAdvisoryLockKey(proxyID uint64, kind string) int64 {
+	hasher := fnv.New64a()
+	_, _ = hasher.Write([]byte(fmt.Sprintf("%d:%s", proxyID, strings.ToLower(strings.TrimSpace(kind)))))
+	return int64(hasher.Sum64())
+}
+
+func dedupeProxyReputationsForUpsert(reps []domain.ProxyReputation) []domain.ProxyReputation {
+	if len(reps) <= 1 {
+		return reps
+	}
+
+	type key struct {
+		proxyID uint64
+		kind    string
+	}
+
+	out := make([]domain.ProxyReputation, 0, len(reps))
+	indexByKey := make(map[key]int, len(reps))
+
+	for _, rep := range reps {
+		k := key{
+			proxyID: rep.ProxyID,
+			kind:    strings.ToLower(strings.TrimSpace(rep.Kind)),
+		}
+
+		if idx, exists := indexByKey[k]; exists {
+			out[idx] = rep
+			continue
+		}
+
+		indexByKey[k] = len(out)
+		out = append(out, rep)
+	}
+
+	return out
 }
 
 func isMissingUniqueConstraintError(err error) bool {

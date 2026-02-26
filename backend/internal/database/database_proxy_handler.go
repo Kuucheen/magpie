@@ -28,6 +28,7 @@ const (
 	deleteChunkSize            = 5000  // Keep large deletes under Postgres parameter limits
 	autoRemoveCleanupBatchSize = 2000
 	proxyIterationBatchSize    = 2000
+	proxyExportBatchSize       = 2000
 
 	proxiesPerPage    = 40
 	maxProxiesPerPage = 100
@@ -1702,9 +1703,15 @@ func DeleteProxiesWithSettings(userID uint, settings dto.DeleteSettings) (int64,
 	return DeleteProxyRelation(userID, intIDs)
 }
 
-func GetProxiesForExport(userID uint, settings dto.ExportSettings) ([]domain.Proxy, error) {
+func StreamProxiesForExport(userID uint, settings dto.ExportSettings, batchSize int, consume func(domain.Proxy) error) error {
 	if DB == nil {
-		return nil, fmt.Errorf("database connection was not initialised")
+		return fmt.Errorf("database connection was not initialised")
+	}
+	if consume == nil {
+		return fmt.Errorf("export consumer callback is nil")
+	}
+	if batchSize <= 0 {
+		batchSize = proxyExportBatchSize
 	}
 
 	tx := DB.Begin(&sql.TxOptions{
@@ -1712,7 +1719,7 @@ func GetProxiesForExport(userID uint, settings dto.ExportSettings) ([]domain.Pro
 		Isolation: sql.LevelRepeatableRead,
 	})
 	if tx.Error != nil {
-		return nil, tx.Error
+		return tx.Error
 	}
 	defer func() {
 		if err := tx.Rollback().Error; err != nil && !errors.Is(err, gorm.ErrInvalidTransaction) {
@@ -1720,99 +1727,178 @@ func GetProxiesForExport(userID uint, settings dto.ExportSettings) ([]domain.Pro
 		}
 	}()
 
-	var proxies []domain.Proxy
-
-	baseQuery := tx.Preload("Statistics", func(db *gorm.DB) *gorm.DB {
-		return db.Order("created_at DESC, id DESC")
-	}).Preload("Statistics.Protocol").
-		Preload("Reputations").
+	idQuery := tx.Model(&domain.Proxy{}).
+		Select("DISTINCT proxies.id").
 		Joins("JOIN user_proxies ON user_proxies.proxy_id = proxies.id").
 		Where("user_proxies.user_id = ?", userID)
 
-	baseQuery = applyExportReputationFilters(baseQuery, settings)
+	idQuery = applyExportReputationFilters(idQuery, settings)
 
 	if settings.ProxyStatus == "alive" || settings.ProxyStatus == "dead" {
 		isAlive := settings.ProxyStatus == "alive"
-		baseQuery = baseQuery.Joins("JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
+		idQuery = idQuery.Joins("JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
 			Where("pos.overall_alive = ?", isAlive)
 	}
 
 	if len(settings.Proxies) > 0 {
-		baseQuery = baseQuery.Where("proxies.id IN ?", settings.Proxies)
+		idQuery = idQuery.Where("proxies.id IN ?", settings.Proxies)
 	}
 
-	var err error
 	if settings.Filter {
-		proxies, err = applyAdditionalFilters(baseQuery, settings)
-	} else {
-		err = baseQuery.Find(&proxies).Error
-	}
-	if err != nil {
-		return nil, err
+		idQuery = applyAdditionalExportFilters(idQuery, settings)
 	}
 
-	filtered := filterProxiesForExport(proxies, settings)
+	var lastID uint64
+	for {
+		var ids []uint64
+		query := idQuery
+		if lastID > 0 {
+			query = query.Where("proxies.id > ?", lastID)
+		}
+		if err := query.Order("proxies.id ASC").Limit(batchSize).Pluck("proxies.id", &ids).Error; err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			break
+		}
+
+		proxies, err := loadExportProxyBatch(tx, ids)
+		if err != nil {
+			return err
+		}
+
+		filtered := filterProxiesForExport(proxies, settings)
+		for _, proxy := range filtered {
+			if err := consume(proxy); err != nil {
+				return err
+			}
+		}
+
+		lastID = ids[len(ids)-1]
+	}
 
 	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func applyAdditionalExportFilters(query *gorm.DB, settings dto.ExportSettings) *gorm.DB {
+	needsProxyStatistics := settings.Http || settings.Https || settings.Socks4 || settings.Socks5 || settings.MaxTimeout > 0 || settings.MaxRetries > 0
+	if needsProxyStatistics {
+		query = query.
+			Joins("JOIN proxy_latest_statistics pls ON pls.proxy_id = proxies.id").
+			Joins("JOIN proxy_statistics ps ON ps.id = pls.statistic_id")
+	}
+
+	protocols := protocolsForExport(settings)
+	if len(protocols) > 0 {
+		query = query.
+			Joins("JOIN protocols proto ON proto.id = ps.protocol_id").
+			Where("LOWER(proto.name) IN ?", protocols)
+	}
+
+	if settings.MaxTimeout > 0 {
+		query = query.Where("ps.response_time <= ?", settings.MaxTimeout)
+	}
+
+	if settings.MaxRetries > 0 {
+		query = query.Where("ps.attempt <= ?", settings.MaxRetries)
+	}
+
+	return query
+}
+
+func loadExportProxyBatch(tx *gorm.DB, ids []uint64) ([]domain.Proxy, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var proxies []domain.Proxy
+	if err := tx.
+		Where("id IN ?", ids).
+		Find(&proxies).Error; err != nil {
+		return nil, err
+	}
+	if len(proxies) == 0 {
+		return nil, nil
+	}
+
+	indexByID := make(map[uint64]int, len(proxies))
+	for i := range proxies {
+		indexByID[proxies[i].ID] = i
+	}
+
+	var statRows []struct {
+		ProxyID      uint64
+		StatisticID  uint64
+		Alive        bool
+		Attempt      uint8
+		ResponseTime uint16
+		ProtocolID   int
+		ProtocolName string
+		CreatedAt    time.Time
+	}
+	if err := tx.
+		Table("proxy_latest_statistics pls").
+		Select(
+			"pls.proxy_id AS proxy_id, "+
+				"ps.id AS statistic_id, ps.alive AS alive, ps.attempt AS attempt, "+
+				"ps.response_time AS response_time, ps.protocol_id AS protocol_id, "+
+				"COALESCE(proto.name, '') AS protocol_name, ps.created_at AS created_at",
+		).
+		Joins("JOIN proxy_statistics ps ON ps.id = pls.statistic_id").
+		Joins("LEFT JOIN protocols proto ON proto.id = ps.protocol_id").
+		Where("pls.proxy_id IN ?", ids).
+		Scan(&statRows).Error; err != nil {
 		return nil, err
 	}
 
-	return filtered, nil
-}
-
-// applyAdditionalFilters applies additional filters based on settings
-func applyAdditionalFilters(query *gorm.DB, settings dto.ExportSettings) ([]domain.Proxy, error) {
-	var proxies []domain.Proxy
-
-	// If any of the filters require proxy_statistics, join it once.
-	needsProxyStatistics := settings.Http || settings.Https || settings.Socks4 || settings.Socks5 || settings.MaxTimeout > 0 || settings.MaxRetries > 0
-	if needsProxyStatistics {
-		query = query.Joins("JOIN proxy_statistics ON proxies.id = proxy_statistics.proxy_id")
-	}
-
-	// Apply protocol filters using the protocols join if any protocols are selected.
-	if settings.Http || settings.Https || settings.Socks4 || settings.Socks5 {
-		var protocols []string
-		if settings.Http {
-			protocols = append(protocols, "http")
+	for _, row := range statRows {
+		idx, ok := indexByID[row.ProxyID]
+		if !ok {
+			continue
 		}
-		if settings.Https {
-			protocols = append(protocols, "https")
+		proxies[idx].Statistics = append(proxies[idx].Statistics, domain.ProxyStatistic{
+			ID:           row.StatisticID,
+			Alive:        row.Alive,
+			Attempt:      row.Attempt,
+			ResponseTime: row.ResponseTime,
+			ProtocolID:   row.ProtocolID,
+			Protocol: domain.Protocol{
+				ID:   row.ProtocolID,
+				Name: row.ProtocolName,
+			},
+			CreatedAt: row.CreatedAt,
+		})
+	}
+
+	var reputations []domain.ProxyReputation
+	if err := tx.
+		Where("proxy_id IN ?", ids).
+		Find(&reputations).Error; err != nil {
+		return nil, err
+	}
+
+	for _, rep := range reputations {
+		idx, ok := indexByID[rep.ProxyID]
+		if !ok {
+			continue
 		}
-		if settings.Socks4 {
-			protocols = append(protocols, "socks4")
+		proxies[idx].Reputations = append(proxies[idx].Reputations, rep)
+	}
+
+	ordered := make([]domain.Proxy, 0, len(ids))
+	for _, id := range ids {
+		idx, ok := indexByID[id]
+		if !ok {
+			continue
 		}
-		if settings.Socks5 {
-			protocols = append(protocols, "socks5")
-		}
-		// Add the join for protocols once.
-		query = query.Joins("JOIN protocols ON proxy_statistics.protocol_id = protocols.id").
-			Where("protocols.name IN ?", protocols)
+		ordered = append(ordered, proxies[idx])
 	}
 
-	// Apply response time filter.
-	if settings.MaxTimeout > 0 {
-		query = query.Where("proxy_statistics.response_time <= ?", settings.MaxTimeout)
-	}
-
-	// Apply retry count filter.
-	if settings.MaxRetries > 0 {
-		query = query.Where("proxy_statistics.attempt <= ?", settings.MaxRetries)
-	}
-
-	// Group the results to avoid duplicates.
-	// In many cases, grouping by the primary key (proxies.id) is sufficient.
-	// If you joined protocols and proxy_statistics then you may need to group by those IDs as well.
-	groupBy := "proxies.id"
-	if settings.Http || settings.Https || settings.Socks4 || settings.Socks5 {
-		groupBy += ", protocols.id"
-	}
-	// Optionally include the proxy_statistics.id if needed to ensure uniqueness.
-	groupBy += ", proxy_statistics.id"
-	query = query.Group(groupBy)
-
-	err := query.Find(&proxies).Error
-	return proxies, err
+	return ordered, nil
 }
 
 func filterProxiesForExport(proxies []domain.Proxy, settings dto.ExportSettings) []domain.Proxy {

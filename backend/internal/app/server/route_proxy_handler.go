@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"magpie/internal/auth"
 	"magpie/internal/blacklist"
 	"magpie/internal/database"
+	"magpie/internal/domain"
 	proxyqueue "magpie/internal/jobs/queue/proxy"
 	"magpie/internal/support"
 	"net/http"
@@ -22,6 +24,15 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	proxyUploadParseChunkBytes = 1 << 20
+	proxyUploadBatchSize       = 5_000
+	proxyUploadMaxLineBytes    = 1 << 20
+	proxyExportBatchSize       = 2_000
+)
+
+var errMissingProxyUploadContent = errors.New("missing proxy upload content")
+
 func addProxies(w http.ResponseWriter, r *http.Request) {
 	userID, userErr := auth.GetUserIDFromRequest(r)
 	if userErr != nil {
@@ -30,63 +41,29 @@ func addProxies(w http.ResponseWriter, r *http.Request) {
 	}
 	startedAt := time.Now()
 	maxBodyBytes := resolveUploadMaxBodyBytes()
-	if !prepareMultipartForm(w, r, maxBodyBytes, resolveMultipartMemoryBytes()) {
-		return
-	}
-
-	textareaContent := r.FormValue("proxyTextarea") // "proxyTextarea" matches the key sent by the frontend
-	clipboardContent := r.FormValue("clipboardProxies")
-	file, fileHeader, err := r.FormFile("file") // "file" is the key of the form field
-
-	var fileContent []byte
-
-	if err == nil {
-		defer file.Close()
-
-		log.Debugf("Uploaded file: %s (%d bytes)", fileHeader.Filename, fileHeader.Size)
-
-		fileContent, err = io.ReadAll(file)
-		if err != nil {
-			if isRequestBodyTooLarge(err) {
-				writeError(w, requestBodyTooLargeMessage(maxBodyBytes), http.StatusRequestEntityTooLarge)
-				return
-			}
-			writeError(w, "Failed to read file", http.StatusInternalServerError)
+	insertedCount, parseStats, blacklistedCount, err := ingestProxyUploadMultipart(w, r, userID, maxBodyBytes)
+	if err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			writeError(w, "Input line exceeds maximum supported length", http.StatusRequestEntityTooLarge)
 			return
 		}
-	} else if !errors.Is(err, http.ErrMissingFile) {
-		writeError(w, "Failed to retrieve file", http.StatusBadRequest)
-		return
-	} else if len(textareaContent) == 0 && len(clipboardContent) == 0 {
-		writeError(w, "Failed to retrieve file", http.StatusBadRequest)
-		return
-	}
-
-	// Merge the file content and the textarea content
-	mergedContent := string(fileContent) + "\n" + textareaContent + "\n" + clipboardContent
-
-	log.Infof("File content received: %d bytes", len(mergedContent))
-
-	proxyList, parseStats := support.ParseTextToProxiesWithStats(mergedContent)
-	proxyList, blocked := blacklist.FilterProxies(proxyList)
-	if len(blocked) > 0 {
-		log.Info("Dropped blacklisted proxies from upload", "count", len(blocked))
-	}
-
-	proxyList, err = database.InsertAndGetProxiesWithUser(proxyList, userID)
-	if err != nil {
-		log.Error("Could not add proxies to database", "error", err.Error())
+		if isRequestBodyTooLarge(err) {
+			writeError(w, requestBodyTooLargeMessage(maxBodyBytes), http.StatusRequestEntityTooLarge)
+			return
+		}
+		if errors.Is(err, errMissingProxyUploadContent) {
+			writeError(w, "Failed to retrieve file", http.StatusBadRequest)
+			return
+		}
+		log.Error("Could not add proxies to database", "error", err)
 		writeError(w, "Could not add proxies to database", http.StatusInternalServerError)
 		return
 	}
 
-	database.AsyncEnrichProxyMetadata(proxyList)
-	proxyqueue.PublicProxyQueue.AddToQueue(proxyList)
-
 	w.WriteHeader(http.StatusOK)
 	processingMs := time.Since(startedAt).Milliseconds()
 	response := dto.AddProxiesResponse{
-		ProxyCount: len(proxyList),
+		ProxyCount: insertedCount,
 		Details: dto.AddProxiesDetails{
 			SubmittedCount:     parseStats.SubmittedCount,
 			ParsedCount:        parseStats.ParsedCount,
@@ -94,11 +71,146 @@ func addProxies(w http.ResponseWriter, r *http.Request) {
 			InvalidIPCount:     parseStats.InvalidIPCount,
 			InvalidIPv4Count:   parseStats.InvalidIPv4Count,
 			InvalidPortCount:   parseStats.InvalidPortCount,
-			BlacklistedCount:   len(blocked),
+			BlacklistedCount:   blacklistedCount,
 			ProcessingMs:       processingMs,
 		},
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+func ingestProxyUploadMultipart(w http.ResponseWriter, r *http.Request, userID uint, maxBodyBytes int64) (int, support.ProxyParseStats, int, error) {
+	if r == nil || r.Body == nil {
+		return 0, support.ProxyParseStats{}, 0, errMissingProxyUploadContent
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	multipartReader, err := r.MultipartReader()
+	if err != nil {
+		return 0, support.ProxyParseStats{}, 0, err
+	}
+
+	var (
+		stats          support.ProxyParseStats
+		insertedCount  int
+		blacklistCount int
+		batch          []domain.Proxy
+		sawInput       bool
+	)
+
+	flushBatch := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+
+		filtered, blocked := blacklist.FilterProxies(batch)
+		blacklistCount += len(blocked)
+		if len(blocked) > 0 {
+			log.Info("Dropped blacklisted proxies from upload", "count", len(blocked))
+		}
+
+		batch = batch[:0]
+		if len(filtered) == 0 {
+			return nil
+		}
+
+		inserted, err := database.InsertAndGetProxiesWithUser(filtered, userID)
+		if err != nil {
+			return err
+		}
+
+		if len(inserted) > 0 {
+			insertedCount += len(inserted)
+			database.AsyncEnrichProxyMetadata(inserted)
+			if err := proxyqueue.PublicProxyQueue.AddToQueue(inserted); err != nil {
+				log.Error("Could not add proxies to queue", "error", err)
+			}
+		}
+
+		return nil
+	}
+
+	flushParseChunk := func(chunk *strings.Builder) error {
+		if chunk.Len() == 0 {
+			return nil
+		}
+
+		parsed, parseStats := support.ParseTextToProxiesWithStats(chunk.String())
+		stats.SubmittedCount += parseStats.SubmittedCount
+		stats.ParsedCount += parseStats.ParsedCount
+		stats.InvalidFormatCount += parseStats.InvalidFormatCount
+		stats.InvalidIPCount += parseStats.InvalidIPCount
+		stats.InvalidIPv4Count += parseStats.InvalidIPv4Count
+		stats.InvalidPortCount += parseStats.InvalidPortCount
+
+		batch = append(batch, parsed...)
+		chunk.Reset()
+
+		if len(batch) >= proxyUploadBatchSize {
+			return flushBatch()
+		}
+		return nil
+	}
+
+	ingestPart := func(source io.Reader) error {
+		scanner := bufio.NewScanner(source)
+		scanner.Buffer(make([]byte, 64*1024), proxyUploadMaxLineBytes)
+		var parseChunk strings.Builder
+
+		for scanner.Scan() {
+			parseChunk.WriteString(scanner.Text())
+			parseChunk.WriteByte('\n')
+			if parseChunk.Len() >= proxyUploadParseChunkBytes {
+				if err := flushParseChunk(&parseChunk); err != nil {
+					return err
+				}
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+		return flushParseChunk(&parseChunk)
+	}
+
+	for {
+		part, err := multipartReader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return 0, support.ProxyParseStats{}, 0, err
+		}
+
+		formName := strings.TrimSpace(part.FormName())
+		switch formName {
+		case "file", "proxyTextarea", "clipboardProxies":
+			sawInput = true
+			if name := strings.TrimSpace(part.FileName()); name != "" {
+				log.Debugf("Uploaded file: %s", name)
+			}
+			if err := ingestPart(part); err != nil {
+				_ = part.Close()
+				return 0, support.ProxyParseStats{}, 0, err
+			}
+		default:
+			if _, err := io.Copy(io.Discard, part); err != nil {
+				_ = part.Close()
+				return 0, support.ProxyParseStats{}, 0, err
+			}
+		}
+
+		if err := part.Close(); err != nil {
+			return 0, support.ProxyParseStats{}, 0, err
+		}
+	}
+
+	if !sawInput {
+		return 0, support.ProxyParseStats{}, 0, errMissingProxyUploadContent
+	}
+	if err := flushBatch(); err != nil {
+		return 0, support.ProxyParseStats{}, 0, err
+	}
+
+	return insertedCount, stats, blacklistCount, nil
 }
 
 func getProxyPage(w http.ResponseWriter, r *http.Request) {
@@ -409,16 +521,32 @@ func exportProxies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxies, err := database.GetProxiesForExport(userID, settings)
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Disposition", "attachment; filename=proxies.txt")
+	writer := bufio.NewWriterSize(w, 256*1024)
+	wroteBytes := false
 
+	err := database.StreamProxiesForExport(userID, settings, proxyExportBatchSize, func(proxy domain.Proxy) error {
+		line := support.FormatProxy(proxy, settings.OutputFormat)
+		if _, err := writer.WriteString(line); err != nil {
+			return err
+		}
+		if err := writer.WriteByte('\n'); err != nil {
+			return err
+		}
+		wroteBytes = true
+		return nil
+	})
 	if err != nil {
-		writeError(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+		if !wroteBytes {
+			writeError(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+			return
+		}
+		log.Error("export proxies stream failed", "error", err)
 		return
 	}
 
-	formattedProxies := support.FormatProxies(proxies, settings.OutputFormat)
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Disposition", "attachment; filename=proxies.txt")
-	json.NewEncoder(w).Encode(formattedProxies)
+	if err := writer.Flush(); err != nil {
+		log.Warn("export proxies flush failed", "error", err)
+	}
 }

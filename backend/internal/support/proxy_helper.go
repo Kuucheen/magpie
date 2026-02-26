@@ -194,42 +194,44 @@ func GetProxyLevel(html string) int {
 	return 1
 }
 
+func FormatProxy(proxy domain.Proxy, outputFormat string) string {
+	protocolName := ""
+	aliveValue := "false"
+	timeValue := "0"
+
+	if latestStat := latestStatistic(proxy.Statistics); latestStat != nil {
+		protocolName = getProtocolName(latestStat)
+		timeValue = strconv.Itoa(int(latestStat.ResponseTime))
+	}
+
+	aliveValue = strconv.FormatBool(overallAliveFromStatistics(proxy.Statistics))
+
+	reputationLabel, reputationScore := resolveReputationForExport(proxy.Reputations, protocolName)
+
+	replacements := []string{
+		"protocol", protocolName,
+		"ip", proxy.GetIp(),
+		"port", fmt.Sprintf("%d", proxy.Port),
+		"username", proxy.Username,
+		"password", proxy.Password,
+		"country", proxy.Country,
+		"alive", aliveValue,
+		"type", proxy.EstimatedType,
+		"time", timeValue,
+		"reputation_score", reputationScore,
+		"reputation_label", reputationLabel,
+		"reputation", reputationLabel,
+	}
+
+	return strings.NewReplacer(replacements...).Replace(outputFormat)
+}
+
 // FormatProxies formats the list of proxies according to the specified output format
 func FormatProxies(proxies []domain.Proxy, outputFormat string) string {
 	var result strings.Builder
 
 	for _, proxy := range proxies {
-		protocolName := ""
-		aliveValue := "false"
-		timeValue := "0"
-
-		if latestStat := latestStatistic(proxy.Statistics); latestStat != nil {
-			protocolName = getProtocolName(latestStat)
-			timeValue = strconv.Itoa(int(latestStat.ResponseTime))
-		}
-
-		aliveValue = strconv.FormatBool(overallAliveFromStatistics(proxy.Statistics))
-
-		reputationLabel, reputationScore := resolveReputationForExport(proxy.Reputations, protocolName)
-
-		replacements := []string{
-			"protocol", protocolName,
-			"ip", proxy.GetIp(),
-			"port", fmt.Sprintf("%d", proxy.Port),
-			"username", proxy.Username,
-			"password", proxy.Password,
-			"country", proxy.Country,
-			"alive", aliveValue,
-			"type", proxy.EstimatedType,
-			"time", timeValue,
-			"reputation_score", reputationScore,
-			"reputation_label", reputationLabel,
-			"reputation", reputationLabel,
-		}
-
-		line := strings.NewReplacer(replacements...).Replace(outputFormat)
-
-		result.WriteString(line)
+		result.WriteString(FormatProxy(proxy, outputFormat))
 		result.WriteString("\n")
 	}
 

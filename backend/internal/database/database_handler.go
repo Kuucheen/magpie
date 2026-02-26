@@ -382,6 +382,10 @@ func ensureProxyStatisticsRetentionSchema(db *gorm.DB) error {
 		return nil
 	}
 
+	if err := ensureProxyStatisticsPartitionSchema(db); err != nil {
+		return fmt.Errorf("proxy statistics partition schema: %w", err)
+	}
+
 	stmts := []string{
 		`CREATE INDEX IF NOT EXISTS idx_proxy_statistics_created_at_id ON proxy_statistics (created_at, id)`,
 	}

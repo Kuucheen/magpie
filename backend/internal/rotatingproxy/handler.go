@@ -21,10 +21,13 @@ import (
 	"magpie/internal/api/dto"
 	"magpie/internal/database"
 	"magpie/internal/domain"
+	"magpie/internal/support"
 )
 
 const (
-	connectEstablishedResponse = "HTTP/1.1 200 Connection Established\r\nProxy-Agent: Magpie Rotator\r\n\r\n"
+	connectEstablishedResponse          = "HTTP/1.1 200 Connection Established\r\nProxy-Agent: Magpie Rotator\r\n\r\n"
+	envRotatingProxyMaxRequestBodyBytes = "ROTATING_PROXY_MAX_REQUEST_BODY_BYTES"
+	defaultMaxRequestBodyBytes          = 10 * 1024 * 1024
 )
 
 var (
@@ -32,6 +35,7 @@ var (
 	dialUpstreamFunc           = dialUpstream
 	performUpstreamConnectFunc = performUpstreamConnect
 	connectThroughUpstreamFunc = connectThroughUpstream
+	maxRequestBodyBytes        = loadMaxRequestBodyBytes()
 )
 
 type proxyHandler struct {
@@ -321,12 +325,26 @@ func (h *proxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(r.Body)
+	if maxRequestBodyBytes > 0 && r.ContentLength > int64(maxRequestBodyBytes) {
+		if r.Body != nil {
+			_ = r.Body.Close()
+		}
+		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	bodyBytes, err := readRequestBodyWithLimit(r.Body, maxRequestBodyBytes)
+	if r.Body != nil {
+		_ = r.Body.Close()
+	}
 	if err != nil {
+		if errors.Is(err, errRequestBodyTooLarge) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
 		return
 	}
-	_ = r.Body.Close()
 
 	targetURL := r.URL
 	if !targetURL.IsAbs() {
@@ -374,6 +392,36 @@ func (h *proxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		log.Warn("rotating proxy: failed to copy response body", "rotator_id", h.rotator.ID, "error", err)
 	}
+}
+
+var errRequestBodyTooLarge = errors.New("request body too large")
+
+func loadMaxRequestBodyBytes() int {
+	limit := support.GetEnvInt(envRotatingProxyMaxRequestBodyBytes, defaultMaxRequestBodyBytes)
+	if limit <= 0 {
+		return defaultMaxRequestBodyBytes
+	}
+	return limit
+}
+
+func readRequestBodyWithLimit(body io.Reader, limit int) ([]byte, error) {
+	if body == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		return io.ReadAll(body)
+	}
+
+	limited := io.LimitReader(body, int64(limit)+1)
+	payload, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) > limit {
+		return nil, errRequestBodyTooLarge
+	}
+
+	return payload, nil
 }
 
 func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {

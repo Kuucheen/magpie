@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -17,6 +18,12 @@ import (
 	"magpie/internal/database"
 	"magpie/internal/domain"
 	"magpie/internal/support"
+)
+
+const (
+	envRotatingProxySocksMaxConcurrentConnections = "ROTATING_PROXY_SOCKS_MAX_CONCURRENT_CONNECTIONS"
+	defaultSocksMaxConcurrentConnections          = 512
+	socksConcurrencyLogEvery                      = 15 * time.Second
 )
 
 type Manager struct {
@@ -31,6 +38,7 @@ func NewManager() *Manager {
 }
 
 var GlobalManager = NewManager()
+var maxSocksConcurrentConnections = loadMaxSocksConcurrentConnections()
 
 func (m *Manager) StartAll() {
 	m.Reconcile()
@@ -152,15 +160,21 @@ func (m *Manager) StopAll() {
 }
 
 type proxyServer struct {
-	rotator     domain.RotatingProxy
-	listener    net.Listener
-	httpServer  *http.Server
-	http3Server *http3.Server
-	closeOnce   sync.Once
+	rotator                 domain.RotatingProxy
+	listener                net.Listener
+	httpServer              *http.Server
+	http3Server             *http3.Server
+	socksWorkerSem          chan struct{}
+	lastSocksConcurrencyLog atomic.Int64
+	closeOnce               sync.Once
 }
 
 func newProxyServer(rotator domain.RotatingProxy) *proxyServer {
-	return &proxyServer{rotator: rotator}
+	server := &proxyServer{rotator: rotator}
+	if maxSocksConcurrentConnections > 0 {
+		server.socksWorkerSem = make(chan struct{}, maxSocksConcurrentConnections)
+	}
+	return server
 }
 
 func (ps *proxyServer) Start() error {
@@ -226,7 +240,9 @@ func (ps *proxyServer) startSocksServer() error {
 				log.Error("rotating proxy server: accept error", "rotator_id", ps.rotator.ID, "error", err)
 				continue
 			}
-			go handler.handle(conn)
+			if !ps.dispatchSocksConnection(conn, handler.handle) {
+				ps.logSocksConcurrencyLimit()
+			}
 		}
 	}()
 
@@ -315,4 +331,48 @@ func listenTransportProtocolName(rotator domain.RotatingProxy) string {
 		return support.NormalizeTransportProtocol(name)
 	}
 	return support.TransportTCP
+}
+
+func loadMaxSocksConcurrentConnections() int {
+	limit := support.GetEnvInt(envRotatingProxySocksMaxConcurrentConnections, defaultSocksMaxConcurrentConnections)
+	if limit <= 0 {
+		return defaultSocksMaxConcurrentConnections
+	}
+	return limit
+}
+
+func (ps *proxyServer) dispatchSocksConnection(conn net.Conn, handle func(net.Conn)) bool {
+	if ps.socksWorkerSem == nil {
+		go handle(conn)
+		return true
+	}
+
+	select {
+	case ps.socksWorkerSem <- struct{}{}:
+		go func() {
+			defer func() { <-ps.socksWorkerSem }()
+			handle(conn)
+		}()
+		return true
+	default:
+		_ = conn.Close()
+		return false
+	}
+}
+
+func (ps *proxyServer) logSocksConcurrencyLimit() {
+	nowUnix := time.Now().Unix()
+	last := ps.lastSocksConcurrencyLog.Load()
+	if nowUnix-last < int64(socksConcurrencyLogEvery/time.Second) {
+		return
+	}
+	if !ps.lastSocksConcurrencyLog.CompareAndSwap(last, nowUnix) {
+		return
+	}
+
+	log.Warn(
+		"rotating proxy server: max SOCKS concurrent connections reached; rejecting connection",
+		"rotator_id", ps.rotator.ID,
+		"max_concurrency", cap(ps.socksWorkerSem),
+	)
 }

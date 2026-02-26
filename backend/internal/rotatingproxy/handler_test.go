@@ -2,12 +2,14 @@ package rotatingproxy
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -255,6 +257,130 @@ func TestHandleConnect_ProxiesDataThroughUpstream(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("handleConnect did not return after closing connections")
+	}
+}
+
+func TestHandleHTTP_RejectsOversizedRequestBody(t *testing.T) {
+	handler := &proxyHandler{
+		rotator: domain.RotatingProxy{
+			ID:     42,
+			UserID: 7,
+		},
+	}
+
+	originalGetNext := getNextRotatingProxyFunc
+	getNextRotatingProxyFunc = func(userID uint, rotatorID uint64) (*dto.RotatingProxyNext, error) {
+		return &dto.RotatingProxyNext{
+			ProxyID:  1,
+			IP:       "192.0.2.10",
+			Port:     8080,
+			Protocol: "socks5",
+		}, nil
+	}
+	t.Cleanup(func() { getNextRotatingProxyFunc = originalGetNext })
+
+	originalConnect := connectThroughUpstreamFunc
+	var connectCalls atomic.Int64
+	connectThroughUpstreamFunc = func(target string, next *dto.RotatingProxyNext) (net.Conn, error) {
+		connectCalls.Add(1)
+		return nil, io.EOF
+	}
+	t.Cleanup(func() { connectThroughUpstreamFunc = originalConnect })
+
+	originalLimit := maxRequestBodyBytes
+	maxRequestBodyBytes = 8
+	t.Cleanup(func() { maxRequestBodyBytes = originalLimit })
+
+	body := bytes.Repeat([]byte("a"), 9)
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/upload", bytes.NewReader(body))
+	request.Host = "example.com"
+	recorder := httptest.NewRecorder()
+
+	handler.handleHTTP(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusRequestEntityTooLarge)
+	}
+	if calls := connectCalls.Load(); calls != 0 {
+		t.Fatalf("connectThroughUpstreamFunc calls = %d, want 0", calls)
+	}
+}
+
+func TestHandleHTTP_ForwardsBodyWithinLimit(t *testing.T) {
+	handler := &proxyHandler{
+		rotator: domain.RotatingProxy{
+			ID:     42,
+			UserID: 7,
+		},
+	}
+
+	originalGetNext := getNextRotatingProxyFunc
+	getNextRotatingProxyFunc = func(userID uint, rotatorID uint64) (*dto.RotatingProxyNext, error) {
+		return &dto.RotatingProxyNext{
+			ProxyID:  1,
+			IP:       "192.0.2.10",
+			Port:     8080,
+			Protocol: "socks5",
+		}, nil
+	}
+	t.Cleanup(func() { getNextRotatingProxyFunc = originalGetNext })
+
+	upstreamClient, upstreamServer := net.Pipe()
+	originalConnect := connectThroughUpstreamFunc
+	connectThroughUpstreamFunc = func(target string, next *dto.RotatingProxyNext) (net.Conn, error) {
+		if target != "example.com:80" {
+			t.Fatalf("target = %q, want example.com:80", target)
+		}
+		return upstreamServer, nil
+	}
+	t.Cleanup(func() { connectThroughUpstreamFunc = originalConnect })
+
+	originalLimit := maxRequestBodyBytes
+	maxRequestBodyBytes = 16
+	t.Cleanup(func() { maxRequestBodyBytes = originalLimit })
+
+	upstreamDone := make(chan struct{})
+	go func() {
+		defer close(upstreamDone)
+		defer upstreamClient.Close()
+
+		req, err := http.ReadRequest(bufio.NewReader(upstreamClient))
+		if err != nil {
+			t.Errorf("read upstream request: %v", err)
+			return
+		}
+		defer req.Body.Close()
+
+		payload, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Errorf("read upstream body: %v", err)
+			return
+		}
+		if string(payload) != "ping" {
+			t.Errorf("upstream payload = %q, want ping", string(payload))
+			return
+		}
+
+		_, _ = upstreamClient.Write([]byte("HTTP/1.1 201 Created\r\nContent-Length: 2\r\n\r\nok"))
+	}()
+
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/upload", bytes.NewReader([]byte("ping")))
+	request.Host = "example.com"
+	recorder := httptest.NewRecorder()
+
+	handler.handleHTTP(recorder, request)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusCreated)
+	}
+	if recorder.Body.String() != "ok" {
+		t.Fatalf("response body = %q, want ok", recorder.Body.String())
+	}
+
+	select {
+	case <-upstreamDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("upstream test server did not finish")
 	}
 }
 

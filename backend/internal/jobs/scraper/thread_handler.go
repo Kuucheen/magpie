@@ -38,6 +38,12 @@ const (
 	browserEnsureWaitPoll        = 100 * time.Millisecond
 	browserRestartInitialBackoff = 500 * time.Millisecond
 	browserRestartMaxBackoff     = 15 * time.Second
+	defaultPostProcessWorkers    = 8
+	defaultPostProcessQueueSize  = 256
+	maxPostProcessWorkers        = 64
+	maxPostProcessQueueSize      = 4096
+	envPostProcessWorkers        = "SCRAPER_POST_PROCESS_WORKERS"
+	envPostProcessQueueSize      = "SCRAPER_POST_PROCESS_QUEUE_CAPACITY"
 )
 
 /* ─────────────────────────────  browser & page pool  ───────────────────── */
@@ -47,18 +53,28 @@ var (
 	pagePool     chan *rod.Page
 	currentPages atomic.Int32
 
+	postProcessQueue chan scrapedHTMLJob
+
 	stopPage     = make(chan struct{}) // signals that a page should be closed
 	browserAlive atomic.Bool
 	restartCh    = make(chan struct{}, 1) // coalesced restart signal
 )
 
+type scrapedHTMLJob struct {
+	site domain.ScrapeSite
+	html string
+}
+
 /* ─────────────────────────────  init  ───────────────────────────────────── */
 
 func init() {
 	pagePool = make(chan *rod.Page, maxScraperPages)
+	postProcessQueue = make(chan scrapedHTMLJob, resolvePostProcessQueueSize())
+
 	go BrowserWatchdog() // listen for restart requests
 	requestRestartBrowser()
 	go ManagePagePool() // keep pool aligned with demand
+	startScrapedHTMLWorkers(resolvePostProcessWorkers())
 }
 
 /* ─────────────────────────────  dispatcher  ─────────────────────────────── */
@@ -183,7 +199,9 @@ func scrapeWorker(parent context.Context) {
 			if scrapeErr != nil {
 				log.Warn("scrape failed", "url", site.URL, "err", scrapeErr)
 			} else {
-				go handleScrapedHTML(site, html)
+				if err := enqueueScrapedHTML(ctx, site, html); err != nil {
+					log.Warn("scraped html enqueue interrupted", "url", site.URL, "err", err)
+				}
 			}
 		}
 
@@ -490,6 +508,52 @@ func restartBrowser() error {
 
 func safeClosePage(p *rod.Page) error {
 	return rod.Try(func() { p.MustClose() })
+}
+
+func startScrapedHTMLWorkers(count int) {
+	for i := 0; i < count; i++ {
+		go func() {
+			for job := range postProcessQueue {
+				handleScrapedHTML(job.site, job.html)
+			}
+		}()
+	}
+}
+
+func enqueueScrapedHTML(ctx context.Context, site domain.ScrapeSite, html string) error {
+	job := scrapedHTMLJob{
+		site: site,
+		html: html,
+	}
+
+	select {
+	case postProcessQueue <- job:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func resolvePostProcessWorkers() int {
+	workers := support.GetEnvInt(envPostProcessWorkers, defaultPostProcessWorkers)
+	if workers < 1 {
+		return 1
+	}
+	if workers > maxPostProcessWorkers {
+		return maxPostProcessWorkers
+	}
+	return workers
+}
+
+func resolvePostProcessQueueSize() int {
+	size := support.GetEnvInt(envPostProcessQueueSize, defaultPostProcessQueueSize)
+	if size < 1 {
+		return 1
+	}
+	if size > maxPostProcessQueueSize {
+		return maxPostProcessQueueSize
+	}
+	return size
 }
 
 func isConnClosed(err error) bool {

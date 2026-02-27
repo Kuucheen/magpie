@@ -325,16 +325,10 @@ func GetNextRotatingProxy(userID uint, rotatingProxyID uint64) (*dto.RotatingPro
 
 		labels := sanitizeRotatorReputationLabels(entity.ReputationLabels.Clone())
 		uptimeFilterType, uptimePercentage := normalizeRotatorUptimeFilter(entity.UptimeFilterType, entity.UptimePercentage)
-		proxies, err := aliveProxiesForProtocol(tx, userID, entity.ProtocolID, labels, uptimeFilterType, uptimePercentage)
+		selected, err := nextAliveProxyForProtocol(tx, userID, entity.ProtocolID, labels, uptimeFilterType, uptimePercentage, entity.LastProxyID)
 		if err != nil {
 			return err
 		}
-
-		if len(proxies) == 0 {
-			return ErrRotatingProxyNoAliveProxies
-		}
-
-		selected := selectNextProxy(proxies, entity.LastProxyID)
 
 		now := time.Now()
 
@@ -406,18 +400,9 @@ func getProxyAddressCached(userID uint, proxyID uint64, cache map[uint64]string)
 }
 
 func aliveProxiesForProtocol(tx *gorm.DB, userID uint, protocolID int, labels []string, uptimeFilterType string, uptimePercentage *float64) ([]domain.Proxy, error) {
-	filterLabels := sanitizeRotatorReputationLabels(labels)
+	query := buildAliveProxyQuery(tx, userID, protocolID, labels, uptimeFilterType, uptimePercentage)
 
 	var proxies []domain.Proxy
-	query := tx.
-		Model(&domain.Proxy{}).
-		Select("proxies.*").
-		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userID).
-		Joins("JOIN proxy_latest_statistics pls ON pls.proxy_id = proxies.id AND pls.protocol_id = ? AND pls.alive = ?", protocolID, true)
-
-	query = applyReputationFilter(query, filterLabels)
-	query = applyUptimeFilter(query, tx, protocolID, uptimeFilterType, uptimePercentage)
-
 	err := query.
 		Order("proxies.id").
 		Find(&proxies).Error
@@ -426,6 +411,57 @@ func aliveProxiesForProtocol(tx *gorm.DB, userID uint, protocolID int, labels []
 	}
 
 	return proxies, nil
+}
+
+func buildAliveProxyQuery(tx *gorm.DB, userID uint, protocolID int, labels []string, uptimeFilterType string, uptimePercentage *float64) *gorm.DB {
+	filterLabels := sanitizeRotatorReputationLabels(labels)
+
+	query := tx.
+		Model(&domain.Proxy{}).
+		Select("proxies.*").
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userID).
+		Joins("JOIN proxy_latest_statistics pls ON pls.proxy_id = proxies.id AND pls.protocol_id = ? AND pls.alive = ?", protocolID, true)
+
+	query = applyReputationFilter(query, filterLabels)
+	query = applyUptimeFilter(query, tx, protocolID, uptimeFilterType, uptimePercentage)
+	return query
+}
+
+func nextAliveProxyForProtocol(tx *gorm.DB, userID uint, protocolID int, labels []string, uptimeFilterType string, uptimePercentage *float64, lastProxyID *uint64) (*domain.Proxy, error) {
+	baseQuery := buildAliveProxyQuery(tx, userID, protocolID, labels, uptimeFilterType, uptimePercentage)
+
+	if lastProxyID != nil {
+		nextAfterCursor, err := fetchAliveProxyCandidate(baseQuery, *lastProxyID, true)
+		if err == nil {
+			return nextAfterCursor, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+
+	first, err := fetchAliveProxyCandidate(baseQuery, 0, false)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrRotatingProxyNoAliveProxies
+		}
+		return nil, err
+	}
+	return first, nil
+}
+
+func fetchAliveProxyCandidate(baseQuery *gorm.DB, cursorProxyID uint64, applyCursor bool) (*domain.Proxy, error) {
+	query := baseQuery.Session(&gorm.Session{})
+	if applyCursor {
+		query = query.Where("proxies.id > ?", cursorProxyID)
+	}
+
+	var proxy domain.Proxy
+	if err := query.Order("proxies.id").Limit(1).First(&proxy).Error; err != nil {
+		return nil, err
+	}
+
+	return &proxy, nil
 }
 
 func applyReputationFilter(query *gorm.DB, labels []string) *gorm.DB {
@@ -475,24 +511,6 @@ func fetchUserProxyByID(tx *gorm.DB, userID uint, proxyID uint64) (*domain.Proxy
 		return nil, err
 	}
 	return &proxy, nil
-}
-
-func selectNextProxy(proxies []domain.Proxy, lastProxyID *uint64) domain.Proxy {
-	if lastProxyID == nil {
-		return proxies[0]
-	}
-
-	for idx := range proxies {
-		if proxies[idx].ID == *lastProxyID {
-			next := idx + 1
-			if next >= len(proxies) {
-				next = 0
-			}
-			return proxies[next]
-		}
-	}
-
-	return proxies[0]
 }
 
 func fetchProtocolByName(tx *gorm.DB, name string) (domain.Protocol, error) {

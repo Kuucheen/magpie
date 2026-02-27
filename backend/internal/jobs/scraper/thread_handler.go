@@ -44,6 +44,10 @@ const (
 	maxPostProcessQueueSize      = 4096
 	envPostProcessWorkers        = "SCRAPER_POST_PROCESS_WORKERS"
 	envPostProcessQueueSize      = "SCRAPER_POST_PROCESS_QUEUE_CAPACITY"
+	defaultScraperPagePoolMin    = 1
+	defaultScraperPagePoolMax    = maxScraperPages
+	envScraperPagePoolMin        = "SCRAPER_PAGE_POOL_MIN_CAPACITY"
+	envScraperPagePoolMax        = "SCRAPER_PAGE_POOL_MAX_CAPACITY"
 )
 
 /* ─────────────────────────────  browser & page pool  ───────────────────── */
@@ -307,25 +311,97 @@ func ManagePagePool() {
 }
 
 func calcRequiredPages(cfg config.Config) int32 {
-	count := uint64(1)
+	totalSites := int64(1)
 	if n, err := sitequeue.PublicScrapeSiteQueue.GetScrapeSiteCount(); err == nil {
-		count = uint64(n)
+		totalSites = n
 	}
 
-	interval := config.CalculateMillisecondsOfCheckingPeriod(cfg.Scraper.ScraperTimer)
-	if interval == 0 {
-		interval = 86_400_000
+	activeInstances := 1
+	if n, err := sitequeue.PublicScrapeSiteQueue.GetActiveInstances(); err == nil && n > 0 {
+		activeInstances = n
 	}
-	avg := uint64(cfg.Scraper.Timeout * (cfg.Scraper.Retries + 1)) // ms
 
-	required := (count * avg) / uint64(interval)
-	if required < 1 && count > 0 {
-		required = 1
-	}
-	if required > maxScraperPages {
-		required = maxScraperPages
-	}
+	interval := uint64(config.CalculateMillisecondsOfCheckingPeriod(cfg.Scraper.ScraperTimer))
+	minPages, maxPages := resolveScraperPagePoolCaps()
+
+	required := calculateRequiredPages(
+		totalSites,
+		activeInstances,
+		uint64(cfg.Scraper.Timeout),
+		uint64(cfg.Scraper.Retries),
+		interval,
+		minPages,
+		maxPages,
+	)
 	return int32(required)
+}
+
+func resolveScraperPagePoolCaps() (int64, int64) {
+	minPages := int64(support.GetEnvInt(envScraperPagePoolMin, defaultScraperPagePoolMin))
+	maxPages := int64(support.GetEnvInt(envScraperPagePoolMax, defaultScraperPagePoolMax))
+
+	if minPages < 1 {
+		minPages = 1
+	}
+	if minPages > maxScraperPages {
+		minPages = maxScraperPages
+	}
+
+	if maxPages < 1 {
+		maxPages = 1
+	}
+	if maxPages > maxScraperPages {
+		maxPages = maxScraperPages
+	}
+
+	if minPages > maxPages {
+		minPages = maxPages
+	}
+
+	return minPages, maxPages
+}
+
+func calculateRequiredPages(totalSites int64, activeInstances int, timeoutMs, retries, intervalMs uint64, minPages, maxPages int64) int64 {
+	if totalSites < 0 {
+		totalSites = 0
+	}
+	if activeInstances < 1 {
+		activeInstances = 1
+	}
+	if intervalMs == 0 {
+		intervalMs = 86_400_000
+	}
+	if minPages < 1 {
+		minPages = 1
+	}
+	if maxPages < 1 {
+		maxPages = 1
+	}
+	if maxPages > maxScraperPages {
+		maxPages = maxScraperPages
+	}
+	if minPages > maxPages {
+		minPages = maxPages
+	}
+
+	perInstanceSites := (uint64(totalSites) + uint64(activeInstances) - 1) / uint64(activeInstances)
+	var required uint64
+	if perInstanceSites > 0 {
+		totalWorkMs := perInstanceSites * timeoutMs * (retries + 1)
+		required = (totalWorkMs + intervalMs - 1) / intervalMs
+		if required < 1 {
+			required = 1
+		}
+	}
+
+	if required < uint64(minPages) {
+		required = uint64(minPages)
+	}
+	if required > uint64(maxPages) {
+		required = uint64(maxPages)
+	}
+
+	return int64(required)
 }
 
 func addPage() error {

@@ -35,3 +35,54 @@ func TestResolvePostProcessQueueSize_DefaultAndClamp(t *testing.T) {
 		t.Fatalf("queue size = %d, want %d", got, maxPostProcessQueueSize)
 	}
 }
+
+func TestResolveScraperPagePoolCaps_DefaultAndClamp(t *testing.T) {
+	t.Setenv(envScraperPagePoolMin, "")
+	t.Setenv(envScraperPagePoolMax, "")
+	minPages, maxPages := resolveScraperPagePoolCaps()
+	if minPages != defaultScraperPagePoolMin || maxPages != defaultScraperPagePoolMax {
+		t.Fatalf("caps = (%d,%d), want (%d,%d)", minPages, maxPages, defaultScraperPagePoolMin, defaultScraperPagePoolMax)
+	}
+
+	t.Setenv(envScraperPagePoolMin, "0")
+	t.Setenv(envScraperPagePoolMax, "5000")
+	minPages, maxPages = resolveScraperPagePoolCaps()
+	if minPages != 1 || maxPages != maxScraperPages {
+		t.Fatalf("caps = (%d,%d), want (1,%d)", minPages, maxPages, maxScraperPages)
+	}
+
+	t.Setenv(envScraperPagePoolMin, "200")
+	t.Setenv(envScraperPagePoolMax, "50")
+	minPages, maxPages = resolveScraperPagePoolCaps()
+	if minPages != 50 || maxPages != 50 {
+		t.Fatalf("caps = (%d,%d), want (50,50)", minPages, maxPages)
+	}
+}
+
+func TestCalculateRequiredPages_PerInstanceAndCap(t *testing.T) {
+	required := calculateRequiredPages(
+		2000, // total sites
+		4,    // replicas
+		1000, // timeout ms
+		0,    // retries
+		1000, // interval ms
+		1,
+		maxScraperPages,
+	)
+	if required != 500 {
+		t.Fatalf("required pages = %d, want 500", required)
+	}
+
+	capped := calculateRequiredPages(
+		2000,
+		4,
+		1000,
+		0,
+		1000,
+		1,
+		100,
+	)
+	if capped != 100 {
+		t.Fatalf("capped pages = %d, want 100", capped)
+	}
+}

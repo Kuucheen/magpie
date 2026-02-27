@@ -3,8 +3,6 @@ package runtime
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -31,15 +29,7 @@ type ActiveInstance struct {
 	PortEnd   int    `json:"port_end"`
 }
 
-var instanceID = generateInstanceID()
-
-func generateInstanceID() string {
-	if configured := strings.TrimSpace(support.GetInstanceID()); configured != "" {
-		return configured
-	}
-	hostname, _ := os.Hostname()
-	return fmt.Sprintf("%s-%d-%d", hostname, os.Getpid(), time.Now().UnixNano())
-}
+var instanceID = strings.TrimSpace(support.GetInstanceID())
 
 func currentInstancePayload() ActiveInstance {
 	start, end := support.GetRotatingProxyPortRange()

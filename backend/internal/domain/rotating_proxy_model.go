@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"os"
+	"magpie/internal/instanceid"
 	"strings"
 	"time"
 
@@ -93,12 +93,5 @@ func (rp *RotatingProxy) AfterFind(_ *gorm.DB) error {
 }
 
 func defaultInstanceID() string {
-	if value := strings.TrimSpace(os.Getenv("MAGPIE_INSTANCE_ID")); value != "" {
-		return value
-	}
-	hostname, err := os.Hostname()
-	if err == nil && strings.TrimSpace(hostname) != "" {
-		return strings.TrimSpace(hostname)
-	}
-	return "default"
+	return instanceid.Get()
 }

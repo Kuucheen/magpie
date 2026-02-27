@@ -1,7 +1,7 @@
 package support
 
 import (
-	"os"
+	"magpie/internal/instanceid"
 	"strings"
 	"sync"
 )
@@ -13,8 +13,6 @@ const (
 )
 
 var (
-	instanceIDOnce   sync.Once
-	instanceIDValue  string
 	instanceNameOnce sync.Once
 	instanceNameVal  string
 	instanceRegOnce  sync.Once
@@ -22,20 +20,7 @@ var (
 )
 
 func GetInstanceID() string {
-	instanceIDOnce.Do(func() {
-		value := strings.TrimSpace(GetEnv(envInstanceID, ""))
-		if value == "" {
-			hostname, err := os.Hostname()
-			if err == nil {
-				value = strings.TrimSpace(hostname)
-			}
-		}
-		if value == "" {
-			value = "default"
-		}
-		instanceIDValue = value
-	})
-	return instanceIDValue
+	return instanceid.Get()
 }
 
 func GetInstanceName() string {

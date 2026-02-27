@@ -26,7 +26,7 @@ var (
 	stopChannel           = make(chan struct{}) // Signal to stop threads
 	userCache             sync.Map
 	checkProxyWithRetries = CheckProxyWithRetries
-	enqueueProxyStatistic = jobruntime.AddProxyStatistic
+	enqueueProxyStatistic = jobruntime.AddProxyStatisticForUsers
 )
 
 const (
@@ -394,8 +394,29 @@ func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*request
 			statistic.LevelID = &lvl
 		}
 
-		enqueueProxyStatistic(statistic)
+		tenantUserIDs := collectCheckUserIDs(item.checks)
+		enqueueProxyStatistic(statistic, tenantUserIDs)
 	}
+}
+
+func collectCheckUserIDs(checks []userCheck) []uint {
+	if len(checks) == 0 {
+		return nil
+	}
+
+	seen := make(map[uint]struct{}, len(checks))
+	userIDs := make([]uint, 0, len(checks))
+	for _, check := range checks {
+		if check.userID == 0 {
+			continue
+		}
+		if _, ok := seen[check.userID]; ok {
+			continue
+		}
+		seen[check.userID] = struct{}{}
+		userIDs = append(userIDs, check.userID)
+	}
+	return userIDs
 }
 
 func handleFailureTracking(proxy domain.Proxy, userSuccess, userHasChecks map[uint]bool) (map[uint]struct{}, []domain.Proxy) {

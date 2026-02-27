@@ -39,8 +39,10 @@ func TestProcessJudgeAssignments_EnqueuesOneStatisticPerNetworkCheck(t *testing.
 	}
 
 	var captured []domain.ProxyStatistic
-	enqueueProxyStatistic = func(stat domain.ProxyStatistic) {
+	var capturedUserIDs [][]uint
+	enqueueProxyStatistic = func(stat domain.ProxyStatistic, userIDs []uint) {
 		captured = append(captured, stat)
+		capturedUserIDs = append(capturedUserIDs, append([]uint(nil), userIDs...))
 	}
 
 	proxy := domain.Proxy{ID: 99}
@@ -88,6 +90,12 @@ func TestProcessJudgeAssignments_EnqueuesOneStatisticPerNetworkCheck(t *testing.
 	if !userSuccess[1] || !userSuccess[2] || userSuccess[3] {
 		t.Fatalf("unexpected user success map: %#v", userSuccess)
 	}
+	if len(capturedUserIDs) != 1 {
+		t.Fatalf("expected 1 captured user id set, got %d", len(capturedUserIDs))
+	}
+	if len(capturedUserIDs[0]) != 3 {
+		t.Fatalf("captured user ids = %#v, want 3 unique IDs", capturedUserIDs[0])
+	}
 }
 
 func TestProcessJudgeAssignments_RecordsFailedCheckOnce(t *testing.T) {
@@ -103,7 +111,7 @@ func TestProcessJudgeAssignments_RecordsFailedCheckOnce(t *testing.T) {
 	}
 
 	var captured []domain.ProxyStatistic
-	enqueueProxyStatistic = func(stat domain.ProxyStatistic) {
+	enqueueProxyStatistic = func(stat domain.ProxyStatistic, _ []uint) {
 		captured = append(captured, stat)
 	}
 

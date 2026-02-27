@@ -33,6 +33,13 @@ var (
 
 const maxScraperPages = 2000
 
+const (
+	browserEnsureWaitTimeout     = 2 * time.Second
+	browserEnsureWaitPoll        = 100 * time.Millisecond
+	browserRestartInitialBackoff = 500 * time.Millisecond
+	browserRestartMaxBackoff     = 15 * time.Second
+)
+
 /* ─────────────────────────────  browser & page pool  ───────────────────── */
 
 var (
@@ -49,9 +56,9 @@ var (
 
 func init() {
 	pagePool = make(chan *rod.Page, maxScraperPages)
-	mustRestartBrowser() // initial bring-up
 	go BrowserWatchdog() // listen for restart requests
-	go ManagePagePool()  // keep pool aligned with demand
+	requestRestartBrowser()
+	go ManagePagePool() // keep pool aligned with demand
 }
 
 /* ─────────────────────────────  dispatcher  ─────────────────────────────── */
@@ -377,7 +384,7 @@ func BrowserWatchdog() {
 		}
 	drained:
 
-		mustRestartBrowser()
+		restartBrowserWithRetry()
 
 		// repopulate opportunistically to previous target
 		go func(target int32) {
@@ -403,11 +410,9 @@ func ensureBrowser() error {
 		return nil
 	}
 	requestRestartBrowser()
-	// small wait window to let watchdog spin up
-	select {
-	case <-time.After(2 * time.Second):
-		// continue; watchdog might already have done the work
-	default:
+	deadline := time.Now().Add(browserEnsureWaitTimeout)
+	for !browserAlive.Load() && time.Now().Before(deadline) {
+		time.Sleep(browserEnsureWaitPoll)
 	}
 	if !browserAlive.Load() {
 		return fmt.Errorf("browser not available")
@@ -415,14 +420,35 @@ func ensureBrowser() error {
 	return nil
 }
 
-func mustRestartBrowser() {
+func restartBrowserWithRetry() {
+	backoff := browserRestartInitialBackoff
+
+	for {
+		if err := restartBrowser(); err == nil {
+			return
+		} else {
+			log.Error("browser restart failed; running in degraded mode until retry succeeds", "err", err, "retry_in", backoff)
+		}
+
+		time.Sleep(backoff)
+		backoff *= 2
+		if backoff > browserRestartMaxBackoff {
+			backoff = browserRestartMaxBackoff
+		}
+	}
+}
+
+func restartBrowser() error {
+	browserAlive.Store(false)
+
 	// Close old quietly
 	if browser != nil {
 		_ = rod.Try(func() { browser.MustClose() })
+		browser = nil
 	}
 
 	// Launch Chrome
-	url := launcher.New().
+	url, err := launcher.New().
 		// Sleep/resume can confuse leakless in dev; keep it off on laptops
 		Leakless(true).
 		Headless(true).
@@ -430,20 +456,23 @@ func mustRestartBrowser() {
 		Set("disable-background-timer-throttling").
 		Set("disable-backgrounding-occluded-windows").
 		Set("disable-renderer-backgrounding").
-		MustLaunch()
+		Launch()
+	if err != nil {
+		return fmt.Errorf("browser launch failed: %w", err)
+	}
 
 	b := rod.New().ControlURL(url)
 	// connect with simple backoff
-	var err error
+	var connectErr error
 	for i := 0; i < 10; i++ {
-		if err = b.Connect(); err == nil {
+		if connectErr = b.Connect(); connectErr == nil {
 			break
 		}
 		time.Sleep(time.Duration(250*(i+1)) * time.Millisecond)
 	}
-	if err != nil {
+	if connectErr != nil {
 		_ = rod.Try(func() { b.MustClose() })
-		panic(fmt.Errorf("browser connect failed: %w", err))
+		return fmt.Errorf("browser connect failed: %w", connectErr)
 	}
 
 	browser = b
@@ -454,6 +483,7 @@ func mustRestartBrowser() {
 		log.Warn("disable browser downloads failed", "err", err)
 	}
 	browserAlive.Store(true)
+	return nil
 }
 
 /* ─────────────────────────────  helpers  ────────────────────────────────── */

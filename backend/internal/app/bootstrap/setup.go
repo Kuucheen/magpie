@@ -147,6 +147,7 @@ func Setup(ctx context.Context) error {
 	go judges.StartJudgeRoutine(ctx)
 	go jobruntime.StartProxyStatisticsRoutine(ctx)
 	go jobruntime.StartProxyStatisticsRetentionRoutine(ctx)
+	go jobruntime.StartProxyTimelineRetentionRoutine(ctx)
 	go jobruntime.StartProxyHistoryRoutine(ctx)
 	go jobruntime.StartProxySnapshotRoutine(ctx)
 	go jobruntime.StartProxyGeoRefreshRoutine(ctx)

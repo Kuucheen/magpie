@@ -102,6 +102,10 @@ func SetupDB(opts ...Option) (*gorm.DB, error) {
 			log.Error("Failed to ensure proxy statistics retention schema", "error", err)
 		}
 
+		if err := ensureProxyTimelineRetentionSchema(DB); err != nil {
+			log.Error("Failed to ensure proxy timeline retention schema", "error", err)
+		}
+
 		if err := ensureProxyQueryIndexSchema(DB); err != nil {
 			log.Error("Failed to ensure proxy query index schema", "error", err)
 		}
@@ -396,6 +400,28 @@ func ensureProxyStatisticsRetentionSchema(db *gorm.DB) error {
 	for _, stmt := range stmts {
 		if err := db.Exec(stmt).Error; err != nil {
 			return fmt.Errorf("proxy statistics retention schema: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func ensureProxyTimelineRetentionSchema(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("nil database connection")
+	}
+
+	stmts := make([]string, 0, 2)
+	if db.Migrator().HasTable(&domain.ProxySnapshot{}) {
+		stmts = append(stmts, `CREATE INDEX IF NOT EXISTS idx_proxy_snapshots_created_at_id ON proxy_snapshots (created_at, id)`)
+	}
+	if db.Migrator().HasTable(&domain.ProxyHistory{}) {
+		stmts = append(stmts, `CREATE INDEX IF NOT EXISTS idx_proxy_histories_created_at_id ON proxy_histories (created_at, id)`)
+	}
+
+	for _, stmt := range stmts {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("proxy timeline retention schema: %w", err)
 		}
 	}
 

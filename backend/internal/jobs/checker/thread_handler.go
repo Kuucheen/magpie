@@ -22,9 +22,11 @@ import (
 )
 
 var (
-	currentThreads atomic.Uint32
-	stopChannel    = make(chan struct{}) // Signal to stop threads
-	userCache      sync.Map
+	currentThreads        atomic.Uint32
+	stopChannel           = make(chan struct{}) // Signal to stop threads
+	userCache             sync.Map
+	checkProxyWithRetries = CheckProxyWithRetries
+	enqueueProxyStatistic = jobruntime.AddProxyStatistic
 )
 
 const (
@@ -38,15 +40,15 @@ type cachedUser struct {
 }
 
 type userCheck struct {
-	userID     uint
-	regex      string
-	protocolID int
+	userID uint
+	regex  string
 }
 
 type requestAssignment struct {
 	judge             *domain.Judge
 	proxyProtocol     string
 	transportProtocol string
+	protocolID        int
 	checks            []userCheck
 }
 
@@ -328,14 +330,14 @@ func buildRequestAssignments(proxy domain.Proxy) (map[string]*requestAssignment,
 					judge:             nextJudge,
 					proxyProtocol:     protocol,
 					transportProtocol: transportProtocol,
+					protocolID:        protocolID,
 				}
 				judgeRequests[judgeKey] = assignment
 			}
 
 			assignment.checks = append(assignment.checks, userCheck{
-				userID:     user.ID,
-				regex:      regex,
-				protocolID: protocolID,
+				userID: user.ID,
+				regex:  regex,
 			})
 			userHasChecks[user.ID] = true
 		}
@@ -356,39 +358,43 @@ func determineJudgeScheme(protocol string, protocolID int, useHTTPSForSocks bool
 
 func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*requestAssignment, userSuccess map[uint]bool, maxTimeout uint16, maxRetries uint8, saveResponses bool) {
 	for _, item := range assignments {
-		html, err, responseTime, attempt := CheckProxyWithRetries(proxy, item.judge, item.proxyProtocol, item.transportProtocol, maxTimeout, maxRetries)
+		html, err, responseTime, attempt := checkProxyWithRetries(proxy, item.judge, item.proxyProtocol, item.transportProtocol, maxTimeout, maxRetries)
 		truncatedBody := ""
 		if saveResponses {
 			truncatedBody = truncateResponseBody(html)
 		}
 		responseValidByRegex := make(map[string]bool, len(item.checks))
+		statAlive := false
+		createdAt := time.Now().UTC()
 
 		for _, check := range item.checks {
-			statistic := domain.ProxyStatistic{
-				Alive:        false,
-				ResponseTime: uint16(responseTime),
-				Attempt:      attempt,
-				ProxyID:      proxy.ID,
-				ProtocolID:   check.protocolID,
-				JudgeID:      item.judge.ID,
-				ResponseBody: truncatedBody,
-				CreatedAt:    time.Now().UTC(),
-			}
-
 			validResponse, ok := responseValidByRegex[check.regex]
 			if !ok {
 				validResponse = err == nil && CheckForValidResponse(html, check.regex)
 				responseValidByRegex[check.regex] = validResponse
 			}
 			if validResponse {
-				lvl := support.GetProxyLevel(html)
-				statistic.LevelID = &lvl
-				statistic.Alive = true
+				statAlive = true
 				userSuccess[check.userID] = true
 			}
-
-			jobruntime.AddProxyStatistic(statistic)
 		}
+
+		statistic := domain.ProxyStatistic{
+			Alive:        statAlive,
+			ResponseTime: uint16(responseTime),
+			Attempt:      attempt,
+			ProxyID:      proxy.ID,
+			ProtocolID:   item.protocolID,
+			JudgeID:      item.judge.ID,
+			ResponseBody: truncatedBody,
+			CreatedAt:    createdAt,
+		}
+		if statAlive {
+			lvl := support.GetProxyLevel(html)
+			statistic.LevelID = &lvl
+		}
+
+		enqueueProxyStatistic(statistic)
 	}
 }
 

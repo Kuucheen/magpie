@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -26,6 +27,11 @@ import (
 
 const startupProxyBatchSize = 2000
 const startupQueueBootstrapLockKey = "magpie:leader:startup_queue_bootstrap"
+const envStartupQueueBootstrapAsync = "STARTUP_QUEUE_BOOTSTRAP_ASYNC"
+const startupQueueBootstrapRetryDelay = 10 * time.Second
+
+var startupQueueBootstrapCompleted atomic.Bool
+var startupQueueBootstrapRunning atomic.Bool
 
 func Setup(ctx context.Context) error {
 	if ctx == nil {
@@ -129,7 +135,15 @@ func Setup(ctx context.Context) error {
 
 	}()
 
-	bootstrapStartupQueues(ctx)
+	startupQueueBootstrapCompleted.Store(false)
+	if support.GetEnvBool(envStartupQueueBootstrapAsync, true) {
+		startBootstrapStartupQueuesAsync(ctx)
+	} else {
+		if err := bootstrapStartupQueues(ctx); err != nil {
+			return err
+		}
+		startupQueueBootstrapCompleted.Store(true)
+	}
 
 	rotatingproxy.GlobalManager.StartAll()
 	go func() {
@@ -160,31 +174,68 @@ func Setup(ctx context.Context) error {
 	return nil
 }
 
+func StartupQueueBootstrapCompleted() bool {
+	return startupQueueBootstrapCompleted.Load()
+}
+
 func judgeSetup() {
 	addJudgeRelationsToCache()
 	AddDefaultJudgesToUsers()
 }
 
-func bootstrapStartupQueues(ctx context.Context) {
-	err := support.RunLeaderTaskOnce(ctx, startupQueueBootstrapLockKey, support.DefaultLeadershipTTL, func(context.Context) error {
-		if err := queueStartupProxies(); err != nil {
+func startBootstrapStartupQueuesAsync(ctx context.Context) {
+	if !startupQueueBootstrapRunning.CompareAndSwap(false, true) {
+		return
+	}
+
+	go func() {
+		defer startupQueueBootstrapRunning.Store(false)
+		for {
+			err := bootstrapStartupQueues(ctx)
+			if err == nil {
+				startupQueueBootstrapCompleted.Store(true)
+				log.Info("Startup queue bootstrap completed")
+				return
+			}
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+
+			log.Error("Startup queue bootstrap failed; retrying", "error", err, "retry_in", startupQueueBootstrapRetryDelay)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(startupQueueBootstrapRetryDelay):
+			}
+		}
+	}()
+}
+
+func bootstrapStartupQueues(ctx context.Context) error {
+	err := support.RunLeaderTaskOnce(ctx, startupQueueBootstrapLockKey, support.DefaultLeadershipTTL, func(leaderCtx context.Context) error {
+		if err := queueStartupProxies(leaderCtx); err != nil {
 			return err
 		}
-		return queueStartupScrapeSites()
+		return queueStartupScrapeSites(leaderCtx)
 	})
 	if err == nil {
-		return
+		return nil
 	}
 	if errors.Is(err, support.ErrLeaderLockNotAcquired) {
 		log.Info("Skipped startup queue bootstrap on follower instance")
-		return
+		return nil
 	}
-	log.Error("Startup queue bootstrap failed", "error", err)
+	return err
 }
 
-func queueStartupProxies() error {
+func queueStartupProxies(ctx context.Context) error {
 	queuedProxies := 0
 	err := database.ForEachProxyBatch(startupProxyBatchSize, func(proxies []domain.Proxy) error {
+		if ctx != nil {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 		missingGeo := database.FilterProxiesMissingGeo(proxies)
 		if len(missingGeo) > 0 {
 			database.AsyncEnrichProxyMetadata(missingGeo)
@@ -205,7 +256,12 @@ func queueStartupProxies() error {
 	return nil
 }
 
-func queueStartupScrapeSites() error {
+func queueStartupScrapeSites(ctx context.Context) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
 	scrapeSites, err := database.GetAllScrapeSites()
 	if err != nil {
 		return fmt.Errorf("load startup scrape sites: %w", err)
@@ -227,6 +283,11 @@ func queueStartupScrapeSites() error {
 
 	if len(filtered) == 0 {
 		return nil
+	}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 
 	if err := sitequeue.PublicScrapeSiteQueue.AddToQueue(filtered); err != nil {

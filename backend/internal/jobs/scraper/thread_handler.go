@@ -31,6 +31,8 @@ var (
 	stopThread     = make(chan struct{}) // signals a worker to exit
 )
 
+const maxScraperPages = 2000
+
 /* ─────────────────────────────  browser & page pool  ───────────────────── */
 
 var (
@@ -46,7 +48,7 @@ var (
 /* ─────────────────────────────  init  ───────────────────────────────────── */
 
 func init() {
-	pagePool = make(chan *rod.Page, 40)
+	pagePool = make(chan *rod.Page, maxScraperPages)
 	mustRestartBrowser() // initial bring-up
 	go BrowserWatchdog() // listen for restart requests
 	go ManagePagePool()  // keep pool aligned with demand
@@ -295,8 +297,8 @@ func calcRequiredPages(cfg config.Config) int32 {
 	if required < 1 && count > 0 {
 		required = 1
 	}
-	if required > 2000 {
-		required = 2000
+	if required > maxScraperPages {
+		required = maxScraperPages
 	}
 	return int32(required)
 }

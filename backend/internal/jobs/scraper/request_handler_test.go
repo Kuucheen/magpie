@@ -34,3 +34,9 @@ func TestContentLengthExceedsLimit_GracefulOnMissingOrInvalidHeader(t *testing.T
 		t.Fatal("non-positive limit should always be treated as exceeded")
 	}
 }
+
+func TestPagePoolCapacityMatchesMaxScraperPages(t *testing.T) {
+	if got := cap(pagePool); got != maxScraperPages {
+		t.Fatalf("page pool capacity = %d, want %d", got, maxScraperPages)
+	}
+}

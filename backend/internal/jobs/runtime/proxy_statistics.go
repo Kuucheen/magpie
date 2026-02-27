@@ -2,57 +2,86 @@ package runtime
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"magpie/internal/database"
 	"magpie/internal/domain"
+	"magpie/internal/support"
 
 	"github.com/charmbracelet/log"
 )
 
 const (
-	statisticsFlushInterval        = 15 * time.Second
-	statisticsBatchThreshold       = 5000
-	statisticsQueueCapacity        = 20_000
-	statisticsBackpressureLogEvery = 15 * time.Second
-	statisticsInsertTimeout        = 30 * time.Second
-	reputationRecalcTimeout        = 10 * time.Second
-	reputationRecalcInterval       = 1 * time.Minute
-	reputationRecalcBatch          = 5000
-	reputationRecalcPerTick        = 4
+	statisticsFlushInterval           = 15 * time.Second
+	statisticsBatchThreshold          = 5000
+	statisticsQueueCapacity           = 20_000
+	statisticsDirtyProxyQueueCapacity = 1024
+	statisticsSaturationLogEvery      = 15 * time.Second
+	statisticsInsertTimeout           = 30 * time.Second
+	reputationRecalcTimeout           = 10 * time.Second
+	reputationRecalcInterval          = 1 * time.Minute
+	reputationRecalcBatch             = 5000
+	reputationRecalcPerTick           = 4
+	defaultStatisticsIngestWorkers    = 4
+	maxStatisticsIngestWorkers        = 32
+	envProxyStatisticsIngestWorkers   = "PROXY_STATISTICS_INGEST_WORKERS"
 )
 
 var (
-	proxyStatisticQueue               = make(chan domain.ProxyStatistic, statisticsQueueCapacity)
-	proxyStatisticLastBackpressureLog atomic.Int64
+	proxyStatisticQueue             = make(chan domain.ProxyStatistic, statisticsQueueCapacity)
+	proxyStatisticDroppedCount      atomic.Uint64
+	proxyStatisticEvictedCount      atomic.Uint64
+	proxyStatisticLastSaturationLog atomic.Int64
 )
 
 func AddProxyStatistic(proxyStatistic domain.ProxyStatistic) {
-	select {
-	case proxyStatisticQueue <- proxyStatistic:
+	if enqueueProxyStatistic(proxyStatistic) {
 		return
-	default:
 	}
 
-	waitStarted := time.Now()
-	proxyStatisticQueue <- proxyStatistic
-	recordProxyStatisticBackpressure(waitStarted)
+	if evictOldestProxyStatistic() && enqueueProxyStatistic(proxyStatistic) {
+		return
+	}
+
+	dropped := proxyStatisticDroppedCount.Add(1)
+	recordProxyStatisticSaturation(dropped, proxyStatisticEvictedCount.Load())
 }
 
-func recordProxyStatisticBackpressure(waitStarted time.Time) {
+func enqueueProxyStatistic(proxyStatistic domain.ProxyStatistic) bool {
+	select {
+	case proxyStatisticQueue <- proxyStatistic:
+		return true
+	default:
+		return false
+	}
+}
+
+func evictOldestProxyStatistic() bool {
+	select {
+	case <-proxyStatisticQueue:
+		proxyStatisticEvictedCount.Add(1)
+		return true
+	default:
+		return false
+	}
+}
+
+func recordProxyStatisticSaturation(totalDropped, totalEvicted uint64) {
 	nowUnix := time.Now().Unix()
-	last := proxyStatisticLastBackpressureLog.Load()
-	if nowUnix-last < int64(statisticsBackpressureLogEvery/time.Second) {
+	last := proxyStatisticLastSaturationLog.Load()
+	if nowUnix-last < int64(statisticsSaturationLogEvery/time.Second) {
 		return
 	}
-	if !proxyStatisticLastBackpressureLog.CompareAndSwap(last, nowUnix) {
+	if !proxyStatisticLastSaturationLog.CompareAndSwap(last, nowUnix) {
 		return
 	}
 
 	log.Warn(
-		"Proxy statistics queue is full; applying backpressure to avoid dropping statistics",
-		"blocked_for_seconds", time.Since(waitStarted).Seconds(),
+		"Proxy statistics queue saturated; evicting oldest statistics to preserve throughput",
+		"dropped_total", totalDropped,
+		"evicted_total", totalEvicted,
 		"queue_len", len(proxyStatisticQueue),
 		"queue_capacity", cap(proxyStatisticQueue),
 	)
@@ -63,34 +92,95 @@ func StartProxyStatisticsRoutine(ctx context.Context) {
 		ctx = context.Background()
 	}
 
+	workerCount := resolveStatisticsIngestWorkers()
+	dirtyProxyIDsQueue := make(chan []uint64, statisticsDirtyProxyQueueCapacity)
+
+	var reputationWG sync.WaitGroup
+	reputationWG.Add(1)
+	go func() {
+		defer reputationWG.Done()
+		runProxyReputationCoordinator(ctx, dirtyProxyIDsQueue)
+	}()
+
+	var workerWG sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		workerWG.Add(1)
+		go func() {
+			defer workerWG.Done()
+			runProxyStatisticsWorker(ctx, dirtyProxyIDsQueue)
+		}()
+	}
+
+	<-ctx.Done()
+	workerWG.Wait()
+	close(dirtyProxyIDsQueue)
+	reputationWG.Wait()
+}
+
+func runProxyStatisticsWorker(ctx context.Context, dirtyProxyIDsQueue chan<- []uint64) {
 	var buffer []domain.ProxyStatistic
-	dirtyProxyIDs := make(map[uint64]struct{})
 	flushTimer := time.NewTimer(statisticsFlushInterval)
 	defer flushTimer.Stop()
-	reputationTimer := time.NewTimer(reputationRecalcInterval)
-	defer reputationTimer.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			drainProxyStatisticQueue(&buffer)
-			mergeProxyIDs(dirtyProxyIDs, flushProxyStatistics(&buffer))
-			flushDirtyProxyReputations(dirtyProxyIDs, true)
+			publishDirtyProxyIDs(dirtyProxyIDsQueue, flushProxyStatistics(&buffer))
 			return
 		case stat := <-proxyStatisticQueue:
 			buffer = append(buffer, stat)
 			if len(buffer) >= statisticsBatchThreshold {
-				mergeProxyIDs(dirtyProxyIDs, flushProxyStatistics(&buffer))
+				publishDirtyProxyIDs(dirtyProxyIDsQueue, flushProxyStatistics(&buffer))
 				resetTimer(flushTimer)
 			}
 		case <-flushTimer.C:
-			mergeProxyIDs(dirtyProxyIDs, flushProxyStatistics(&buffer))
+			publishDirtyProxyIDs(dirtyProxyIDsQueue, flushProxyStatistics(&buffer))
 			flushTimer.Reset(statisticsFlushInterval)
+		}
+	}
+}
+
+func runProxyReputationCoordinator(ctx context.Context, dirtyProxyIDsQueue <-chan []uint64) {
+	dirtyProxyIDs := make(map[uint64]struct{})
+	reputationTimer := time.NewTimer(reputationRecalcInterval)
+	defer reputationTimer.Stop()
+
+	ctxDone := ctx.Done()
+	for {
+		select {
+		case proxyIDs, ok := <-dirtyProxyIDsQueue:
+			if !ok {
+				flushDirtyProxyReputations(dirtyProxyIDs, true)
+				return
+			}
+			mergeProxyIDs(dirtyProxyIDs, proxyIDs)
 		case <-reputationTimer.C:
 			flushDirtyProxyReputations(dirtyProxyIDs, false)
 			reputationTimer.Reset(reputationRecalcInterval)
+		case <-ctxDone:
+			// Keep draining worker updates until the channel is closed.
+			ctxDone = nil
 		}
 	}
+}
+
+func resolveStatisticsIngestWorkers() int {
+	workers := support.GetEnvInt(envProxyStatisticsIngestWorkers, defaultStatisticsIngestWorkers)
+	if workers <= 0 {
+		return 1
+	}
+	if workers > maxStatisticsIngestWorkers {
+		return maxStatisticsIngestWorkers
+	}
+	return workers
+}
+
+func publishDirtyProxyIDs(ch chan<- []uint64, proxyIDs []uint64) {
+	if len(proxyIDs) == 0 {
+		return
+	}
+	ch <- proxyIDs
 }
 
 func flushProxyStatistics(buffer *[]domain.ProxyStatistic) []uint64 {

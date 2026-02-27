@@ -5,9 +5,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"magpie/internal/config"
+	"magpie/internal/support"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +17,13 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 )
 
-const scraperUserAgent = "magpie-scraper/1.0"
+const (
+	scraperUserAgent               = "magpie-scraper/1.0"
+	envScraperFallbackMaxBodyBytes = "SCRAPER_FALLBACK_MAX_RESPONSE_BODY_BYTES"
+	envScraperCapturedMaxBodyBytes = "SCRAPER_CAPTURED_MAX_RESPONSE_BODY_BYTES"
+	defaultScraperFallbackMaxBody  = 8 << 20 // 8 MiB
+	defaultScraperCapturedMaxBody  = 8 << 20 // 8 MiB
+)
 
 /*
 ScraperRequest fetches the HTML of url within the given timeout.
@@ -70,6 +77,7 @@ func ScraperRequest(url string, timeout time.Duration) (string, error) {
 	defer cancelEvents()
 
 	var mainRequestID proto.NetworkRequestID
+	capturedBodyLimit := scraperCapturedMaxResponseBodyBytes()
 
 	waitResponse := page.Context(eventCtx).EachEvent(
 		func(e *proto.NetworkRequestWillBeSent) {
@@ -96,6 +104,12 @@ func ScraperRequest(url string, timeout time.Duration) (string, error) {
 				return false
 			}
 
+			if contentLengthExceedsLimit(e.Response.Headers, capturedBodyLimit) {
+				responseCaptureError = fmt.Errorf("captured response body exceeded %d bytes", capturedBodyLimit)
+				doneOnce.Do(func() { close(done) })
+				return true
+			}
+
 			body, err := proto.NetworkGetResponseBody{RequestID: e.RequestID}.Call(page)
 			if err != nil {
 				responseCaptureError = err
@@ -104,14 +118,29 @@ func ScraperRequest(url string, timeout time.Duration) (string, error) {
 			}
 
 			if body.Base64Encoded {
+				if int64(base64.StdEncoding.DecodedLen(len(body.Body))) > capturedBodyLimit {
+					responseCaptureError = fmt.Errorf("captured response body exceeded %d bytes", capturedBodyLimit)
+					doneOnce.Do(func() { close(done) })
+					return true
+				}
 				raw, decodeErr := base64.StdEncoding.DecodeString(body.Body)
 				if decodeErr != nil {
 					responseCaptureError = decodeErr
 					doneOnce.Do(func() { close(done) })
 					return true
 				}
+				if int64(len(raw)) > capturedBodyLimit {
+					responseCaptureError = fmt.Errorf("captured response body exceeded %d bytes", capturedBodyLimit)
+					doneOnce.Do(func() { close(done) })
+					return true
+				}
 				capturedBody = string(raw)
 			} else {
+				if int64(len(body.Body)) > capturedBodyLimit {
+					responseCaptureError = fmt.Errorf("captured response body exceeded %d bytes", capturedBodyLimit)
+					doneOnce.Do(func() { close(done) })
+					return true
+				}
 				capturedBody = body.Body
 			}
 
@@ -305,10 +334,45 @@ func fetchDirect(url string, timeout time.Duration) (string, error) {
 		return "", fmt.Errorf("fallback fetch status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	bodyLimit := scraperFallbackMaxResponseBodyBytes()
+	body, err := support.ReadAllWithLimit(resp.Body, bodyLimit)
 	if err != nil {
+		if errors.Is(err, support.ErrResponseBodyTooLarge) {
+			return "", fmt.Errorf("fallback response body exceeded %d bytes", bodyLimit)
+		}
 		return "", err
 	}
 
 	return string(body), nil
+}
+
+func scraperFallbackMaxResponseBodyBytes() int64 {
+	limit := support.GetEnvInt(envScraperFallbackMaxBodyBytes, defaultScraperFallbackMaxBody)
+	if limit <= 0 {
+		limit = defaultScraperFallbackMaxBody
+	}
+	return int64(limit)
+}
+
+func scraperCapturedMaxResponseBodyBytes() int64 {
+	limit := support.GetEnvInt(envScraperCapturedMaxBodyBytes, defaultScraperCapturedMaxBody)
+	if limit <= 0 {
+		limit = defaultScraperCapturedMaxBody
+	}
+	return int64(limit)
+}
+
+func contentLengthExceedsLimit(headers proto.NetworkHeaders, limit int64) bool {
+	if limit <= 0 {
+		return true
+	}
+	raw := strings.TrimSpace(headerValue(headers, "Content-Length"))
+	if raw == "" {
+		return false
+	}
+	length, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || length < 0 {
+		return false
+	}
+	return length > limit
 }

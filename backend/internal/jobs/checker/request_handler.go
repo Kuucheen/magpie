@@ -3,8 +3,8 @@ package checker
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
-	"io"
 	"magpie/internal/config"
 	"magpie/internal/domain"
 	"magpie/internal/support"
@@ -24,6 +24,8 @@ type cachedRegex struct {
 const (
 	regexCacheTTL             = 5 * time.Minute
 	regexCacheCleanupInterval = 1 * time.Minute
+	envCheckerMaxResponseBody = "CHECKER_MAX_RESPONSE_BODY_BYTES"
+	defaultCheckerMaxBodySize = 1 << 20 // 1 MiB
 )
 
 var (
@@ -64,8 +66,12 @@ func ProxyCheckRequest(proxyToCheck domain.Proxy, judge *domain.Judge, protocol 
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	bodyLimit := checkerMaxResponseBodyBytes()
+	body, err := support.ReadAllWithLimit(resp.Body, bodyLimit)
 	if err != nil {
+		if errors.Is(err, support.ErrResponseBodyTooLarge) {
+			return "Error reading body", fmt.Errorf("judge response body exceeded %d bytes", bodyLimit)
+		}
 		return "Error reading body", err
 	}
 
@@ -163,10 +169,22 @@ func DefaultRequest(siteName string) (string, error) {
 		return "", err
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
+	bodyLimit := checkerMaxResponseBodyBytes()
+	body, err := support.ReadAllWithLimit(response.Body, bodyLimit)
 	if err != nil {
+		if errors.Is(err, support.ErrResponseBodyTooLarge) {
+			return "", fmt.Errorf("response body exceeded %d bytes", bodyLimit)
+		}
 		return "", err
 	}
 
 	return string(body), nil
+}
+
+func checkerMaxResponseBodyBytes() int64 {
+	limit := support.GetEnvInt(envCheckerMaxResponseBody, defaultCheckerMaxBodySize)
+	if limit <= 0 {
+		limit = defaultCheckerMaxBodySize
+	}
+	return int64(limit)
 }

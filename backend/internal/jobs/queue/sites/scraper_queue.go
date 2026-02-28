@@ -9,6 +9,7 @@ import (
 	"hash/fnv"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"magpie/internal/config"
@@ -23,16 +24,17 @@ import (
 const (
 	scrapesiteKeyPrefix = "scrapesite:"
 
-	legacyScrapesiteQueueKey   = "scrapesite_queue"
-	scrapesiteQueueHeadKey     = "scrapesite_queue_heads"
-	scrapesiteQueueShardPrefix = "scrapesite_queue:"
-	defaultScrapeQueueShards   = 8
-	maxScrapeQueueShards       = 64
-	minDequeueSleep            = 10 * time.Millisecond
-	idleQueueSleep             = 250 * time.Millisecond
-	maxDequeueSleep            = 2 * time.Second
-	processingLease            = 5 * time.Minute
-	scrapeRescheduleBatch      = 500
+	legacyScrapesiteQueueKey      = "scrapesite_queue"
+	scrapesiteQueueHeadKey        = "scrapesite_queue_heads"
+	scrapesiteQueueShardPrefix    = "scrapesite_queue:"
+	defaultScrapeQueueShards      = 8
+	maxScrapeQueueShards          = 64
+	minDequeueSleep               = 10 * time.Millisecond
+	idleQueueSleep                = 250 * time.Millisecond
+	maxDequeueSleep               = 2 * time.Second
+	processingLease               = 5 * time.Minute
+	scrapeQueueRescheduleLockKey  = "magpie:leader:scrape_queue_reschedule"
+	scrapeQueueRescheduleStateKey = "magpie:queue:scrape:interval_ms"
 )
 
 //go:embed pop.lua
@@ -54,6 +56,7 @@ type scrapePopResult struct {
 }
 
 var PublicScrapeSiteQueue RedisScrapeSiteQueue
+var runLeaderTaskOnce = support.RunLeaderTaskOnce
 
 func init() {
 	client, err := support.GetRedisClient()
@@ -65,11 +68,42 @@ func init() {
 	go func() {
 		updates := config.ScrapeIntervalUpdates()
 		for interval := range updates {
-			if err := PublicScrapeSiteQueue.Reschedule(interval); err != nil {
+			err := applyIntervalUpdateAsLeader(
+				scrapeQueueRescheduleLockKey,
+				interval,
+				PublicScrapeSiteQueue.Reschedule,
+			)
+			if err != nil {
 				log.Error("Failed to reschedule scrape queue after interval update", "error", err)
 			}
 		}
 	}()
+}
+
+func applyIntervalUpdateAsLeader(lockKey string, interval time.Duration, reschedule func(time.Duration) error) error {
+	return applyIntervalUpdateAsLeaderWithRunner(runLeaderTaskOnce, lockKey, interval, reschedule)
+}
+
+func applyIntervalUpdateAsLeaderWithRunner(
+	runner func(context.Context, string, time.Duration, func(context.Context) error) error,
+	lockKey string,
+	interval time.Duration,
+	reschedule func(time.Duration) error,
+) error {
+	if runner == nil {
+		return errors.New("leader runner is nil")
+	}
+	if reschedule == nil {
+		return errors.New("reschedule function is nil")
+	}
+
+	err := runner(context.Background(), lockKey, support.DefaultLeadershipTTL, func(context.Context) error {
+		return reschedule(interval)
+	})
+	if errors.Is(err, support.ErrLeaderLockNotAcquired) {
+		return nil
+	}
+	return err
 }
 
 func NewRedisScrapeSiteQueue(client *redis.Client) *RedisScrapeSiteQueue {
@@ -452,7 +486,7 @@ func coerceLuaInt64(value interface{}) (int64, error) {
 }
 
 func (rssq *RedisScrapeSiteQueue) RequeueScrapeSite(site domain.ScrapeSite, lastCheckTime time.Time) error {
-	interval := config.GetTimeBetweenScrapes()
+	interval := rssq.getEffectiveScrapeInterval()
 	base := lastCheckTime
 	if now := time.Now(); now.After(base) {
 		base = now
@@ -487,6 +521,32 @@ func (rssq *RedisScrapeSiteQueue) RequeueScrapeSite(site domain.ScrapeSite, last
 	return err
 }
 
+func (rssq *RedisScrapeSiteQueue) getEffectiveScrapeInterval() time.Duration {
+	fallback := config.GetTimeBetweenScrapes()
+	if rssq == nil || rssq.client == nil {
+		return fallback
+	}
+
+	raw, err := rssq.client.Get(rssq.ctx, scrapeQueueRescheduleStateKey).Result()
+	if err != nil {
+		return fallback
+	}
+	return parseIntervalStateMillis(raw, fallback)
+}
+
+func parseIntervalStateMillis(raw string, fallback time.Duration) time.Duration {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+
+	ms, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || ms <= 0 {
+		return fallback
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
 func (rssq *RedisScrapeSiteQueue) GetScrapeSiteCount() (int64, error) {
 	var total int64
 	for _, key := range rssq.popQueueKeys {
@@ -516,95 +576,15 @@ func (rssq *RedisScrapeSiteQueue) Reschedule(interval time.Duration) error {
 		interval = time.Second
 	}
 
-	type queueCount struct {
-		key   string
-		count int64
+	if err := rssq.client.Set(rssq.ctx, scrapeQueueRescheduleStateKey, strconv.FormatInt(interval.Milliseconds(), 10), 0).Err(); err != nil {
+		return fmt.Errorf("reschedule: failed to persist interval state: %w", err)
 	}
-
-	counts := make([]queueCount, 0, len(rssq.popQueueKeys))
-	var total int64
-	for _, key := range rssq.popQueueKeys {
-		count, err := rssq.client.ZCard(rssq.ctx, key).Result()
-		if err != nil {
-			return fmt.Errorf("reschedule: failed to count queue entries: %w", err)
-		}
-		if count == 0 {
-			continue
-		}
-		counts = append(counts, queueCount{key: key, count: count})
-		total += count
-	}
-
-	if total == 0 {
-		return nil
-	}
-
-	now := time.Now()
-	totalDuration := time.Duration(total)
-	var globalIndex int64
-	const fetchBatch int64 = scrapeRescheduleBatch
-	const updateBatch = 250
-
-	pipe := rssq.client.Pipeline()
-	opCount := 0
-
-	flush := func() error {
-		if opCount == 0 {
-			return nil
-		}
-		if _, err := pipe.Exec(rssq.ctx); err != nil {
-			return fmt.Errorf("reschedule: pipeline exec failed: %w", err)
-		}
-		pipe = rssq.client.Pipeline()
-		opCount = 0
-		return nil
-	}
-
-	for _, queue := range counts {
-		for start := int64(0); start < queue.count; start += fetchBatch {
-			end := start + fetchBatch - 1
-			if end >= queue.count {
-				end = queue.count - 1
-			}
-
-			members, err := rssq.client.ZRange(rssq.ctx, queue.key, start, end).Result()
-			if err != nil {
-				return fmt.Errorf("reschedule: failed to fetch members: %w", err)
-			}
-
-			for _, member := range members {
-				offset := (interval * time.Duration(globalIndex)) / totalDuration
-				nextCheck := now.Add(offset).UnixMilli()
-				targetQueue := rssq.queueKeyForMember(member)
-
-				if queue.key != targetQueue {
-					pipe.ZRem(rssq.ctx, queue.key, member)
-					opCount++
-				}
-
-				pipe.ZAdd(rssq.ctx, targetQueue, redis.Z{
-					Score:  float64(nextCheck),
-					Member: member,
-				})
-				opCount++
-				globalIndex++
-
-				if opCount != 0 && opCount%updateBatch == 0 {
-					if err := flush(); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-
-	if err := flush(); err != nil {
-		return err
-	}
+	// Existing queue members keep their current due times and converge naturally
+	// to the new interval as they are popped and requeued.
 	if err := rssq.refreshQueueHeads(); err != nil {
 		return fmt.Errorf("reschedule: failed to refresh queue heads: %w", err)
 	}
 
-	log.Debug("scrape queue rescheduled", "entries", total, "interval", interval)
+	log.Debug("scrape queue interval updated; existing entries converge lazily", "interval", interval)
 	return nil
 }

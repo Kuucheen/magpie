@@ -9,6 +9,7 @@ import (
 	"hash/fnv"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"magpie/internal/config"
@@ -23,16 +24,17 @@ import (
 const (
 	proxyKeyPrefix = "proxy:"
 
-	legacyQueueKey       = "proxy_queue"
-	proxyQueueHeadKey    = "proxy_queue_heads"
-	queueShardKeyPrefix  = "proxy_queue:"
-	defaultQueueShards   = 16
-	maxQueueShards       = 128
-	minDequeueSleep      = 10 * time.Millisecond
-	idleQueueSleep       = 250 * time.Millisecond
-	maxDequeueSleep      = 2 * time.Second
-	processingLease      = 5 * time.Minute
-	queueRescheduleBatch = 1000
+	legacyQueueKey          = "proxy_queue"
+	proxyQueueHeadKey       = "proxy_queue_heads"
+	queueShardKeyPrefix     = "proxy_queue:"
+	defaultQueueShards      = 16
+	maxQueueShards          = 128
+	minDequeueSleep         = 10 * time.Millisecond
+	idleQueueSleep          = 250 * time.Millisecond
+	maxDequeueSleep         = 2 * time.Second
+	processingLease         = 5 * time.Minute
+	queueRescheduleLockKey  = "magpie:leader:proxy_queue_reschedule"
+	queueRescheduleStateKey = "magpie:queue:proxy:interval_ms"
 )
 
 //go:embed pop.lua
@@ -69,6 +71,7 @@ type queuedProxy struct {
 }
 
 var PublicProxyQueue RedisProxyQueue
+var runLeaderTaskOnce = support.RunLeaderTaskOnce
 
 func init() {
 	client, err := support.GetRedisClient()
@@ -80,11 +83,42 @@ func init() {
 	go func() {
 		updates := config.CheckIntervalUpdates()
 		for interval := range updates {
-			if err := PublicProxyQueue.Reschedule(interval); err != nil {
+			err := applyIntervalUpdateAsLeader(
+				queueRescheduleLockKey,
+				interval,
+				PublicProxyQueue.Reschedule,
+			)
+			if err != nil {
 				log.Error("Failed to reschedule proxy queue after interval update", "error", err)
 			}
 		}
 	}()
+}
+
+func applyIntervalUpdateAsLeader(lockKey string, interval time.Duration, reschedule func(time.Duration) error) error {
+	return applyIntervalUpdateAsLeaderWithRunner(runLeaderTaskOnce, lockKey, interval, reschedule)
+}
+
+func applyIntervalUpdateAsLeaderWithRunner(
+	runner func(context.Context, string, time.Duration, func(context.Context) error) error,
+	lockKey string,
+	interval time.Duration,
+	reschedule func(time.Duration) error,
+) error {
+	if runner == nil {
+		return errors.New("leader runner is nil")
+	}
+	if reschedule == nil {
+		return errors.New("reschedule function is nil")
+	}
+
+	err := runner(context.Background(), lockKey, support.DefaultLeadershipTTL, func(context.Context) error {
+		return reschedule(interval)
+	})
+	if errors.Is(err, support.ErrLeaderLockNotAcquired) {
+		return nil
+	}
+	return err
 }
 
 func NewRedisProxyQueue(client *redis.Client) *RedisProxyQueue {
@@ -461,7 +495,7 @@ func coerceLuaInt64(value interface{}) (int64, error) {
 }
 
 func (rpq *RedisProxyQueue) RequeueProxy(proxy domain.Proxy, lastCheckTime time.Time) error {
-	interval := config.GetTimeBetweenChecks()
+	interval := rpq.getEffectiveCheckInterval()
 	base := lastCheckTime
 	// Clamp to now so overdue proxies don't keep hogging the queue.
 	if now := time.Now(); now.After(base) {
@@ -496,6 +530,32 @@ func (rpq *RedisProxyQueue) RequeueProxy(proxy domain.Proxy, lastCheckTime time.
 
 	_, err = pipe.Exec(rpq.ctx)
 	return err
+}
+
+func (rpq *RedisProxyQueue) getEffectiveCheckInterval() time.Duration {
+	fallback := config.GetTimeBetweenChecks()
+	if rpq == nil || rpq.client == nil {
+		return fallback
+	}
+
+	raw, err := rpq.client.Get(rpq.ctx, queueRescheduleStateKey).Result()
+	if err != nil {
+		return fallback
+	}
+	return parseIntervalStateMillis(raw, fallback)
+}
+
+func parseIntervalStateMillis(raw string, fallback time.Duration) time.Duration {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+
+	ms, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || ms <= 0 {
+		return fallback
+	}
+	return time.Duration(ms) * time.Millisecond
 }
 
 func marshalQueuedProxy(proxy domain.Proxy) ([]byte, error) {
@@ -604,95 +664,16 @@ func (rpq *RedisProxyQueue) Reschedule(interval time.Duration) error {
 		interval = time.Second
 	}
 
-	type queueCount struct {
-		key   string
-		count int64
+	if err := rpq.client.Set(rpq.ctx, queueRescheduleStateKey, strconv.FormatInt(interval.Milliseconds(), 10), 0).Err(); err != nil {
+		return fmt.Errorf("reschedule: failed to persist interval state: %w", err)
 	}
 
-	counts := make([]queueCount, 0, len(rpq.popQueueKeys))
-	var total int64
-	for _, key := range rpq.popQueueKeys {
-		count, err := rpq.client.ZCard(rpq.ctx, key).Result()
-		if err != nil {
-			return fmt.Errorf("reschedule: failed to count queue entries: %w", err)
-		}
-		if count == 0 {
-			continue
-		}
-		counts = append(counts, queueCount{key: key, count: count})
-		total += count
-	}
-
-	if total == 0 {
-		return nil
-	}
-
-	now := time.Now()
-	totalDuration := time.Duration(total)
-	var globalIndex int64
-	const fetchBatch int64 = queueRescheduleBatch
-	const updateBatch = 500
-
-	pipe := rpq.client.Pipeline()
-	opCount := 0
-
-	flush := func() error {
-		if opCount == 0 {
-			return nil
-		}
-		if _, err := pipe.Exec(rpq.ctx); err != nil {
-			return fmt.Errorf("reschedule: pipeline exec failed: %w", err)
-		}
-		pipe = rpq.client.Pipeline()
-		opCount = 0
-		return nil
-	}
-
-	for _, queue := range counts {
-		for start := int64(0); start < queue.count; start += fetchBatch {
-			end := start + fetchBatch - 1
-			if end >= queue.count {
-				end = queue.count - 1
-			}
-
-			members, err := rpq.client.ZRange(rpq.ctx, queue.key, start, end).Result()
-			if err != nil {
-				return fmt.Errorf("reschedule: failed to fetch members: %w", err)
-			}
-
-			for _, member := range members {
-				offset := (interval * time.Duration(globalIndex)) / totalDuration
-				nextCheck := now.Add(offset).UnixMilli()
-				targetQueue := rpq.queueKeyForMember(member)
-
-				if queue.key != targetQueue {
-					pipe.ZRem(rpq.ctx, queue.key, member)
-					opCount++
-				}
-
-				pipe.ZAdd(rpq.ctx, targetQueue, redis.Z{
-					Score:  float64(nextCheck),
-					Member: member,
-				})
-				opCount++
-				globalIndex++
-
-				if opCount != 0 && opCount%updateBatch == 0 {
-					if err := flush(); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-
-	if err := flush(); err != nil {
-		return err
-	}
+	// Existing queue members keep their current due times and converge naturally
+	// to the new interval as they are popped and requeued.
 	if err := rpq.refreshQueueHeads(); err != nil {
 		return fmt.Errorf("reschedule: failed to refresh queue heads: %w", err)
 	}
 
-	log.Debug("proxy queue rescheduled", "entries", total, "interval", interval)
+	log.Debug("proxy queue interval updated; existing entries converge lazily", "interval", interval)
 	return nil
 }

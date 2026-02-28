@@ -440,6 +440,24 @@ func ensureProxyQueryIndexSchema(db *gorm.DB) error {
 	if db.Migrator().HasTable(&domain.ProxyStatistic{}) {
 		stmts = append(stmts, `CREATE INDEX IF NOT EXISTS idx_proxy_statistics_proxy_created_id ON proxy_statistics (proxy_id, created_at DESC, id DESC)`)
 	}
+	if isPostgresDialect(db) {
+		if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS pg_trgm`).Error; err != nil {
+			log.Warn("proxy query index schema: pg_trgm extension unavailable; search will use fallback indexes", "error", err)
+		} else {
+			if db.Migrator().HasTable(&domain.Proxy{}) {
+				stmts = append(stmts,
+					`CREATE INDEX IF NOT EXISTS idx_proxies_country_search_trgm ON proxies USING gin (LOWER(COALESCE(NULLIF(country, ''), 'n/a')) gin_trgm_ops)`,
+					`CREATE INDEX IF NOT EXISTS idx_proxies_estimated_type_search_trgm ON proxies USING gin (LOWER(COALESCE(NULLIF(estimated_type, ''), 'n/a')) gin_trgm_ops)`,
+				)
+			}
+			if db.Migrator().HasTable(&domain.ProxyReputation{}) {
+				stmts = append(stmts,
+					`CREATE INDEX IF NOT EXISTS idx_proxy_reputations_kind_search_trgm ON proxy_reputations USING gin (LOWER(COALESCE(kind, '')) gin_trgm_ops)`,
+					`CREATE INDEX IF NOT EXISTS idx_proxy_reputations_label_search_trgm ON proxy_reputations USING gin (LOWER(COALESCE(label, '')) gin_trgm_ops)`,
+				)
+			}
+		}
+	}
 
 	for _, stmt := range stmts {
 		if err := db.Exec(stmt).Error; err != nil {
@@ -448,4 +466,12 @@ func ensureProxyQueryIndexSchema(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+func isPostgresDialect(db *gorm.DB) bool {
+	if db == nil {
+		return false
+	}
+	name := strings.ToLower(strings.TrimSpace(db.Dialector.Name()))
+	return strings.Contains(name, "postgres")
 }

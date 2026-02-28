@@ -580,7 +580,6 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 	rows := make([]dto.ProxyInfoRow, 0)
 	normalizedSearch := strings.TrimSpace(search)
 	lowerSearch := strings.ToLower(normalizedSearch)
-	searchPattern := "%" + lowerSearch + "%"
 
 	if normalizedSearch == "" {
 		offset := (page - 1) * pageSize
@@ -597,23 +596,17 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		}
 
 		var total int64
-		if err := filterQuery.Distinct("proxies.id").Count(&total).Error; err != nil {
+		if err := DB.Table("(?) AS filtered", filterQuery.Select("proxies.id").Group("proxies.id")).Count(&total).Error; err != nil {
 			return proxies, 0
 		}
 		return proxies, total
 	}
 
 	if !isLikelyProxyIPSearch(lowerSearch) {
-		filteredQuery := applyProxySearchQuery(query, searchPattern)
+		matchedProxyIDs := buildProxySearchIDQuery(userId, filterQuery, lowerSearch)
 
 		var total int64
-		if err := filteredQuery.
-			Session(&gorm.Session{}).
-			Limit(-1).
-			Offset(-1).
-			Order("").
-			Distinct("proxies.id").
-			Count(&total).Error; err != nil {
+		if err := DB.Table("(?) AS matched", matchedProxyIDs).Count(&total).Error; err != nil {
 			return []dto.ProxyInfo{}, 0
 		}
 
@@ -622,7 +615,8 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		}
 
 		offset := (page - 1) * pageSize
-		if err := filteredQuery.
+		if err := query.
+			Joins("JOIN (?) AS matched ON matched.id = proxies.id", matchedProxyIDs).
 			Offset(offset).
 			Limit(pageSize).
 			Scan(&rows).Error; err != nil {
@@ -639,16 +633,10 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		return []dto.ProxyInfo{}, 0
 	}
 
-	filteredQuery := query.Where("proxies.ip_int BETWEEN ? AND ?", rangeStart, rangeEnd)
+	matchedProxyIDs := buildProxyIPSearchIDQuery(userId, filterQuery, rangeStart, rangeEnd)
 
 	var total int64
-	if err := filteredQuery.
-		Session(&gorm.Session{}).
-		Limit(-1).
-		Offset(-1).
-		Order("").
-		Distinct("proxies.id").
-		Count(&total).Error; err != nil {
+	if err := DB.Table("(?) AS matched", matchedProxyIDs).Count(&total).Error; err != nil {
 		return []dto.ProxyInfo{}, 0
 	}
 	if total == 0 {
@@ -656,7 +644,8 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 	}
 
 	offset := (page - 1) * pageSize
-	if err := filteredQuery.
+	if err := query.
+		Joins("JOIN (?) AS matched ON matched.id = proxies.id", matchedProxyIDs).
 		Offset(offset).
 		Limit(pageSize).
 		Scan(&rows).Error; err != nil {
@@ -725,31 +714,84 @@ func buildIPIntSearchRange(search string) (uint32, uint32, bool) {
 	return start, end, true
 }
 
-func applyProxySearchQuery(query *gorm.DB, pattern string) *gorm.DB {
-	return query.Where(
-		`(
-				CAST(proxies.port AS TEXT) ILIKE ? OR
-				CAST(COALESCE(ps.response_time, 0) AS TEXT) ILIKE ? OR
-				LOWER(COALESCE(NULLIF(proxies.estimated_type, ''), 'n/a')) ILIKE ? OR
-				LOWER(COALESCE(NULLIF(proxies.country, ''), 'n/a')) ILIKE ? OR
-				LOWER(COALESCE(al.name, 'n/a')) ILIKE ? OR
-				LOWER(CASE WHEN COALESCE(pos.overall_alive, false) THEN 'alive' ELSE 'dead' END) ILIKE ? OR
-				CAST(COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS TEXT) ILIKE ? OR
-				LOWER(COALESCE(pr_overall.kind, '')) ILIKE ? OR
-				LOWER(COALESCE(pr_overall.label, '')) ILIKE ? OR
-				CAST(COALESCE(pr_overall.score, 0) AS TEXT) ILIKE ?
-			)`,
+func buildProxySearchIDQuery(userId uint, filterQuery *gorm.DB, lowerSearch string) *gorm.DB {
+	latestStats := buildLatestProxyStatisticSubQuery()
+	query := DB.Model(&domain.Proxy{}).
+		Select("proxies.id").
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
+		Joins("LEFT JOIN (?) AS ps ON ps.proxy_id = proxies.id", latestStats).
+		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
+		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
+		Joins("LEFT JOIN proxy_reputations pr_overall ON pr_overall.proxy_id = proxies.id AND pr_overall.kind = ?", domain.ProxyReputationKindOverall)
+
+	if filterQuery != nil {
+		query = query.Where("proxies.id IN (?)", filterQuery)
+	}
+
+	query = applyProxySearchQuery(query, lowerSearch)
+	return query.Group("proxies.id")
+}
+
+func buildProxyIPSearchIDQuery(userId uint, filterQuery *gorm.DB, rangeStart, rangeEnd uint32) *gorm.DB {
+	query := DB.Model(&domain.Proxy{}).
+		Select("proxies.id").
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
+		Where("proxies.ip_int BETWEEN ? AND ?", rangeStart, rangeEnd)
+
+	if filterQuery != nil {
+		query = query.Where("proxies.id IN (?)", filterQuery)
+	}
+
+	return query.Group("proxies.id")
+}
+
+func applyProxySearchQuery(query *gorm.DB, lowerSearch string) *gorm.DB {
+	whereSQL, args := buildProxySearchPredicate(lowerSearch)
+	if whereSQL == "" || len(args) == 0 {
+		return query
+	}
+	return query.Where(whereSQL, args...)
+}
+
+func buildProxySearchPredicate(lowerSearch string) (string, []interface{}) {
+	lowerSearch = strings.ToLower(strings.TrimSpace(lowerSearch))
+	if lowerSearch == "" {
+		return "", nil
+	}
+
+	pattern := "%" + lowerSearch + "%"
+	conditions := []string{
+		"LOWER(COALESCE(NULLIF(proxies.estimated_type, ''), 'n/a')) LIKE ?",
+		"LOWER(COALESCE(NULLIF(proxies.country, ''), 'n/a')) LIKE ?",
+		"LOWER(COALESCE(al.name, 'n/a')) LIKE ?",
+		"LOWER(COALESCE(pr_overall.kind, '')) LIKE ?",
+		"LOWER(COALESCE(pr_overall.label, '')) LIKE ?",
+	}
+	args := []interface{}{
 		pattern,
 		pattern,
 		pattern,
 		pattern,
 		pattern,
-		pattern,
-		pattern,
-		pattern,
-		pattern,
-		pattern,
-	)
+	}
+
+	switch lowerSearch {
+	case "alive":
+		conditions = append(conditions, "COALESCE(pos.overall_alive, false) = ?")
+		args = append(args, true)
+	case "dead":
+		conditions = append(conditions, "COALESCE(pos.overall_alive, false) = ?")
+		args = append(args, false)
+	}
+
+	if numericValue, err := strconv.ParseUint(lowerSearch, 10, 16); err == nil {
+		conditions = append(conditions, "proxies.port = ?")
+		args = append(args, uint16(numericValue))
+		conditions = append(conditions, "COALESCE(ps.response_time, 0) = ?")
+		args = append(args, uint16(numericValue))
+	}
+
+	return "(" + strings.Join(conditions, " OR ") + ")", args
 }
 
 func buildProxyListFilterQuery(userId uint, filters dto.ProxyListFilters) *gorm.DB {

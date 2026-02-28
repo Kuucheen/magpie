@@ -1,6 +1,7 @@
 package database
 
 import (
+	"strings"
 	"testing"
 
 	dto "magpie/internal/api/dto"
@@ -61,5 +62,42 @@ func TestProxyMatchesSearch(t *testing.T) {
 		if result != expected {
 			t.Errorf("proxyMatchesSearch(%q) = %v, want %v", term, result, expected)
 		}
+	}
+}
+
+func TestBuildProxySearchPredicate_AvoidsCastHeavyPredicates(t *testing.T) {
+	sql, args := buildProxySearchPredicate("alive")
+	if sql == "" || len(args) == 0 {
+		t.Fatal("expected predicate for alive search")
+	}
+	if strings.Contains(sql, "CAST(") || strings.Contains(sql, "ILIKE") {
+		t.Fatalf("expected no cast-heavy ilike predicates, got %q", sql)
+	}
+	if !strings.Contains(sql, "overall_alive") {
+		t.Fatalf("expected status predicate in %q", sql)
+	}
+}
+
+func TestBuildProxySearchPredicate_NumericIncludesTypedMatches(t *testing.T) {
+	sql, args := buildProxySearchPredicate("3128")
+	if sql == "" {
+		t.Fatal("expected predicate for numeric search")
+	}
+	if !strings.Contains(sql, "proxies.port = ?") {
+		t.Fatalf("expected typed port match in %q", sql)
+	}
+	if !strings.Contains(sql, "ps.response_time") {
+		t.Fatalf("expected typed response time match in %q", sql)
+	}
+
+	var hasPortArg bool
+	for _, arg := range args {
+		if value, ok := arg.(uint16); ok && value == 3128 {
+			hasPortArg = true
+			break
+		}
+	}
+	if !hasPortArg {
+		t.Fatalf("expected uint16 numeric argument in %#v", args)
 	}
 }

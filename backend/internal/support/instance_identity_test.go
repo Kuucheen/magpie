@@ -21,6 +21,7 @@ func TestGetInstanceID_UsesConfiguredValue(t *testing.T) {
 	resetInstanceIdentityCacheForTests()
 	t.Cleanup(resetInstanceIdentityCacheForTests)
 
+	t.Setenv("MAGPIE_INSTANCE_ID_FILE", t.TempDir()+"/instance_id")
 	t.Setenv(envInstanceID, "  replica-a  ")
 	got := GetInstanceID()
 	if got != "replica-a" {
@@ -35,6 +36,7 @@ func TestGetInstanceID_GeneratesUUIDWhenNotConfigured(t *testing.T) {
 	resetInstanceIdentityCacheForTests()
 	t.Cleanup(resetInstanceIdentityCacheForTests)
 
+	t.Setenv("MAGPIE_INSTANCE_ID_FILE", t.TempDir()+"/instance_id")
 	t.Setenv(envInstanceID, "")
 	got := GetInstanceID()
 	if !uuidV4Pattern.MatchString(got) {
@@ -48,15 +50,16 @@ func TestGetInstanceID_GeneratesUUIDWhenNotConfigured(t *testing.T) {
 	}
 }
 
-func TestGetInstanceID_GeneratesNewUUIDAfterCacheReset(t *testing.T) {
+func TestGetInstanceID_RetainsGeneratedIDAfterCacheReset(t *testing.T) {
 	resetInstanceIdentityCacheForTests()
 	t.Cleanup(resetInstanceIdentityCacheForTests)
 
+	t.Setenv("MAGPIE_INSTANCE_ID_FILE", t.TempDir()+"/instance_id")
 	t.Setenv(envInstanceID, "")
 	first := GetInstanceID()
 	resetInstanceIdentityCacheForTests()
 	second := GetInstanceID()
-	if first == second {
-		t.Fatalf("expected new generated instance id after reset, got identical values %q", first)
+	if first != second {
+		t.Fatalf("expected persisted instance id after reset, got %q then %q", first, second)
 	}
 }

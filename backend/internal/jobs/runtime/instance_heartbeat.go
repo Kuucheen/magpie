@@ -29,9 +29,8 @@ type ActiveInstance struct {
 	PortEnd   int    `json:"port_end"`
 }
 
-var instanceID = strings.TrimSpace(support.GetInstanceID())
-
 func currentInstancePayload() ActiveInstance {
+	instanceID := currentInstanceID()
 	start, end := support.GetRotatingProxyPortRange()
 	return ActiveInstance{
 		ID:        instanceID,
@@ -50,6 +49,7 @@ func StartInstanceHeartbeat(ctx context.Context, client *redis.Client, keyPrefix
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	instanceID := currentInstanceID()
 	heartbeatKey := heartbeatKeyForInstance(instanceID, keyPrefix)
 	heartbeatValue, _ := json.Marshal(currentInstancePayload())
 
@@ -93,6 +93,10 @@ func LaunchInstanceHeartbeat(parent context.Context, client *redis.Client) conte
 	ctx, cancel := context.WithCancel(parent)
 	go StartInstanceHeartbeat(ctx, client, InstanceHeartbeatKeyPrefix, DefaultHeartbeatInterval, DefaultHeartbeatTTL)
 	return cancel
+}
+
+func currentInstanceID() string {
+	return strings.TrimSpace(support.GetInstanceID())
 }
 
 func CountActiveInstances(ctx context.Context, client *redis.Client) (int, error) {

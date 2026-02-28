@@ -75,6 +75,7 @@ all via a web dashboard.
 3. **Required secrets** – Magpie requires:
    - `PROXY_ENCRYPTION_KEY` to encrypt stored proxy secrets (keep it stable between restarts/updates)
    - `JWT_SECRET` to sign authentication tokens
+   - optional `STRICT_SECRET_VALIDATION` (defaults to `false` locally, `true` with backend `-production`)
 
 > [!WARNING]
 > `PROXY_ENCRYPTION_KEY` locks all stored secrets (proxy auth, passwords, and ip addresses).  
@@ -107,7 +108,19 @@ all via a web dashboard.
         -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
       ```
 
-      For production, set `DISABLE_PUBLIC_REGISTRATION=true` after initial admin creation to block public signups.
+      Local default stays simple: first user can register and becomes admin.
+
+      Production mode (`backend -production`) hardening defaults:
+      - `DISABLE_PUBLIC_REGISTRATION=true`
+      - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=false` (public first-admin bootstrap disabled by default)
+      - `DB_AUTO_MIGRATE=false`
+      - `STRICT_SECRET_VALIDATION=true`
+
+      To bootstrap first admin in production via `/api/register`, explicitly set:
+      - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true` (temporary, controlled window)
+
+      Optional reverse-proxy trust boundary for forwarded client IP headers:
+      - `TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.168.0.0/16`
 
       Health probes:
       - Liveness: `GET /healthz`

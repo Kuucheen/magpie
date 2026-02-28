@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"magpie/internal/config"
 	"os"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 const (
 	proxyEncryptionKeyEnv = "PROXY_ENCRYPTION_KEY"
 	ProxyEncryptionPrefix = "enc:"
+	proxyEncryptionKeyMin = 32
 )
 
 var (
@@ -36,6 +38,10 @@ func getProxyCipher() (*proxyCipher, error) {
 		rawKey := strings.TrimSpace(os.Getenv(proxyEncryptionKeyEnv))
 		if rawKey == "" {
 			proxyCipherErr = errors.New("proxy encryption key not set: " + proxyEncryptionKeyEnv)
+			return
+		}
+		if err := validateProxyEncryptionKey(rawKey); err != nil {
+			proxyCipherErr = err
 			return
 		}
 
@@ -79,6 +85,56 @@ func deriveProxyKey(raw string) ([]byte, error) {
 
 	sum := sha256.Sum256([]byte(raw))
 	return sum[:], nil
+}
+
+func validateProxyEncryptionKey(raw string) error {
+	if !config.StrictSecretValidationEnabled() {
+		return nil
+	}
+
+	if len(raw) < proxyEncryptionKeyMin {
+		return fmt.Errorf("proxy encryption key is too short for strict mode: need at least %d characters", proxyEncryptionKeyMin)
+	}
+
+	if isKnownPlaceholderProxySecret(raw) {
+		return errors.New("proxy encryption key uses a known placeholder value; set a strong unique secret")
+	}
+
+	return nil
+}
+
+func isKnownPlaceholderProxySecret(secret string) bool {
+	placeholders := map[string]struct{}{
+		"changeme":               {},
+		"changemetoastrongkey":   {},
+		"proxyencryptionkey":     {},
+		"yourproxyencryptionkey": {},
+	}
+
+	normalized := normalizeSecretValue(secret)
+	if normalized == "" {
+		return false
+	}
+
+	_, exists := placeholders[normalized]
+	return exists
+}
+
+func normalizeSecretValue(secret string) string {
+	secret = strings.ToLower(strings.TrimSpace(secret))
+	if secret == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(secret))
+	for _, r := range secret {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			builder.WriteRune(r)
+		}
+	}
+
+	return builder.String()
 }
 
 func normalizeKey(key []byte) []byte {

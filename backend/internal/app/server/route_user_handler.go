@@ -26,21 +26,24 @@ import (
 )
 
 const (
-	firstUserAdminAdvisoryLockKey int64 = 941_843_229_541
-	invalidAuthCredentialsMessage       = "Invalid email or password"
-	envDisablePublicRegistration        = "DISABLE_PUBLIC_REGISTRATION"
+	firstUserAdminAdvisoryLockKey      int64 = 941_843_229_541
+	invalidAuthCredentialsMessage            = "Invalid email or password"
+	envDisablePublicRegistration             = "DISABLE_PUBLIC_REGISTRATION"
+	envEnablePublicFirstAdminBootstrap       = "ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP"
 )
 
 var (
 	errEmailAlreadyInUse          = errors.New("email already in use")
 	errPublicRegistrationDisabled = errors.New("public registration is disabled")
+	errPublicFirstAdminBootstrap  = errors.New("public first-admin bootstrap is disabled")
 
 	loginFallbackPasswordHashOnce sync.Once
 	loginFallbackPasswordHash     string
 )
 
 type userRegistrationPolicy struct {
-	DisablePublicRegistration bool
+	DisablePublicRegistration        bool
+	DisablePublicFirstAdminBootstrap bool
 }
 
 func checkLogin(w http.ResponseWriter, r *http.Request) {
@@ -87,9 +90,7 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	user.UseHttpsForSocks = cfg.Checker.UseHttpsForSocks
 	user.TransportProtocol = support.TransportTCP
 
-	policy := userRegistrationPolicy{
-		DisablePublicRegistration: support.GetEnvBool(envDisablePublicRegistration, false),
-	}
+	policy := resolveUserRegistrationPolicy()
 
 	// Save user to the database
 	if err = createUserWithFirstAdminRole(&user, policy); err != nil {
@@ -98,6 +99,8 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Email already in use", http.StatusConflict)
 		case errors.Is(err, errPublicRegistrationDisabled):
 			writeError(w, "Public registration is disabled", http.StatusForbidden)
+		case errors.Is(err, errPublicFirstAdminBootstrap):
+			writeError(w, "Initial admin bootstrap via public registration is disabled", http.StatusForbidden)
 		default:
 			writeError(w, "Failed to create user", http.StatusInternalServerError)
 		}
@@ -476,6 +479,9 @@ func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPoli
 		}
 
 		if userCount == 0 {
+			if policy.DisablePublicFirstAdminBootstrap {
+				return errPublicFirstAdminBootstrap
+			}
 			user.Role = "admin"
 		} else {
 			if policy.DisablePublicRegistration {
@@ -493,6 +499,23 @@ func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPoli
 
 		return nil
 	})
+}
+
+func resolveUserRegistrationPolicy() userRegistrationPolicy {
+	disablePublicDefault := false
+	if config.InProductionMode {
+		disablePublicDefault = true
+	}
+
+	policy := userRegistrationPolicy{
+		DisablePublicRegistration: support.GetEnvBool(envDisablePublicRegistration, disablePublicDefault),
+	}
+
+	if config.InProductionMode {
+		policy.DisablePublicFirstAdminBootstrap = !support.GetEnvBool(envEnablePublicFirstAdminBootstrap, false)
+	}
+
+	return policy
 }
 
 func consumeInvalidPasswordWork(password string) {

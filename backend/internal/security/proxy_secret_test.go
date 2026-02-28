@@ -1,8 +1,14 @@
 package security
 
-import "testing"
+import (
+	"os"
+	"testing"
+
+	"magpie/internal/config"
+)
 
 const testEncryptionKey = "unit-test-encryption-key"
+const envStrictSecretValidation = "STRICT_SECRET_VALIDATION"
 
 func TestEncryptDecryptProxySecret(t *testing.T) {
 	t.Setenv(proxyEncryptionKeyEnv, testEncryptionKey)
@@ -43,4 +49,64 @@ func TestDecryptLegacyProxySecret(t *testing.T) {
 	if plain != "legacy-secret" {
 		t.Fatalf("DecryptProxySecret returned %q, want legacy-secret", plain)
 	}
+}
+
+func TestRequireProxyEncryptionKeyConfigured_StrictModeRejectsPlaceholderByDefaultInProduction(t *testing.T) {
+	ResetProxyCipherForTests()
+	setProductionModeForProxyTests(t, true)
+	unsetEnvForProxyTests(t, envStrictSecretValidation)
+	t.Setenv(proxyEncryptionKeyEnv, "ChangeMeToAStrongKey")
+
+	if err := RequireProxyEncryptionKeyConfigured(); err == nil {
+		t.Fatal("expected strict validation to reject placeholder proxy encryption key in production")
+	}
+}
+
+func TestRequireProxyEncryptionKeyConfigured_StrictModeOverrideCanBeDisabled(t *testing.T) {
+	ResetProxyCipherForTests()
+	setProductionModeForProxyTests(t, true)
+	t.Setenv(envStrictSecretValidation, "false")
+	t.Setenv(proxyEncryptionKeyEnv, "ChangeMeToAStrongKey")
+
+	if err := RequireProxyEncryptionKeyConfigured(); err != nil {
+		t.Fatalf("expected strict validation override to allow placeholder key, got %v", err)
+	}
+}
+
+func TestRequireProxyEncryptionKeyConfigured_StrictModeRejectsShortKey(t *testing.T) {
+	ResetProxyCipherForTests()
+	setProductionModeForProxyTests(t, false)
+	t.Setenv(envStrictSecretValidation, "true")
+	t.Setenv(proxyEncryptionKeyEnv, "too-short-proxy-key")
+
+	if err := RequireProxyEncryptionKeyConfigured(); err == nil {
+		t.Fatal("expected strict validation to reject short proxy key")
+	}
+}
+
+func setProductionModeForProxyTests(t *testing.T, production bool) {
+	t.Helper()
+
+	prev := config.InProductionMode
+	config.SetProductionMode(production)
+	t.Cleanup(func() {
+		config.SetProductionMode(prev)
+	})
+}
+
+func unsetEnvForProxyTests(t *testing.T, key string) {
+	t.Helper()
+
+	prev, had := os.LookupEnv(key)
+	if had {
+		t.Cleanup(func() {
+			_ = os.Setenv(key, prev)
+		})
+	} else {
+		t.Cleanup(func() {
+			_ = os.Unsetenv(key)
+		})
+	}
+
+	_ = os.Unsetenv(key)
 }

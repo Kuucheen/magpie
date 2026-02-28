@@ -34,18 +34,19 @@ func Run() error {
 	}
 
 	configureLogLevel()
-	if err := auth.RequireJWTSecretConfigured(); err != nil {
-		return err
-	}
-	if err := security.RequireProxyEncryptionKeyConfigured(); err != nil {
-		return err
-	}
 
 	backendPortFlag := flag.Int("backend-port", defaultBackendPort, "Port for API server")
 	productionFlag := flag.Bool("production", false, "Run in production mode")
 	flag.Parse()
 
 	config.SetProductionMode(*productionFlag)
+
+	if err := auth.RequireJWTSecretConfigured(); err != nil {
+		return err
+	}
+	if err := security.RequireProxyEncryptionKeyConfigured(); err != nil {
+		return err
+	}
 
 	backendPort := resolvePort("BACKEND_PORT", "backend-port", *backendPortFlag)
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

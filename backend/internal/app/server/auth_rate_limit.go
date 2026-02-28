@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -406,49 +405,6 @@ func setRetryAfterHeader(w http.ResponseWriter, retryAfter time.Duration) {
 	}
 
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
-}
-
-func getAuthClientIP(r *http.Request) string {
-	if r == nil {
-		return "unknown"
-	}
-
-	forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
-	if forwardedFor != "" {
-		for _, part := range strings.Split(forwardedFor, ",") {
-			if ip := parseIP(strings.TrimSpace(part)); ip != "" {
-				return ip
-			}
-		}
-	}
-
-	if realIP := parseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); realIP != "" {
-		return realIP
-	}
-
-	if remoteIP := parseIP(strings.TrimSpace(r.RemoteAddr)); remoteIP != "" {
-		return remoteIP
-	}
-
-	return "unknown"
-}
-
-func parseIP(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-
-	if host, _, err := net.SplitHostPort(raw); err == nil {
-		raw = host
-	}
-
-	parsed := net.ParseIP(raw)
-	if parsed == nil {
-		return ""
-	}
-
-	return parsed.String()
 }
 
 func normalizeRateLimitIP(ip string) string {

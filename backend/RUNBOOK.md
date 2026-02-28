@@ -19,7 +19,7 @@ _Last updated: 2026-02-28_
 
 ## Admin Bootstrap
 
-When no users exist, the first registered user becomes admin automatically.
+Local default (without `-production`): when no users exist, the first registered user becomes admin automatically.
 
 Example:
 
@@ -27,7 +27,16 @@ Example:
 curl -X POST http://localhost:5656/api/register   -H "Content-Type: application/json"   -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
 ```
 
-For production hardening, set `DISABLE_PUBLIC_REGISTRATION=true` after initial admin creation to block public self-signup.
+Production mode (`-production`) defaults:
+- `DISABLE_PUBLIC_REGISTRATION=true`
+- `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=false`
+
+That means public `/api/register` first-admin bootstrap is blocked by default in production.
+
+For a controlled initial bootstrap window, set:
+- `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true`
+
+After first admin is created, keep bootstrap disabled and keep `DISABLE_PUBLIC_REGISTRATION=true` unless intentional public signups are required.
 
 ## Probe Interpretation
 
@@ -80,17 +89,32 @@ Actions:
 ### JWT secret (`JWT_SECRET`)
 - Rotate during maintenance window.
 - Expect all existing tokens to become invalid; users must re-authenticate.
+- With `STRICT_SECRET_VALIDATION=true` (default in production mode), weak/placeholder values are rejected at startup.
 
 ### Proxy encryption key (`PROXY_ENCRYPTION_KEY`)
 - Rotate only with explicit migration/export plan.
 - Changing key without migration breaks decryption of stored proxy secrets.
+- With `STRICT_SECRET_VALIDATION=true` (default in production mode), weak/placeholder values are rejected at startup.
+
+### Secret validation mode (`STRICT_SECRET_VALIDATION`)
+- Local default: `false`
+- Production mode default: `true`
+- Explicit env override (`true` or `false`) always wins.
 
 
 ## TLS / Reverse Proxy Requirement
 
 - Run backend behind a TLS-terminating reverse proxy (Nginx, Traefik, Caddy, ALB, etc.).
 - Do **not** expose plaintext backend traffic directly to the internet.
+- Set `TRUSTED_PROXY_CIDRS` to the CIDRs of your reverse proxies.
+- `X-Forwarded-For` / `X-Real-IP` are only trusted when immediate `RemoteAddr` is in `TRUSTED_PROXY_CIDRS`; otherwise backend uses `RemoteAddr` directly.
 - Ensure proxy forwards `X-Forwarded-For` and request IDs (`X-Request-ID`) for traceability.
+
+## Migration Strategy
+
+- `DB_AUTO_MIGRATE` local default: `true`
+- `DB_AUTO_MIGRATE` production mode default: `false`
+- Explicit `DB_AUTO_MIGRATE` env override always wins.
 
 ## Rollback
 

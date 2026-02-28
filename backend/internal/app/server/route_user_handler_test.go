@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"magpie/internal/config"
 	"magpie/internal/database"
 	"magpie/internal/domain"
 
@@ -50,6 +51,69 @@ func TestCreateUserWithFirstAdminRole_RespectsPublicRegistrationFlagAfterBootstr
 	}
 	if allowedUser.Role != "user" {
 		t.Fatalf("expected follow-up user role user, got %q", allowedUser.Role)
+	}
+}
+
+func TestCreateUserWithFirstAdminRole_BlocksFirstAdminBootstrapWhenPolicyDisablesIt(t *testing.T) {
+	setupUserRegistrationTestDB(t)
+
+	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
+	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{
+		DisablePublicFirstAdminBootstrap: true,
+	})
+	if !errors.Is(err, errPublicFirstAdminBootstrap) {
+		t.Fatalf("expected errPublicFirstAdminBootstrap, got %v", err)
+	}
+}
+
+func TestResolveUserRegistrationPolicy_ProductionDefaults(t *testing.T) {
+	prevProduction := config.InProductionMode
+	config.SetProductionMode(true)
+	t.Cleanup(func() {
+		config.SetProductionMode(prevProduction)
+	})
+
+	policy := resolveUserRegistrationPolicy()
+	if !policy.DisablePublicRegistration {
+		t.Fatal("expected DisablePublicRegistration=true in production by default")
+	}
+	if !policy.DisablePublicFirstAdminBootstrap {
+		t.Fatal("expected DisablePublicFirstAdminBootstrap=true in production by default")
+	}
+}
+
+func TestResolveUserRegistrationPolicy_ProductionOverrides(t *testing.T) {
+	prevProduction := config.InProductionMode
+	config.SetProductionMode(true)
+	t.Cleanup(func() {
+		config.SetProductionMode(prevProduction)
+	})
+
+	t.Setenv(envDisablePublicRegistration, "false")
+	t.Setenv(envEnablePublicFirstAdminBootstrap, "true")
+
+	policy := resolveUserRegistrationPolicy()
+	if policy.DisablePublicRegistration {
+		t.Fatal("expected DisablePublicRegistration=false when override is set")
+	}
+	if policy.DisablePublicFirstAdminBootstrap {
+		t.Fatal("expected DisablePublicFirstAdminBootstrap=false when override is set")
+	}
+}
+
+func TestResolveUserRegistrationPolicy_LocalDefaultsRemainOpen(t *testing.T) {
+	prevProduction := config.InProductionMode
+	config.SetProductionMode(false)
+	t.Cleanup(func() {
+		config.SetProductionMode(prevProduction)
+	})
+
+	policy := resolveUserRegistrationPolicy()
+	if policy.DisablePublicRegistration {
+		t.Fatal("expected DisablePublicRegistration=false outside production by default")
+	}
+	if policy.DisablePublicFirstAdminBootstrap {
+		t.Fatal("expected DisablePublicFirstAdminBootstrap=false outside production by default")
 	}
 }
 

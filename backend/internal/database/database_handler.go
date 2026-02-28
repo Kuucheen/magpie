@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"magpie/internal/config"
 	"magpie/internal/domain"
 	"magpie/internal/support"
 
@@ -130,7 +131,7 @@ func defaultConfig() Config {
 	return Config{
 		Dialector:    postgres.Open(dsn),
 		Logger:       silentLogger(),
-		AutoMigrate:  support.GetEnvBool("DB_AUTO_MIGRATE", true),
+		AutoMigrate:  support.GetEnvBool("DB_AUTO_MIGRATE", !config.InProductionMode),
 		Migrations:   defaultMigrations(),
 		SeedDefaults: true,
 	}

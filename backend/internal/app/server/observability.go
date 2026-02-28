@@ -125,32 +125,6 @@ func withAccessLog(next http.Handler) http.Handler {
 	})
 }
 
-func clientIPFromRequest(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-
-	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
-		parts := strings.Split(forwarded, ",")
-		if len(parts) > 0 {
-			if candidate := strings.TrimSpace(parts[0]); candidate != "" {
-				return candidate
-			}
-		}
-	}
-
-	if value := strings.TrimSpace(r.Header.Get("X-Real-IP")); value != "" {
-		return value
-	}
-
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil && host != "" {
-		return host
-	}
-
-	return strings.TrimSpace(r.RemoteAddr)
-}
-
 func sanitizeRequestID(value string) string {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {

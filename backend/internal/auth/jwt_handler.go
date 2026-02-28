@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"magpie/internal/config"
 	"math"
 	"os"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 )
 
 const jwtSecretEnv = "JWT_SECRET"
+const jwtSecretMinLength = 32
 
 const (
 	jwtTTL           = 24 * 7 * time.Hour
@@ -47,6 +49,10 @@ func jwtSigningKey() ([]byte, error) {
 			jwtKeyErr = fmt.Errorf("jwt secret not configured: %s", jwtSecretEnv)
 			return
 		}
+		if err := validateJWTSecret(raw); err != nil {
+			jwtKeyErr = err
+			return
+		}
 		jwtKey = []byte(raw)
 	})
 
@@ -55,6 +61,58 @@ func jwtSigningKey() ([]byte, error) {
 	}
 
 	return jwtKey, nil
+}
+
+func validateJWTSecret(secret string) error {
+	if !config.StrictSecretValidationEnabled() {
+		return nil
+	}
+
+	if len(secret) < jwtSecretMinLength {
+		return fmt.Errorf("jwt secret is too short for strict mode: need at least %d characters", jwtSecretMinLength)
+	}
+
+	if isKnownPlaceholderSecret(secret, knownJWTSecretPlaceholders()) {
+		return errors.New("jwt secret uses a known placeholder value; set a strong unique secret")
+	}
+
+	return nil
+}
+
+func knownJWTSecretPlaceholders() map[string]struct{} {
+	return map[string]struct{}{
+		"changeme":      {},
+		"changemetoo":   {},
+		"jwtsecret":     {},
+		"yourjwtsecret": {},
+	}
+}
+
+func isKnownPlaceholderSecret(secret string, placeholders map[string]struct{}) bool {
+	normalized := normalizeSecretValue(secret)
+	if normalized == "" {
+		return false
+	}
+
+	_, exists := placeholders[normalized]
+	return exists
+}
+
+func normalizeSecretValue(secret string) string {
+	secret = strings.ToLower(strings.TrimSpace(secret))
+	if secret == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(secret))
+	for _, r := range secret {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			builder.WriteRune(r)
+		}
+	}
+
+	return builder.String()
 }
 
 func GenerateJWT(userId uint, role string) (string, error) {

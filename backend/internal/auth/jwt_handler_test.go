@@ -1,15 +1,19 @@
 package auth
 
 import (
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"magpie/internal/config"
 
 	"magpie/internal/support"
 )
+
+const envStrictSecretValidation = "STRICT_SECRET_VALIDATION"
 
 func TestValidateJWTRejectsRevokedToken(t *testing.T) {
 	resetJWTStateForTests(t)
@@ -142,6 +146,39 @@ func TestValidateJWTFailsClosedWhenRevocationStoreUnavailable(t *testing.T) {
 	}
 }
 
+func TestRequireJWTSecretConfigured_StrictModeRejectsPlaceholderByDefaultInProduction(t *testing.T) {
+	resetJWTSigningKeyStateForTests()
+	setProductionModeForJWTTests(t, true)
+	unsetEnvForJWTTests(t, envStrictSecretValidation)
+	t.Setenv(jwtSecretEnv, "ChangeMeToo")
+
+	if err := RequireJWTSecretConfigured(); err == nil {
+		t.Fatal("expected strict validation to reject placeholder JWT secret in production")
+	}
+}
+
+func TestRequireJWTSecretConfigured_StrictModeOverrideCanBeDisabled(t *testing.T) {
+	resetJWTSigningKeyStateForTests()
+	setProductionModeForJWTTests(t, true)
+	t.Setenv(envStrictSecretValidation, "false")
+	t.Setenv(jwtSecretEnv, "ChangeMeToo")
+
+	if err := RequireJWTSecretConfigured(); err != nil {
+		t.Fatalf("expected strict validation override to allow placeholder secret, got %v", err)
+	}
+}
+
+func TestRequireJWTSecretConfigured_StrictModeRejectsShortSecret(t *testing.T) {
+	resetJWTSigningKeyStateForTests()
+	setProductionModeForJWTTests(t, false)
+	t.Setenv(envStrictSecretValidation, "true")
+	t.Setenv(jwtSecretEnv, "this-secret-is-too-short")
+
+	if err := RequireJWTSecretConfigured(); err == nil {
+		t.Fatal("expected strict validation to reject short JWT secret")
+	}
+}
+
 func resetJWTStateForTests(t *testing.T) {
 	t.Helper()
 
@@ -167,4 +204,37 @@ func resetJWTStateForTests(t *testing.T) {
 	t.Cleanup(func() {
 		_ = support.CloseRedisClient()
 	})
+}
+
+func resetJWTSigningKeyStateForTests() {
+	jwtSecretOnce = sync.Once{}
+	jwtKey = nil
+	jwtKeyErr = nil
+}
+
+func setProductionModeForJWTTests(t *testing.T, production bool) {
+	t.Helper()
+
+	prev := config.InProductionMode
+	config.SetProductionMode(production)
+	t.Cleanup(func() {
+		config.SetProductionMode(prev)
+	})
+}
+
+func unsetEnvForJWTTests(t *testing.T, key string) {
+	t.Helper()
+
+	prev, had := os.LookupEnv(key)
+	if had {
+		t.Cleanup(func() {
+			_ = os.Setenv(key, prev)
+		})
+	} else {
+		t.Cleanup(func() {
+			_ = os.Unsetenv(key)
+		})
+	}
+
+	_ = os.Unsetenv(key)
 }

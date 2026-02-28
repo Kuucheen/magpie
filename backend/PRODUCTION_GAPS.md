@@ -1,82 +1,59 @@
 # Magpie Backend Production Readiness Gaps
 
-_Last reviewed: 2026-02-28 (post auth-bootstrap revert audit)_
+_Last reviewed: 2026-02-28 (final-cycle audit, pre-implementation)_
 
-This is a refreshed, **remaining gaps only** checklist for `backend/` and current deployment config.
+This checklist contains **remaining** production-readiness gaps after the previous hardening cycles.
+
+Product constraints kept in scope:
+- local setup must stay simple (no mandatory technical bootstrap for local users)
+- multi-instance/load-balanced deployments remain first-class (no single-instance assumptions)
 
 ## Critical (fix before internet-facing production)
 
-- [ ] **[CRITICAL][Security] Public first-user admin bootstrap is still takeover-prone**  
-  **Evidence:** `POST /api/register` is public (`internal/app/server/routes.go`) and `createUserWithFirstAdminRole` grants admin when user count is `0` (`internal/app/server/route_user_handler.go`). `backend/RUNBOOK.md` still documents this bootstrap path.  
-  **Risk:** Any actor who reaches the service first can permanently claim admin on a fresh environment.  
+- [ ] **[CRITICAL][Security] First-admin bootstrap in production still lacks request-level proof-of-intent**  
+  **Evidence:** Production defaults now disable public registration/bootstrap, but if operators temporarily set `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true`, first-admin creation still relies only on env toggles (no per-request bootstrap secret/token in `POST /api/register`, `backend/internal/app/server/route_user_handler.go`).  
+  **Risk:** During a bootstrap window, whichever request reaches the service first can still claim admin.  
   **Recommended fix (exact):**
-  1. Add one-time bootstrap protection for first admin creation (`ADMIN_BOOTSTRAP_TOKEN` header or dedicated local-only bootstrap command).
-  2. In production mode, default to `DISABLE_PUBLIC_REGISTRATION=true` and require explicit override.
-  3. Auto-disable bootstrap path once first admin exists.
-  4. Update `RUNBOOK.md` with a secure admin-seed flow that does not rely on unauthenticated public registration.
+  1. Add `ADMIN_BOOTSTRAP_TOKEN` support and require `X-Admin-Bootstrap-Token` (or equivalent) for first-admin registration in production bootstrap mode.
+  2. Keep local defaults unchanged (first local user can still become admin without extra bootstrap mechanics).
+  3. Document bootstrap-window procedure for multi-instance deployments (shared bootstrap token, short window, disable immediately after first admin).
 
 ## High
 
-- [ ] **[HIGH][Security/Reliability] Client IP is taken from spoofable forwarding headers without trusted proxy boundaries**  
-  **Evidence:** `getAuthClientIP` and `clientIPFromRequest` prioritize `X-Forwarded-For`/`X-Real-IP` unconditionally (`internal/app/server/auth_rate_limit.go`, `internal/app/server/observability.go`).  
-  **Risk:** If backend is reachable directly, attackers can spoof IPs to dilute per-IP throttling and pollute forensic logs.  
+- [ ] **[HIGH][CI] CI still does not validate deployable backend artifact + runtime dependency wiring**  
+  **Evidence:** `.github/workflows/backend-ci.yml` currently runs tests/static checks but does not build the backend container image or run an integration smoke against Postgres+Redis.  
+  **Risk:** Code can pass CI while image build, startup command/env wiring, readiness probes, or auth bootstrap path fail at deploy time.  
   **Recommended fix (exact):**
-  1. Introduce `TRUSTED_PROXY_CIDRS` (or equivalent) and only trust forwarded headers when request source is trusted.
-  2. Otherwise derive client IP strictly from `RemoteAddr`.
-  3. Add tests for direct-access spoofing and trusted-proxy forwarding behavior.
-
-- [ ] **[HIGH][Deployment safety] Database schema changes run implicitly on app startup**  
-  **Evidence:** `DB_AUTO_MIGRATE` defaults to `true` (`internal/database/database_handler.go`), and startup executes schema DDL helpers (e.g. column drops/unlogged/index changes in `ensureBlacklistSchema`).  
-  **Risk:** Startup-triggered migrations can introduce unpredictable deploy times, accidental irreversible DDL, and rollback hazards during incidents.  
-  **Recommended fix (exact):**
-  1. Default `DB_AUTO_MIGRATE=false` for production.
-  2. Move schema evolution to explicit, versioned migration steps (pre-deploy job).
-  3. Add migration preflight in runbook: backup check, lock strategy, rollback/restore validation.
-
-- [ ] **[HIGH][Secrets/Config] Secret validation is presence-only; weak/shared values are accepted**  
-  **Evidence:** startup only enforces non-empty `JWT_SECRET` and `PROXY_ENCRYPTION_KEY` (`internal/auth/jwt_handler.go`, `internal/security/proxy_secret.go`).  
-  **Risk:** Weak or placeholder secrets can pass startup and reach production, reducing resistance to token forgery or data compromise.  
-  **Recommended fix (exact):**
-  1. Enforce minimum secret quality (length + entropy/format checks) at startup.
-  2. Reject known placeholder/default strings from `.env.example` patterns.
-  3. Document rotation cadence and staged rotation procedures in `RUNBOOK.md`.
-
-- [ ] **[HIGH][CI] Current CI validates code but not deployable artifacts/runtime wiring**  
-  **Evidence:** `.github/workflows/backend-ci.yml` runs tests/vet/staticcheck/govulncheck/race, but does not build runtime image or run integration smoke with Postgres+Redis.  
-  **Risk:** Changes can pass CI while container startup, runtime deps, or startup probes fail in deployment.  
-  **Recommended fix (exact):**
-  1. Add CI job to build `Dockerfile` image.
-  2. Spin up ephemeral Postgres+Redis and run backend smoke (`/healthz`, `/readyz`, login/register happy path).
-  3. Add container vulnerability scan in release pipeline.
+  1. Add CI job to build `Dockerfile` image for backend runtime.
+  2. Start ephemeral Postgres+Redis and run smoke checks (`/healthz`, `/readyz`, register/login happy-path).
+  3. Fail CI if image does not start cleanly in this dependency-backed smoke environment.
 
 ## Medium
 
-- [ ] **[MEDIUM][Security] Access token lifetime is fixed at 7 days**  
-  **Evidence:** `jwtTTL` is hardcoded (`internal/auth/jwt_handler.go`).  
-  **Risk:** Session duration cannot be tightened per environment or incident posture.  
+- [ ] **[MEDIUM][Security] Access-token lifetime is fixed at 7 days**  
+  **Evidence:** `jwtTTL` is hardcoded in `backend/internal/auth/jwt_handler.go`.  
+  **Risk:** Cannot tighten session lifetime per environment or incident posture.  
   **Recommended fix (exact):**
-  1. Add bounded env-based token lifetime (e.g., `JWT_TTL_MINUTES` with sane min/max).
-  2. Prefer short access token + refresh flow for long sessions.
+  1. Add bounded env-based token lifetime (`JWT_TTL_MINUTES`) with sane min/max.
+  2. Keep local-friendly default at current value to avoid UX regressions.
 
-- [ ] **[MEDIUM][Deployment safety/Config] Shipped compose defaults are dev-friendly and unsafe if reused as production baseline**  
-  **Evidence:** `docker-compose.yml` defaults `DB_SSLMODE=disable`, uses `redis:latest`, and no Redis auth/TLS settings by default.  
-  **Risk:** Weak transport/auth posture and nondeterministic dependency upgrades in real deployments.  
+- [ ] **[MEDIUM][Deployment safety/Config] Shipped compose defaults are intentionally local/dev-oriented and unsafe as production baseline**  
+  **Evidence:** `docker-compose.yml` defaults `DB_SSLMODE=disable`, `redis:latest`, and no Redis auth/TLS settings by default.  
+  **Risk:** Weak transport/auth posture and nondeterministic dependency upgrades if reused in production.  
   **Recommended fix (exact):**
-  1. Provide a production compose/manifest profile with secure defaults (`DB_SSLMODE=require|verify-full`, pinned image tags, Redis auth/TLS).
-  2. Mark current compose clearly as local/dev-only in docs.
+  1. Keep current file local/dev-friendly, but provide a dedicated production profile/manifest with secure defaults (`DB_SSLMODE=require|verify-full`, pinned Redis tag, auth/TLS guidance).
+  2. Explicitly label current compose as local/dev only in docs.
 
-- [ ] **[MEDIUM][Observability/Runbook] Alerting and SLO response guidance is still implicit**  
-  **Evidence:** `/metrics` exists, but repository lacks concrete alert rules and runbook thresholds/actions tied to those metrics.  
-  **Risk:** Slower detection/triage despite telemetry being available.  
+- [ ] **[MEDIUM][Observability/Operations] Alert rules and SLO response mapping are still implicit**  
+  **Evidence:** Metrics endpoint exists, but repository still lacks concrete baseline alert rules + runbook threshold/action mapping.  
+  **Risk:** Slower triage and inconsistent incident response despite telemetry being present.  
   **Recommended fix (exact):**
-  1. Add baseline alert rules (5xx ratio, p95 latency, readiness failures, DB/Redis dependency failures).
-  2. Extend `RUNBOOK.md` with alert-to-action mappings (owner, first checks, escalation).
+  1. Add starter alert rules (5xx ratio, p95 latency, readiness failures, dependency outages).
+  2. Extend `RUNBOOK.md` with alert-to-action owner/escalation guidance.
 
-## Suggested implementation order
+## Suggested implementation order for this final cycle
 
-1. Close first-user admin takeover path and update bootstrap runbook.
-2. Add trusted-proxy IP handling for rate-limits/logging.
-3. Move DB migrations out of startup path and establish migration run procedure.
-4. Enforce secret strength and finalize rotation policy.
-5. Expand CI to build/test runtime artifacts.
-6. Tighten token/config/deployment defaults and add concrete alert rules.
+1. Close first-admin bootstrap window takeover risk with request-level bootstrap token.
+2. Add CI runtime artifact build + dependency-backed smoke checks.
+3. Add configurable JWT TTL (bounded, default preserved).
+4. Leave compose-production profile and alert-pack work as next follow-up if time is exhausted in this cycle.

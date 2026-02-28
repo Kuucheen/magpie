@@ -44,6 +44,9 @@ func Run() error {
 	if err := auth.RequireJWTSecretConfigured(); err != nil {
 		return err
 	}
+	if err := auth.RequireJWTTTLConfigured(); err != nil {
+		return err
+	}
 	if err := security.RequireProxyEncryptionKeyConfigured(); err != nil {
 		return err
 	}

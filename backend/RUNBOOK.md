@@ -35,11 +35,22 @@ That means public `/api/register` first-admin bootstrap is blocked by default in
 
 For a controlled initial bootstrap window, set:
 - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true`
+- `ADMIN_BOOTSTRAP_TOKEN=<strong-random-token>`
 
-After first admin is created, keep bootstrap disabled and keep `DISABLE_PUBLIC_REGISTRATION=true` unless intentional public signups are required.
+Then call registration with the bootstrap header:
+
+```bash
+curl -X POST http://<backend-host>:5656/api/register \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Bootstrap-Token: <same-token>" \
+  -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
+```
+
+After first admin is created, immediately disable bootstrap (`ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=false`) and keep `DISABLE_PUBLIC_REGISTRATION=true` unless intentional public signups are required.
 
 For load-balanced multi-instance deployments, apply the same values for
-`DISABLE_PUBLIC_REGISTRATION` and `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP` on every backend instance.
+`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`, and
+`ADMIN_BOOTSTRAP_TOKEN` on every backend instance.
 
 ## Probe Interpretation
 
@@ -93,6 +104,12 @@ Actions:
 - Rotate during maintenance window.
 - Expect all existing tokens to become invalid; users must re-authenticate.
 - With `STRICT_SECRET_VALIDATION=true` (default in production mode), weak/placeholder values are rejected at startup.
+
+### JWT access token lifetime (`JWT_TTL_MINUTES`)
+- Optional bounded override for access token lifetime.
+- Allowed range: `15-10080` minutes (default `10080`, i.e. 7 days).
+- Startup fails fast if the configured value is outside range or invalid.
+- In multi-instance deployments, keep the same value on all instances.
 
 ### Proxy encryption key (`PROXY_ENCRYPTION_KEY`)
 - Rotate only with explicit migration/export plan.

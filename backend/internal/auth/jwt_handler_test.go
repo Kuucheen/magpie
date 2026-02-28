@@ -14,6 +14,61 @@ import (
 )
 
 const envStrictSecretValidation = "STRICT_SECRET_VALIDATION"
+const envJWTTTLMinutesKey = "JWT_TTL_MINUTES"
+
+func TestRequireJWTTTLConfigured_DefaultWhenUnset(t *testing.T) {
+	resetJWTStateForTests(t)
+
+	if err := RequireJWTTTLConfigured(); err != nil {
+		t.Fatalf("expected default JWT TTL to be valid, got %v", err)
+	}
+}
+
+func TestRequireJWTTTLConfigured_RejectsInvalidValue(t *testing.T) {
+	resetJWTStateForTests(t)
+	t.Setenv(envJWTTTLMinutesKey, "not-a-number")
+
+	if err := RequireJWTTTLConfigured(); err == nil {
+		t.Fatal("expected invalid JWT_TTL_MINUTES to be rejected")
+	}
+}
+
+func TestRequireJWTTTLConfigured_RejectsOutOfRangeValue(t *testing.T) {
+	resetJWTStateForTests(t)
+	t.Setenv(envJWTTTLMinutesKey, "5")
+
+	if err := RequireJWTTTLConfigured(); err == nil {
+		t.Fatal("expected out-of-range JWT_TTL_MINUTES to be rejected")
+	}
+}
+
+func TestGenerateJWT_UsesConfiguredTTL(t *testing.T) {
+	resetJWTStateForTests(t)
+	t.Setenv(envJWTTTLMinutesKey, "60")
+
+	token, err := GenerateJWT(11, "user")
+	if err != nil {
+		t.Fatalf("GenerateJWT failed: %v", err)
+	}
+
+	claims, err := ValidateJWT(token)
+	if err != nil {
+		t.Fatalf("ValidateJWT failed: %v", err)
+	}
+
+	issuedAt, ok := claimInt64(claims, jwtClaimIssuedAt)
+	if !ok {
+		t.Fatal("expected iat claim")
+	}
+	expiresAt, ok := claimInt64(claims, jwtClaimExpiry)
+	if !ok {
+		t.Fatal("expected exp claim")
+	}
+
+	if diff := expiresAt - issuedAt; diff != int64((60 * time.Minute).Seconds()) {
+		t.Fatalf("expected token TTL of 60 minutes, got %d seconds", diff)
+	}
+}
 
 func TestValidateJWTRejectsRevokedToken(t *testing.T) {
 	resetJWTStateForTests(t)

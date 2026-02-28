@@ -17,7 +17,7 @@ const (
 	authRevokedTokenPrefix      = "magpie:auth:revoked:jti:"
 	authUserRevokedBeforePrefix = "magpie:auth:revoked_before:user:"
 	authRedisOperationTimeout   = 2 * time.Second
-	authUserRevokeTTL           = jwtTTL + 24*time.Hour
+	authUserRevokeTTL           = maxJWTTTL + 24*time.Hour
 	authRedisFailureBackoff     = 5 * time.Second
 )
 

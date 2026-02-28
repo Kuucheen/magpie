@@ -96,6 +96,7 @@ all via a web dashboard.
    # optional: tune proxy statistics retention (PROXY_STATISTICS_RETENTION_*)
    docker compose up -d
    ```
+   > `docker-compose.yml` is local/dev oriented. For production deployments, use hardened manifests and secure DB/Redis/TLS settings.
 5. **Dive in**
     - UI: http://localhost:5050
     - API: http://localhost:5656/api
@@ -118,10 +119,24 @@ all via a web dashboard.
 
       To bootstrap first admin in production via `/api/register`, explicitly set:
       - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true` (temporary, controlled window)
+      - `ADMIN_BOOTSTRAP_TOKEN=<strong-random-token>`
+
+      Then call register with the bootstrap header:
+
+      ```bash
+      curl -X POST http://localhost:5656/api/register \
+        -H "Content-Type: application/json" \
+        -H "X-Admin-Bootstrap-Token: <same-token>" \
+        -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
+      ```
+
+      Optional token lifetime hardening:
+      - `JWT_TTL_MINUTES=60` (allowed range: `15-10080`, default `10080`)
 
       Multi-instance note: in load-balanced deployments, keep these hardening env values
       (`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`,
-      `DB_AUTO_MIGRATE`, `STRICT_SECRET_VALIDATION`, `TRUSTED_PROXY_CIDRS`)
+      `ADMIN_BOOTSTRAP_TOKEN`, `DB_AUTO_MIGRATE`, `STRICT_SECRET_VALIDATION`,
+      `TRUSTED_PROXY_CIDRS`, `JWT_TTL_MINUTES`)
       consistent across all backend instances.
 
       Optional reverse-proxy trust boundary for forwarded client IP headers:
@@ -168,7 +183,7 @@ Use the helper scripts to pull the latest code and rebuild just the frontend/bac
 - Quick gate run: `cd scripts/perf && ./run-gate.sh`
 - Include long soak: `cd scripts/perf && PERF_SOAK_DURATION=24h ./run-gate.sh`
 
-Magpie targets Go 1.24.x, Angular 20, PostgreSQL, and Redis. Keep those versions handy for parity.
+Magpie targets Go 1.26.x, Angular 20, PostgreSQL, and Redis. Keep those versions handy for parity.
 
 ## Attributions & External Sources
 - [AbuseIPDB](https://www.abuseipdb.com/) — logo used with permission when linking to their site.

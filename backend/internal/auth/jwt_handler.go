@@ -21,7 +21,11 @@ const jwtSecretEnv = "JWT_SECRET"
 const jwtSecretMinLength = 32
 
 const (
-	jwtTTL           = 24 * 7 * time.Hour
+	envJWTTTLMinutes = "JWT_TTL_MINUTES"
+	defaultJWTTTL    = 24 * 7 * time.Hour
+	minJWTTTL        = 15 * time.Minute
+	maxJWTTTL        = 24 * 7 * time.Hour
+
 	jwtClaimUserID   = "user_id"
 	jwtClaimRole     = "role"
 	jwtClaimExpiry   = "exp"
@@ -39,6 +43,11 @@ var (
 
 func RequireJWTSecretConfigured() error {
 	_, err := jwtSigningKey()
+	return err
+}
+
+func RequireJWTTTLConfigured() error {
+	_, err := resolveJWTTTL()
 	return err
 }
 
@@ -115,8 +124,32 @@ func normalizeSecretValue(secret string) string {
 	return builder.String()
 }
 
+func resolveJWTTTL() (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(envJWTTTLMinutes))
+	if raw == "" {
+		return defaultJWTTTL, nil
+	}
+
+	minutes, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s value %q: must be an integer number of minutes", envJWTTTLMinutes, raw)
+	}
+
+	ttl := time.Duration(minutes) * time.Minute
+	if ttl < minJWTTTL || ttl > maxJWTTTL {
+		return 0, fmt.Errorf("%s out of range: got %d minutes, expected %d-%d", envJWTTTLMinutes, minutes, int(minJWTTTL/time.Minute), int(maxJWTTTL/time.Minute))
+	}
+
+	return ttl, nil
+}
+
 func GenerateJWT(userId uint, role string) (string, error) {
 	signingKey, err := jwtSigningKey()
+	if err != nil {
+		return "", err
+	}
+
+	jwtTTL, err := resolveJWTTTL()
 	if err != nil {
 		return "", err
 	}

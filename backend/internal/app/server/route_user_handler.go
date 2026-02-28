@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,12 +31,16 @@ const (
 	invalidAuthCredentialsMessage            = "Invalid email or password"
 	envDisablePublicRegistration             = "DISABLE_PUBLIC_REGISTRATION"
 	envEnablePublicFirstAdminBootstrap       = "ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP"
+	envAdminBootstrapToken                   = "ADMIN_BOOTSTRAP_TOKEN"
+	headAdminBootstrapToken                  = "X-Admin-Bootstrap-Token"
 )
 
 var (
 	errEmailAlreadyInUse          = errors.New("email already in use")
 	errPublicRegistrationDisabled = errors.New("public registration is disabled")
 	errPublicFirstAdminBootstrap  = errors.New("public first-admin bootstrap is disabled")
+	errInvalidAdminBootstrapToken = errors.New("invalid admin bootstrap token")
+	errAdminBootstrapTokenNotSet  = errors.New("admin bootstrap token is not configured")
 
 	loginFallbackPasswordHashOnce sync.Once
 	loginFallbackPasswordHash     string
@@ -44,6 +49,8 @@ var (
 type userRegistrationPolicy struct {
 	DisablePublicRegistration        bool
 	DisablePublicFirstAdminBootstrap bool
+	RequireAdminBootstrapToken       bool
+	AdminBootstrapToken              string
 }
 
 func checkLogin(w http.ResponseWriter, r *http.Request) {
@@ -91,9 +98,10 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	user.TransportProtocol = support.TransportTCP
 
 	policy := resolveUserRegistrationPolicy()
+	bootstrapToken := strings.TrimSpace(r.Header.Get(headAdminBootstrapToken))
 
 	// Save user to the database
-	if err = createUserWithFirstAdminRole(&user, policy); err != nil {
+	if err = createUserWithFirstAdminRole(&user, policy, bootstrapToken); err != nil {
 		switch {
 		case errors.Is(err, errEmailAlreadyInUse):
 			writeError(w, "Email already in use", http.StatusConflict)
@@ -101,6 +109,10 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Public registration is disabled", http.StatusForbidden)
 		case errors.Is(err, errPublicFirstAdminBootstrap):
 			writeError(w, "Initial admin bootstrap via public registration is disabled", http.StatusForbidden)
+		case errors.Is(err, errInvalidAdminBootstrapToken):
+			writeError(w, "Initial admin bootstrap token is invalid", http.StatusForbidden)
+		case errors.Is(err, errAdminBootstrapTokenNotSet):
+			writeError(w, "Initial admin bootstrap token is not configured", http.StatusServiceUnavailable)
 		default:
 			writeError(w, "Failed to create user", http.StatusInternalServerError)
 		}
@@ -460,7 +472,7 @@ func deleteAccount(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode("Account deleted successfully")
 }
 
-func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPolicy) error {
+func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPolicy, providedBootstrapToken string) error {
 	if user == nil {
 		return errors.New("user cannot be nil")
 	}
@@ -481,6 +493,14 @@ func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPoli
 		if userCount == 0 {
 			if policy.DisablePublicFirstAdminBootstrap {
 				return errPublicFirstAdminBootstrap
+			}
+			if policy.RequireAdminBootstrapToken {
+				if strings.TrimSpace(policy.AdminBootstrapToken) == "" {
+					return errAdminBootstrapTokenNotSet
+				}
+				if subtle.ConstantTimeCompare([]byte(policy.AdminBootstrapToken), []byte(strings.TrimSpace(providedBootstrapToken))) != 1 {
+					return errInvalidAdminBootstrapToken
+				}
 			}
 			user.Role = "admin"
 		} else {
@@ -512,7 +532,12 @@ func resolveUserRegistrationPolicy() userRegistrationPolicy {
 	}
 
 	if config.InProductionMode {
-		policy.DisablePublicFirstAdminBootstrap = !support.GetEnvBool(envEnablePublicFirstAdminBootstrap, false)
+		bootstrapEnabled := support.GetEnvBool(envEnablePublicFirstAdminBootstrap, false)
+		policy.DisablePublicFirstAdminBootstrap = !bootstrapEnabled
+		if bootstrapEnabled {
+			policy.RequireAdminBootstrapToken = true
+			policy.AdminBootstrapToken = strings.TrimSpace(support.GetEnv(envAdminBootstrapToken, ""))
+		}
 	}
 
 	return policy

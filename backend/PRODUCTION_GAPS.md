@@ -1,59 +1,43 @@
 # Magpie Backend Production Readiness Gaps
 
-_Last reviewed: 2026-02-28 (final-cycle audit, pre-implementation)_
+_Last reviewed: 2026-02-28 (final-cycle post-implementation refresh)_
 
-This checklist contains **remaining** production-readiness gaps after the previous hardening cycles.
+Product constraints preserved:
+- local setup remains simple (no mandatory technical bootstrap for local users)
+- multi-instance/load-balanced deployments remain first-class
 
-Product constraints kept in scope:
-- local setup must stay simple (no mandatory technical bootstrap for local users)
-- multi-instance/load-balanced deployments remain first-class (no single-instance assumptions)
+## Closed in this cycle
 
-## Critical (fix before internet-facing production)
+- [x] **[CRITICAL][Security] First-admin bootstrap now requires request-level proof in production bootstrap mode**  
+  **Implemented:** `ADMIN_BOOTSTRAP_TOKEN` + `X-Admin-Bootstrap-Token` enforcement for first-admin creation when production bootstrap is enabled.  
+  **Evidence:**
+  - `backend/internal/app/server/route_user_handler.go`
+  - `backend/internal/app/server/route_user_handler_test.go`
+  - `backend/RUNBOOK.md`, `README.md`, `.env.example`
 
-- [ ] **[CRITICAL][Security] First-admin bootstrap in production still lacks request-level proof-of-intent**  
-  **Evidence:** Production defaults now disable public registration/bootstrap, but if operators temporarily set `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true`, first-admin creation still relies only on env toggles (no per-request bootstrap secret/token in `POST /api/register`, `backend/internal/app/server/route_user_handler.go`).  
-  **Risk:** During a bootstrap window, whichever request reaches the service first can still claim admin.  
-  **Recommended fix (exact):**
-  1. Add `ADMIN_BOOTSTRAP_TOKEN` support and require `X-Admin-Bootstrap-Token` (or equivalent) for first-admin registration in production bootstrap mode.
-  2. Keep local defaults unchanged (first local user can still become admin without extra bootstrap mechanics).
-  3. Document bootstrap-window procedure for multi-instance deployments (shared bootstrap token, short window, disable immediately after first admin).
+- [x] **[HIGH][CI] CI now validates backend runtime image and dependency-backed smoke path**  
+  **Implemented:** backend image build + Postgres/Redis-backed smoke (`/healthz`, `/readyz`, bootstrap/register/login) in GitHub Actions.  
+  **Evidence:**
+  - `.github/workflows/backend-ci.yml`
+  - `Dockerfile` (Go toolchain aligned to module requirement)
 
-## High
+- [x] **[MEDIUM][Security] Access-token lifetime now configurable with bounded validation**  
+  **Implemented:** `JWT_TTL_MINUTES` with enforced range `15-10080` and startup-time validation (`RequireJWTTTLConfigured`).  
+  **Evidence:**
+  - `backend/internal/auth/jwt_handler.go`
+  - `backend/internal/auth/jwt_handler_test.go`
+  - `backend/internal/app/app.go`
+  - `backend/RUNBOOK.md`, `README.md`, `.env.example`
 
-- [ ] **[HIGH][CI] CI still does not validate deployable backend artifact + runtime dependency wiring**  
-  **Evidence:** `.github/workflows/backend-ci.yml` currently runs tests/static checks but does not build the backend container image or run an integration smoke against Postgres+Redis.  
-  **Risk:** Code can pass CI while image build, startup command/env wiring, readiness probes, or auth bootstrap path fail at deploy time.  
-  **Recommended fix (exact):**
-  1. Add CI job to build `Dockerfile` image for backend runtime.
-  2. Start ephemeral Postgres+Redis and run smoke checks (`/healthz`, `/readyz`, register/login happy-path).
-  3. Fail CI if image does not start cleanly in this dependency-backed smoke environment.
+## Remaining gaps
 
-## Medium
+- [ ] **[MEDIUM][Deployment safety/Config] Production-focused compose/profile still missing**  
+  Current shipped `docker-compose.yml` remains intentionally local/dev-oriented (`DB_SSLMODE=disable`, no Redis auth/TLS defaults, mutable image tags).
 
-- [ ] **[MEDIUM][Security] Access-token lifetime is fixed at 7 days**  
-  **Evidence:** `jwtTTL` is hardcoded in `backend/internal/auth/jwt_handler.go`.  
-  **Risk:** Cannot tighten session lifetime per environment or incident posture.  
-  **Recommended fix (exact):**
-  1. Add bounded env-based token lifetime (`JWT_TTL_MINUTES`) with sane min/max.
-  2. Keep local-friendly default at current value to avoid UX regressions.
+- [ ] **[MEDIUM][Observability/Operations] Alert rules + SLO/runbook mapping still implicit**  
+  Metrics are present, but concrete baseline alert rules and alert-to-action playbooks are not yet committed.
 
-- [ ] **[MEDIUM][Deployment safety/Config] Shipped compose defaults are intentionally local/dev-oriented and unsafe as production baseline**  
-  **Evidence:** `docker-compose.yml` defaults `DB_SSLMODE=disable`, `redis:latest`, and no Redis auth/TLS settings by default.  
-  **Risk:** Weak transport/auth posture and nondeterministic dependency upgrades if reused in production.  
-  **Recommended fix (exact):**
-  1. Keep current file local/dev-friendly, but provide a dedicated production profile/manifest with secure defaults (`DB_SSLMODE=require|verify-full`, pinned Redis tag, auth/TLS guidance).
-  2. Explicitly label current compose as local/dev only in docs.
+## Next follow-up order
 
-- [ ] **[MEDIUM][Observability/Operations] Alert rules and SLO response mapping are still implicit**  
-  **Evidence:** Metrics endpoint exists, but repository still lacks concrete baseline alert rules + runbook threshold/action mapping.  
-  **Risk:** Slower triage and inconsistent incident response despite telemetry being present.  
-  **Recommended fix (exact):**
-  1. Add starter alert rules (5xx ratio, p95 latency, readiness failures, dependency outages).
-  2. Extend `RUNBOOK.md` with alert-to-action owner/escalation guidance.
-
-## Suggested implementation order for this final cycle
-
-1. Close first-admin bootstrap window takeover risk with request-level bootstrap token.
-2. Add CI runtime artifact build + dependency-backed smoke checks.
-3. Add configurable JWT TTL (bounded, default preserved).
-4. Leave compose-production profile and alert-pack work as next follow-up if time is exhausted in this cycle.
+1. Add production deployment profile/manifests (secure DB/Redis/TLS defaults, pinned dependency tags).
+2. Add baseline alerts and runbook response mapping for readiness/dependency/API error conditions.

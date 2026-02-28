@@ -188,6 +188,31 @@ func getNextRotatingProxy(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeRotatingProxyError(w http.ResponseWriter, err error) {
+	category := "internal"
+	switch {
+	case errors.Is(err, database.ErrRotatingProxyNameRequired),
+		errors.Is(err, database.ErrRotatingProxyNameTooLong),
+		errors.Is(err, database.ErrRotatingProxyProtocolMissing),
+		errors.Is(err, database.ErrRotatingProxyProtocolDenied),
+		errors.Is(err, database.ErrRotatingProxyAuthUsernameNeeded),
+		errors.Is(err, database.ErrRotatingProxyAuthPasswordNeeded),
+		errors.Is(err, database.ErrRotatingProxyUptimeTypeInvalid),
+		errors.Is(err, database.ErrRotatingProxyUptimeTypeMissing),
+		errors.Is(err, database.ErrRotatingProxyUptimeValueMissing),
+		errors.Is(err, database.ErrRotatingProxyUptimeOutOfRange):
+		category = "validation"
+	case errors.Is(err, database.ErrRotatingProxyNameConflict):
+		category = "conflict"
+	case errors.Is(err, database.ErrRotatingProxyPortExhausted):
+		category = "port_exhausted"
+	case errors.Is(err, database.ErrRotatingProxyNotFound):
+		category = "not_found"
+	case errors.Is(err, database.ErrRotatingProxyNoAliveProxies):
+		category = "no_alive_proxies"
+	}
+
+	recordRotatingProxyErrorMetric(category)
+
 	switch {
 	case errors.Is(err, database.ErrRotatingProxyNameRequired),
 		errors.Is(err, database.ErrRotatingProxyNameTooLong),

@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 ############ Stage 3 – tiny runtime image ##########################
-FROM gcr.io/distroless/base-debian12
+FROM gcr.io/distroless/base-debian12:nonroot
 
 # copy just the libs/fonts we installed above
 COPY --from=chromium-deps /lib/x86_64-linux-gnu /lib/x86_64-linux-gnu
@@ -31,5 +31,7 @@ COPY --from=chromium-deps /usr/share/fonts /usr/share/fonts
 WORKDIR /app
 COPY --from=backend-build /backend/server .
 
-EXPOSE 8082
+USER 65532:65532
+
+EXPOSE 5656
 ENTRYPOINT ["./server"]

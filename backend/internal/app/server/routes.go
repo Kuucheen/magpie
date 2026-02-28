@@ -24,7 +24,7 @@ func writeError(w http.ResponseWriter, msg string, status int) {
 func enableCORS(next http.Handler) http.Handler {
 	cors := resolveCORSConfig()
 	allowedMethods := "GET, POST, OPTIONS, PUT, DELETE"
-	allowedHeaders := "Content-Type, Authorization"
+	allowedHeaders := "Content-Type, Authorization, X-Request-ID, X-Magpie-Bootstrap-Token"
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -59,6 +59,9 @@ func OpenRoutes(ctx context.Context, port int) error {
 	}
 
 	router := http.NewServeMux()
+	router.Handle("GET /healthz", http.HandlerFunc(healthz))
+	router.Handle("GET /readyz", http.HandlerFunc(readyz))
+	router.Handle("GET /metrics", metricsHandler())
 
 	gqlHandler, err := getGraphQLHandler()
 	if err != nil {
@@ -114,9 +117,11 @@ func OpenRoutes(ctx context.Context, port int) error {
 	log.Debug("Routes opened")
 	timeouts := resolveServerTimeouts()
 
+	handler := withRequestID(withAccessLog(withPanicRecovery(enableCORS(router))))
+
 	server := http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
-		Handler:           enableCORS(router),
+		Handler:           handler,
 		ReadTimeout:       timeouts.readTimeout,
 		ReadHeaderTimeout: timeouts.readHeaderTimeout,
 		WriteTimeout:      timeouts.writeTimeout,

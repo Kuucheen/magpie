@@ -97,8 +97,23 @@ all via a web dashboard.
    ```
 5. **Dive in**
     - UI: http://localhost:5050
-    - API: http://localhost:5656/api  
-      Register the first account to become the admin.
+    - API: http://localhost:5656/api
+
+      Set `ADMIN_BOOTSTRAP_TOKEN` before first startup. The first admin registration must include:
+
+      ```bash
+      curl -X POST http://localhost:5656/api/register \
+        -H "Content-Type: application/json" \
+        -H "X-Magpie-Bootstrap-Token: $ADMIN_BOOTSTRAP_TOKEN" \
+        -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
+      ```
+
+      After the first admin exists, token bootstrap is automatically disabled.
+      For production, set `DISABLE_PUBLIC_REGISTRATION=true` to block public signups.
+
+      Health probes:
+      - Liveness: `GET /healthz`
+      - Readiness: `GET /readyz`
 
 For geo lookups, create a [MaxMind GeoLite2 account](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and generate a License Key. Enter it in the dashboard (Admin → Other) to enable automatic database downloads and updates.
 

@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,14 +30,27 @@ import (
 const (
 	firstUserAdminAdvisoryLockKey int64 = 941_843_229_541
 	invalidAuthCredentialsMessage       = "Invalid email or password"
+	envAdminBootstrapToken              = "ADMIN_BOOTSTRAP_TOKEN"
+	headerBootstrapToken                = "X-Magpie-Bootstrap-Token"
+	envDisablePublicRegistration        = "DISABLE_PUBLIC_REGISTRATION"
 )
 
 var (
-	errEmailAlreadyInUse = errors.New("email already in use")
+	errEmailAlreadyInUse             = errors.New("email already in use")
+	errPublicRegistrationDisabled    = errors.New("public registration is disabled")
+	errAdminBootstrapTokenRequired   = errors.New("admin bootstrap token is required")
+	errAdminBootstrapTokenInvalid    = errors.New("admin bootstrap token is invalid")
+	errAdminBootstrapTokenNotDefined = errors.New("admin bootstrap token is not configured")
 
 	loginFallbackPasswordHashOnce sync.Once
 	loginFallbackPasswordHash     string
 )
+
+type userRegistrationPolicy struct {
+	DisablePublicRegistration bool
+	AdminBootstrapToken       string
+	ProvidedBootstrapToken    string
+}
 
 func checkLogin(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -81,13 +96,30 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	user.UseHttpsForSocks = cfg.Checker.UseHttpsForSocks
 	user.TransportProtocol = support.TransportTCP
 
+	policy := userRegistrationPolicy{
+		DisablePublicRegistration: support.GetEnvBool(envDisablePublicRegistration, false),
+		AdminBootstrapToken:       strings.TrimSpace(support.GetEnv(envAdminBootstrapToken, "")),
+		ProvidedBootstrapToken:    strings.TrimSpace(r.Header.Get(headerBootstrapToken)),
+	}
+
 	// Save user to the database
-	if err = createUserWithFirstAdminRole(&user); err != nil {
-		if errors.Is(err, errEmailAlreadyInUse) {
+	if err = createUserWithFirstAdminRole(&user, policy); err != nil {
+		switch {
+		case errors.Is(err, errEmailAlreadyInUse):
 			writeError(w, "Email already in use", http.StatusConflict)
-			return
+		case errors.Is(err, errPublicRegistrationDisabled):
+			writeError(w, "Public registration is disabled", http.StatusForbidden)
+		case errors.Is(err, errAdminBootstrapTokenRequired):
+			recordAuthFailureMetric("bootstrap_token_missing")
+			writeError(w, "Bootstrap token is required for first admin registration", http.StatusUnauthorized)
+		case errors.Is(err, errAdminBootstrapTokenInvalid):
+			recordAuthFailureMetric("bootstrap_token_invalid")
+			writeError(w, "Bootstrap token is invalid", http.StatusUnauthorized)
+		case errors.Is(err, errAdminBootstrapTokenNotDefined):
+			writeError(w, "Server bootstrap token is not configured", http.StatusServiceUnavailable)
+		default:
+			writeError(w, "Failed to create user", http.StatusInternalServerError)
 		}
-		writeError(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
 
@@ -116,6 +148,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 
 	if blocked, retryAfter := loginFailuresBlocked(r, credentials.Email); blocked {
 		setRetryAfterHeader(w, retryAfter)
+		recordRateLimitBlockMetric("login_failure")
 		writeError(w, authLoginBlockedMessage, http.StatusTooManyRequests)
 		return
 	}
@@ -125,6 +158,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			consumeInvalidPasswordWork(credentials.Password)
 			recordLoginFailure(r, credentials.Email)
+			recordAuthFailureMetric("invalid_credentials")
 			writeError(w, invalidAuthCredentialsMessage, http.StatusUnauthorized)
 			return
 		}
@@ -136,6 +170,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	// Compare passwords
 	if !support.CheckPasswordHash(credentials.Password, user.Password) {
 		recordLoginFailure(r, credentials.Email)
+		recordAuthFailureMetric("invalid_credentials")
 		writeError(w, invalidAuthCredentialsMessage, http.StatusUnauthorized)
 		return
 	}
@@ -441,7 +476,7 @@ func deleteAccount(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode("Account deleted successfully")
 }
 
-func createUserWithFirstAdminRole(user *domain.User) error {
+func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPolicy) error {
 	if user == nil {
 		return errors.New("user cannot be nil")
 	}
@@ -460,8 +495,24 @@ func createUserWithFirstAdminRole(user *domain.User) error {
 		}
 
 		if userCount == 0 {
+			expectedToken := strings.TrimSpace(policy.AdminBootstrapToken)
+			providedToken := strings.TrimSpace(policy.ProvidedBootstrapToken)
+
+			if expectedToken == "" {
+				return errAdminBootstrapTokenNotDefined
+			}
+			if providedToken == "" {
+				return errAdminBootstrapTokenRequired
+			}
+			if !secureTokenMatch(providedToken, expectedToken) {
+				return errAdminBootstrapTokenInvalid
+			}
+
 			user.Role = "admin"
 		} else {
+			if policy.DisablePublicRegistration {
+				return errPublicRegistrationDisabled
+			}
 			user.Role = "user"
 		}
 
@@ -474,6 +525,12 @@ func createUserWithFirstAdminRole(user *domain.User) error {
 
 		return nil
 	})
+}
+
+func secureTokenMatch(provided, expected string) bool {
+	providedHash := sha256.Sum256([]byte(provided))
+	expectedHash := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(providedHash[:], expectedHash[:]) == 1
 }
 
 func consumeInvalidPasswordWork(password string) {

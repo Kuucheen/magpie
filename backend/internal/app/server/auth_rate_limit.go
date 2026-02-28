@@ -86,12 +86,12 @@ var (
 
 func withLoginRateLimit(next http.Handler) http.Handler {
 	limits := getAuthRateLimits()
-	return limits.loginRequests.wrap(next, authLoginRateExceededMessage)
+	return limits.loginRequests.wrap(next, authLoginRateExceededMessage, "login_request")
 }
 
 func withRegisterRateLimit(next http.Handler) http.Handler {
 	limits := getAuthRateLimits()
-	return limits.registerRequests.wrap(next, authRegisterRateExceededMessage)
+	return limits.registerRequests.wrap(next, authRegisterRateExceededMessage, "register_request")
 }
 
 func loginFailuresBlocked(r *http.Request, email string) (bool, time.Duration) {
@@ -152,7 +152,7 @@ func newFixedWindowLimiter(prefix string, limit int64, window time.Duration) *fi
 	}
 }
 
-func (l *fixedWindowLimiter) wrap(next http.Handler, message string) http.Handler {
+func (l *fixedWindowLimiter) wrap(next http.Handler, message string, scope string) http.Handler {
 	if l == nil || next == nil || l.limit <= 0 || l.window <= 0 {
 		return next
 	}
@@ -164,6 +164,7 @@ func (l *fixedWindowLimiter) wrap(next http.Handler, message string) http.Handle
 		allowed, retryAfter := l.allow(key)
 		if !allowed {
 			setRetryAfterHeader(w, retryAfter)
+			recordRateLimitBlockMetric(scope)
 			writeError(w, message, http.StatusTooManyRequests)
 			return
 		}

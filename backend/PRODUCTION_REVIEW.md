@@ -117,3 +117,53 @@ Evidence:
 
 1. Add hardened production deployment profile/manifests (secure DB/Redis/TLS defaults, pinned dependency tags).
 2. Add baseline alert pack + runbook escalation mapping for readiness/dependency/API error conditions.
+
+---
+
+## Independent review addendum (separate run)
+
+Date: 2026-02-28
+Reviewer: subagent independent review (`magpie-final-independent-review`)
+Reviewed commits:
+- `ad89507ea495b91d85bdd6d08ca5d80571096019`
+- `7c01d0a868f625ac8861d8a25ea743f82635adcf`
+- `7770ec8ef34d14c2ff1a3ff0a3ef95b32a8d0afe`
+Reference checklist: `backend/PRODUCTION_GAPS.md` (current)
+
+### Verdict
+
+**PASS** — the final-cycle implementation and docs are consistent with the current gaps file, while preserving local-user simplicity and multi-instance compatibility.
+
+### Key findings
+
+1. `backend/PRODUCTION_GAPS.md` accurately reflects final-cycle closure of the three targeted items (bootstrap proof, CI runtime smoke, bounded JWT TTL) and correctly leaves only deployment-profile and alert-mapping work open.
+2. Production bootstrap hardening is implemented as documented:
+   - first-admin bootstrap remains disabled by default in production,
+   - enabling bootstrap requires request header `X-Admin-Bootstrap-Token` matching `ADMIN_BOOTSTRAP_TOKEN`,
+   - misconfiguration (bootstrap enabled without token) fails closed.
+3. Local UX remains simple:
+   - local/default behavior still allows first-user bootstrap without mandatory technical bootstrap token steps.
+4. Multi-instance/load-balanced compatibility remains intact:
+   - first-user serialization continues DB-transaction based with PostgreSQL advisory locking,
+   - docs explicitly require hardening env consistency across instances,
+   - no new single-instance assumptions introduced by reviewed commits.
+
+### Checks run
+
+- `git rev-parse --show-toplevel` => `/home/kuchen/IdeaProjects/magpie` ✅
+- `git rev-parse --abbrev-ref HEAD` => `production-changes` ✅
+- `GOTOOLCHAIN=auto go test -count=1 ./internal/app/server ./internal/auth` ✅
+- `GOTOOLCHAIN=auto go test ./internal/app/server ./internal/auth ./internal/app` ✅
+- `GOTOOLCHAIN=auto go test ./...` ✅
+- `docker build -t magpie-backend-localtest:independent-final ... .` ✅
+- local dependency-backed smoke (Postgres + Redis + backend in `-production`; `/healthz`, `/readyz`, bootstrap register with header token, login) ✅
+
+### Risks
+
+1. No production-focused compose/profile/manifests are committed yet (current compose remains local/dev-oriented).
+2. Concrete baseline alert rules and alert-to-action/SLO mappings are still not committed.
+
+### Follow-ups
+
+1. Add production deployment profile/manifests with secure defaults (DB SSL/TLS posture, pinned dependency images, Redis auth/TLS guidance).
+2. Commit baseline alert rules and explicit runbook response mapping for readiness, dependency, and API error conditions.

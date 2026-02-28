@@ -119,6 +119,11 @@ all via a web dashboard.
       To bootstrap first admin in production via `/api/register`, explicitly set:
       - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true` (temporary, controlled window)
 
+      Multi-instance note: in load-balanced deployments, keep these hardening env values
+      (`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`,
+      `DB_AUTO_MIGRATE`, `STRICT_SECRET_VALIDATION`, `TRUSTED_PROXY_CIDRS`)
+      consistent across all backend instances.
+
       Optional reverse-proxy trust boundary for forwarded client IP headers:
       - `TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.168.0.0/16`
 

@@ -38,6 +38,9 @@ For a controlled initial bootstrap window, set:
 
 After first admin is created, keep bootstrap disabled and keep `DISABLE_PUBLIC_REGISTRATION=true` unless intentional public signups are required.
 
+For load-balanced multi-instance deployments, apply the same values for
+`DISABLE_PUBLIC_REGISTRATION` and `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP` on every backend instance.
+
 ## Probe Interpretation
 
 ### `/healthz` (liveness)
@@ -108,6 +111,7 @@ Actions:
 - Do **not** expose plaintext backend traffic directly to the internet.
 - Set `TRUSTED_PROXY_CIDRS` to the CIDRs of your reverse proxies.
 - `X-Forwarded-For` / `X-Real-IP` are only trusted when immediate `RemoteAddr` is in `TRUSTED_PROXY_CIDRS`; otherwise backend uses `RemoteAddr` directly.
+- In multi-instance deployments behind the same load balancer/reverse proxy tier, keep `TRUSTED_PROXY_CIDRS` consistent on all instances.
 - Ensure proxy forwards `X-Forwarded-For` and request IDs (`X-Request-ID`) for traceability.
 
 ## Migration Strategy
@@ -115,6 +119,7 @@ Actions:
 - `DB_AUTO_MIGRATE` local default: `true`
 - `DB_AUTO_MIGRATE` production mode default: `false`
 - Explicit `DB_AUTO_MIGRATE` env override always wins.
+- In multi-instance deployments, keep `DB_AUTO_MIGRATE` identical on all instances (recommended: `false` + explicit migration job).
 
 ## Rollback
 

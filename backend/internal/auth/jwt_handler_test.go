@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/golang-jwt/jwt/v5"
 
 	"magpie/internal/support"
@@ -115,23 +116,55 @@ func TestValidateJWTRejectsTokenWithoutJTI(t *testing.T) {
 	}
 }
 
+func TestValidateJWTFailsClosedWhenRevocationStoreUnavailable(t *testing.T) {
+	resetJWTStateForTests(t)
+
+	token, err := GenerateJWT(42, "user")
+	if err != nil {
+		t.Fatalf("GenerateJWT failed: %v", err)
+	}
+
+	if _, err := ValidateJWT(token); err != nil {
+		t.Fatalf("ValidateJWT failed before redis outage: %v", err)
+	}
+
+	t.Setenv("redisUrl", "redis://127.0.0.1:1")
+	if err := support.CloseRedisClient(); err != nil {
+		t.Fatalf("CloseRedisClient failed: %v", err)
+	}
+
+	tokenRevocationMu.Lock()
+	redisRetryAfter = time.Time{}
+	tokenRevocationMu.Unlock()
+
+	if _, err := ValidateJWT(token); err == nil {
+		t.Fatal("ValidateJWT accepted token while revocation store was unavailable")
+	}
+}
+
 func resetJWTStateForTests(t *testing.T) {
 	t.Helper()
 
 	t.Setenv("JWT_SECRET", "unit-test-secret")
-	t.Setenv("redisUrl", "redis://127.0.0.1:1")
+	redisServer, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run failed: %v", err)
+	}
+	t.Cleanup(redisServer.Close)
+	t.Setenv("redisUrl", "redis://"+redisServer.Addr())
 
 	jwtSecretOnce = sync.Once{}
 	jwtKey = nil
 	jwtKeyErr = nil
 
 	tokenRevocationMu.Lock()
-	localRevokedTokenByID = make(map[string]time.Time)
-	localUserRevokedBefore = make(map[uint]time.Time)
 	redisRetryAfter = time.Time{}
 	tokenRevocationMu.Unlock()
 
 	if err := support.CloseRedisClient(); err != nil {
 		t.Fatalf("CloseRedisClient failed: %v", err)
 	}
+	t.Cleanup(func() {
+		_ = support.CloseRedisClient()
+	})
 }

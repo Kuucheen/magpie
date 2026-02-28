@@ -184,7 +184,11 @@ func validateTokenRevocation(claims map[string]interface{}) error {
 		return errors.New("invalid token")
 	}
 
-	if isTokenIDRevoked(tokenID) {
+	revoked, err := isTokenIDRevoked(tokenID)
+	if err != nil {
+		return errors.New("invalid token")
+	}
+	if revoked {
 		return errors.New("invalid token")
 	}
 
@@ -198,7 +202,10 @@ func validateTokenRevocation(claims map[string]interface{}) error {
 		return errors.New("invalid token")
 	}
 
-	revokedBefore, exists := userTokensRevokedBefore(userID)
+	revokedBefore, exists, err := userTokensRevokedBefore(userID)
+	if err != nil {
+		return errors.New("invalid token")
+	}
 	if exists && issuedAtNs <= revokedBefore.UnixNano() {
 		return errors.New("invalid token")
 	}

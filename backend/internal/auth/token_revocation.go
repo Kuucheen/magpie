@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -20,10 +22,10 @@ const (
 )
 
 var (
-	tokenRevocationMu      sync.Mutex
-	localRevokedTokenByID  = make(map[string]time.Time)
-	localUserRevokedBefore = make(map[uint]time.Time)
-	redisRetryAfter        time.Time
+	tokenRevocationMu sync.Mutex
+	redisRetryAfter   time.Time
+
+	ErrTokenRevocationStoreUnavailable = errors.New("token revocation store unavailable")
 )
 
 func revokeTokenID(tokenID string, until time.Time) error {
@@ -36,49 +38,40 @@ func revokeTokenID(tokenID string, until time.Time) error {
 		return nil
 	}
 
-	if client := redisClient(); client != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), authRedisOperationTimeout)
-		defer cancel()
-
-		if err := client.Set(ctx, authRevokedTokenPrefix+tokenID, "1", time.Until(until)).Err(); err == nil {
-			markRedisSuccess()
-			return nil
-		} else {
-			markRedisFailure()
-		}
+	client, err := redisClient()
+	if err != nil {
+		return err
 	}
 
-	tokenRevocationMu.Lock()
-	purgeExpiredRevocationsLocked(now)
-	localRevokedTokenByID[tokenID] = until
-	tokenRevocationMu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), authRedisOperationTimeout)
+	defer cancel()
+	if err := client.Set(ctx, authRevokedTokenPrefix+tokenID, "1", time.Until(until)).Err(); err != nil {
+		markRedisFailure()
+		return wrapRevocationStoreError(err)
+	}
+	markRedisSuccess()
 	return nil
 }
 
-func isTokenIDRevoked(tokenID string) bool {
+func isTokenIDRevoked(tokenID string) (bool, error) {
 	if tokenID == "" {
-		return false
+		return false, nil
 	}
 
-	if client := redisClient(); client != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), authRedisOperationTimeout)
-		defer cancel()
-
-		exists, err := client.Exists(ctx, authRevokedTokenPrefix+tokenID).Result()
-		if err == nil {
-			markRedisSuccess()
-			return exists > 0
-		} else {
-			markRedisFailure()
-		}
+	client, err := redisClient()
+	if err != nil {
+		return false, err
 	}
 
-	now := time.Now().UTC()
-	tokenRevocationMu.Lock()
-	purgeExpiredRevocationsLocked(now)
-	expiry, exists := localRevokedTokenByID[tokenID]
-	tokenRevocationMu.Unlock()
-	return exists && now.Before(expiry)
+	ctx, cancel := context.WithTimeout(context.Background(), authRedisOperationTimeout)
+	defer cancel()
+	exists, err := client.Exists(ctx, authRevokedTokenPrefix+tokenID).Result()
+	if err != nil {
+		markRedisFailure()
+		return false, wrapRevocationStoreError(err)
+	}
+	markRedisSuccess()
+	return exists > 0, nil
 }
 
 func revokeUserTokensBefore(userID uint, instant time.Time) error {
@@ -88,73 +81,76 @@ func revokeUserTokensBefore(userID uint, instant time.Time) error {
 
 	instant = instant.UTC()
 
-	if client := redisClient(); client != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), authRedisOperationTimeout)
-		defer cancel()
-
-		err := client.Set(ctx, authUserRevokedBeforePrefix+strconv.FormatUint(uint64(userID), 10), strconv.FormatInt(instant.UnixNano(), 10), authUserRevokeTTL).Err()
-		if err == nil {
-			markRedisSuccess()
-			return nil
-		} else {
-			markRedisFailure()
-		}
+	client, err := redisClient()
+	if err != nil {
+		return err
 	}
 
-	tokenRevocationMu.Lock()
-	localUserRevokedBefore[userID] = instant
-	tokenRevocationMu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), authRedisOperationTimeout)
+	defer cancel()
+	if err := client.Set(ctx, authUserRevokedBeforePrefix+strconv.FormatUint(uint64(userID), 10), strconv.FormatInt(instant.UnixNano(), 10), authUserRevokeTTL).Err(); err != nil {
+		markRedisFailure()
+		return wrapRevocationStoreError(err)
+	}
+	markRedisSuccess()
 	return nil
 }
 
-func userTokensRevokedBefore(userID uint) (time.Time, bool) {
+func userTokensRevokedBefore(userID uint) (time.Time, bool, error) {
 	if userID == 0 {
-		return time.Time{}, false
+		return time.Time{}, false, nil
 	}
 
-	if client := redisClient(); client != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), authRedisOperationTimeout)
-		defer cancel()
+	client, err := redisClient()
+	if err != nil {
+		return time.Time{}, false, err
+	}
 
-		value, err := client.Get(ctx, authUserRevokedBeforePrefix+strconv.FormatUint(uint64(userID), 10)).Result()
-		if err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), authRedisOperationTimeout)
+	defer cancel()
+	value, err := client.Get(ctx, authUserRevokedBeforePrefix+strconv.FormatUint(uint64(userID), 10)).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
 			markRedisSuccess()
-			parsed, parseErr := strconv.ParseInt(value, 10, 64)
-			if parseErr == nil && parsed > 0 {
-				return time.Unix(0, parsed).UTC(), true
-			}
-		} else {
-			markRedisFailure()
+			return time.Time{}, false, nil
 		}
+		markRedisFailure()
+		return time.Time{}, false, wrapRevocationStoreError(err)
 	}
 
-	tokenRevocationMu.Lock()
-	revokedBefore, exists := localUserRevokedBefore[userID]
-	tokenRevocationMu.Unlock()
-	return revokedBefore, exists
-}
-
-func purgeExpiredRevocationsLocked(now time.Time) {
-	for tokenID, expiresAt := range localRevokedTokenByID {
-		if !expiresAt.After(now) {
-			delete(localRevokedTokenByID, tokenID)
-		}
+	parsed, parseErr := strconv.ParseInt(value, 10, 64)
+	if parseErr != nil {
+		markRedisFailure()
+		return time.Time{}, false, wrapRevocationStoreError(fmt.Errorf("invalid revoked-before value for user %d: %w", userID, parseErr))
 	}
+	if parsed <= 0 {
+		markRedisSuccess()
+		return time.Time{}, false, nil
+	}
+	markRedisSuccess()
+	return time.Unix(0, parsed).UTC(), true, nil
 }
 
-func redisClient() *redis.Client {
+func redisClient() (*redis.Client, error) {
 	if !redisAttemptAllowed() {
-		return nil
+		return nil, ErrTokenRevocationStoreUnavailable
 	}
 
 	client, err := support.GetRedisClient()
 	if err != nil {
 		markRedisFailure()
-		return nil
+		return nil, wrapRevocationStoreError(err)
 	}
 
 	markRedisSuccess()
-	return client
+	return client, nil
+}
+
+func wrapRevocationStoreError(err error) error {
+	if err == nil {
+		return ErrTokenRevocationStoreUnavailable
+	}
+	return errors.Join(ErrTokenRevocationStoreUnavailable, err)
 }
 
 func redisAttemptAllowed() bool {

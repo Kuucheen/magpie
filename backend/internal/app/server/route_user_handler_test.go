@@ -11,37 +11,11 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestCreateUserWithFirstAdminRole_RequiresConfiguredBootstrapToken(t *testing.T) {
-	setupUserRegistrationTestDB(t)
-
-	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
-	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{})
-	if !errors.Is(err, errAdminBootstrapTokenNotDefined) {
-		t.Fatalf("expected errAdminBootstrapTokenNotDefined, got %v", err)
-	}
-}
-
-func TestCreateUserWithFirstAdminRole_RequiresValidBootstrapTokenForFirstUser(t *testing.T) {
-	setupUserRegistrationTestDB(t)
-
-	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
-	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{
-		AdminBootstrapToken:    "expected-token",
-		ProvidedBootstrapToken: "wrong-token",
-	})
-	if !errors.Is(err, errAdminBootstrapTokenInvalid) {
-		t.Fatalf("expected errAdminBootstrapTokenInvalid, got %v", err)
-	}
-}
-
 func TestCreateUserWithFirstAdminRole_AssignsAdminToFirstUser(t *testing.T) {
 	setupUserRegistrationTestDB(t)
 
 	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
-	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{
-		AdminBootstrapToken:    "expected-token",
-		ProvidedBootstrapToken: "expected-token",
-	})
+	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{})
 	if err != nil {
 		t.Fatalf("createUserWithFirstAdminRole failed: %v", err)
 	}
@@ -55,17 +29,13 @@ func TestCreateUserWithFirstAdminRole_RespectsPublicRegistrationFlagAfterBootstr
 	setupUserRegistrationTestDB(t)
 
 	admin := &domain.User{Email: "admin@example.com", Password: "password-hash"}
-	if err := createUserWithFirstAdminRole(admin, userRegistrationPolicy{
-		AdminBootstrapToken:    "expected-token",
-		ProvidedBootstrapToken: "expected-token",
-	}); err != nil {
+	if err := createUserWithFirstAdminRole(admin, userRegistrationPolicy{}); err != nil {
 		t.Fatalf("bootstrap admin failed: %v", err)
 	}
 
 	blockedUser := &domain.User{Email: "second@example.com", Password: "password-hash"}
 	err := createUserWithFirstAdminRole(blockedUser, userRegistrationPolicy{
 		DisablePublicRegistration: true,
-		AdminBootstrapToken:       "expected-token",
 	})
 	if !errors.Is(err, errPublicRegistrationDisabled) {
 		t.Fatalf("expected errPublicRegistrationDisabled, got %v", err)
@@ -74,7 +44,6 @@ func TestCreateUserWithFirstAdminRole_RespectsPublicRegistrationFlagAfterBootstr
 	allowedUser := &domain.User{Email: "third@example.com", Password: "password-hash"}
 	err = createUserWithFirstAdminRole(allowedUser, userRegistrationPolicy{
 		DisablePublicRegistration: false,
-		AdminBootstrapToken:       "expected-token",
 	})
 	if err != nil {
 		t.Fatalf("expected follow-up user to be created, got %v", err)

@@ -24,7 +24,7 @@ func writeError(w http.ResponseWriter, msg string, status int) {
 func enableCORS(next http.Handler) http.Handler {
 	cors := resolveCORSConfig()
 	allowedMethods := "GET, POST, OPTIONS, PUT, DELETE"
-	allowedHeaders := "Content-Type, Authorization, X-Request-ID, X-Magpie-Bootstrap-Token"
+	allowedHeaders := "Content-Type, Authorization, X-Request-ID"
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")

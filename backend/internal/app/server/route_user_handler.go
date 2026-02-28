@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,17 +28,12 @@ import (
 const (
 	firstUserAdminAdvisoryLockKey int64 = 941_843_229_541
 	invalidAuthCredentialsMessage       = "Invalid email or password"
-	envAdminBootstrapToken              = "ADMIN_BOOTSTRAP_TOKEN"
-	headerBootstrapToken                = "X-Magpie-Bootstrap-Token"
 	envDisablePublicRegistration        = "DISABLE_PUBLIC_REGISTRATION"
 )
 
 var (
-	errEmailAlreadyInUse             = errors.New("email already in use")
-	errPublicRegistrationDisabled    = errors.New("public registration is disabled")
-	errAdminBootstrapTokenRequired   = errors.New("admin bootstrap token is required")
-	errAdminBootstrapTokenInvalid    = errors.New("admin bootstrap token is invalid")
-	errAdminBootstrapTokenNotDefined = errors.New("admin bootstrap token is not configured")
+	errEmailAlreadyInUse          = errors.New("email already in use")
+	errPublicRegistrationDisabled = errors.New("public registration is disabled")
 
 	loginFallbackPasswordHashOnce sync.Once
 	loginFallbackPasswordHash     string
@@ -48,8 +41,6 @@ var (
 
 type userRegistrationPolicy struct {
 	DisablePublicRegistration bool
-	AdminBootstrapToken       string
-	ProvidedBootstrapToken    string
 }
 
 func checkLogin(w http.ResponseWriter, r *http.Request) {
@@ -98,8 +89,6 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 
 	policy := userRegistrationPolicy{
 		DisablePublicRegistration: support.GetEnvBool(envDisablePublicRegistration, false),
-		AdminBootstrapToken:       strings.TrimSpace(support.GetEnv(envAdminBootstrapToken, "")),
-		ProvidedBootstrapToken:    strings.TrimSpace(r.Header.Get(headerBootstrapToken)),
 	}
 
 	// Save user to the database
@@ -109,14 +98,6 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Email already in use", http.StatusConflict)
 		case errors.Is(err, errPublicRegistrationDisabled):
 			writeError(w, "Public registration is disabled", http.StatusForbidden)
-		case errors.Is(err, errAdminBootstrapTokenRequired):
-			recordAuthFailureMetric("bootstrap_token_missing")
-			writeError(w, "Bootstrap token is required for first admin registration", http.StatusUnauthorized)
-		case errors.Is(err, errAdminBootstrapTokenInvalid):
-			recordAuthFailureMetric("bootstrap_token_invalid")
-			writeError(w, "Bootstrap token is invalid", http.StatusUnauthorized)
-		case errors.Is(err, errAdminBootstrapTokenNotDefined):
-			writeError(w, "Server bootstrap token is not configured", http.StatusServiceUnavailable)
 		default:
 			writeError(w, "Failed to create user", http.StatusInternalServerError)
 		}
@@ -495,19 +476,6 @@ func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPoli
 		}
 
 		if userCount == 0 {
-			expectedToken := strings.TrimSpace(policy.AdminBootstrapToken)
-			providedToken := strings.TrimSpace(policy.ProvidedBootstrapToken)
-
-			if expectedToken == "" {
-				return errAdminBootstrapTokenNotDefined
-			}
-			if providedToken == "" {
-				return errAdminBootstrapTokenRequired
-			}
-			if !secureTokenMatch(providedToken, expectedToken) {
-				return errAdminBootstrapTokenInvalid
-			}
-
 			user.Role = "admin"
 		} else {
 			if policy.DisablePublicRegistration {
@@ -525,12 +493,6 @@ func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPoli
 
 		return nil
 	})
-}
-
-func secureTokenMatch(provided, expected string) bool {
-	providedHash := sha256.Sum256([]byte(provided))
-	expectedHash := sha256.Sum256([]byte(expected))
-	return subtle.ConstantTimeCompare(providedHash[:], expectedHash[:]) == 1
 }
 
 func consumeInvalidPasswordWork(password string) {

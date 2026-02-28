@@ -17,25 +17,17 @@ _Last updated: 2026-02-28_
    - auth/login spikes.
 5. If impact is user-facing, initiate rollback/mitigation within 15 minutes.
 
-## Secure Admin Bootstrap
+## Admin Bootstrap
 
-When no users exist, admin registration requires:
-
-- env: `ADMIN_BOOTSTRAP_TOKEN` (required)
-- header: `X-Magpie-Bootstrap-Token`
+When no users exist, the first registered user becomes admin automatically.
 
 Example:
 
 ```bash
-curl -X POST http://localhost:5656/api/register \
-  -H "Content-Type: application/json" \
-  -H "X-Magpie-Bootstrap-Token: $ADMIN_BOOTSTRAP_TOKEN" \
-  -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
+curl -X POST http://localhost:5656/api/register   -H "Content-Type: application/json"   -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
 ```
 
-After first admin creation, bootstrap token path is automatically disabled.
-
-For production hardening, set `DISABLE_PUBLIC_REGISTRATION=true` to block public self-signup.
+For production hardening, set `DISABLE_PUBLIC_REGISTRATION=true` after initial admin creation to block public self-signup.
 
 ## Probe Interpretation
 

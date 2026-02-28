@@ -99,17 +99,15 @@ all via a web dashboard.
     - UI: http://localhost:5050
     - API: http://localhost:5656/api
 
-      Set `ADMIN_BOOTSTRAP_TOKEN` before first startup. The first admin registration must include:
+      The first user who registers becomes admin automatically:
 
       ```bash
       curl -X POST http://localhost:5656/api/register \
         -H "Content-Type: application/json" \
-        -H "X-Magpie-Bootstrap-Token: $ADMIN_BOOTSTRAP_TOKEN" \
         -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
       ```
 
-      After the first admin exists, token bootstrap is automatically disabled.
-      For production, set `DISABLE_PUBLIC_REGISTRATION=true` to block public signups.
+      For production, set `DISABLE_PUBLIC_REGISTRATION=true` after initial admin creation to block public signups.
 
       Health probes:
       - Liveness: `GET /healthz`

@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -81,8 +82,14 @@ func SetupDB(opts ...Option) (*gorm.DB, error) {
 		return nil, fmt.Errorf("database: connection was not configured")
 	}
 
-	if cfg.AutoMigrate && len(cfg.Migrations) > 0 {
-		if err := DB.AutoMigrate(cfg.Migrations...); err != nil {
+	migrations := cfg.Migrations
+	if cfg.AutoMigrate && shouldSkipProxyStatisticsAutoMigrate(DB) {
+		migrations = removeMigrationModel(cfg.Migrations, domain.ProxyStatistic{})
+		log.Warn("Database migration: skipping ProxyStatistic auto-migrate because proxy_statistics is partitioned")
+	}
+
+	if cfg.AutoMigrate && len(migrations) > 0 {
+		if err := DB.AutoMigrate(migrations...); err != nil {
 			return nil, fmt.Errorf("database: auto migrate: %w", err)
 		}
 		log.Info("Database migration completed.")
@@ -467,6 +474,40 @@ func ensureProxyQueryIndexSchema(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+func shouldSkipProxyStatisticsAutoMigrate(db *gorm.DB) bool {
+	if !isPostgresDialect(db) {
+		return false
+	}
+
+	partitioned, err := isProxyStatisticsPartitioned(db)
+	if err != nil {
+		log.Warn("Database migration: unable to detect proxy_statistics partition state", "error", err)
+		return false
+	}
+
+	return partitioned
+}
+
+func removeMigrationModel(migrations []any, model any) []any {
+	if len(migrations) == 0 {
+		return migrations
+	}
+
+	target := reflect.TypeOf(model)
+	if target == nil {
+		return migrations
+	}
+
+	filtered := make([]any, 0, len(migrations))
+	for _, migration := range migrations {
+		if reflect.TypeOf(migration) == target {
+			continue
+		}
+		filtered = append(filtered, migration)
+	}
+	return filtered
 }
 
 func isPostgresDialect(db *gorm.DB) bool {

@@ -512,10 +512,11 @@ func runProxyStatisticsStreamWorker(ctx context.Context, dirtyProxyIDsQueue chan
 			continue
 		}
 
+		appendedMessages := 0
 		for _, stream := range streams {
-			appendStreamMessagesToBuffer(ctx, stream.Messages, &buffer, &messageIDs, client, cfg)
+			appendedMessages += appendStreamMessagesToBuffer(ctx, stream.Messages, &buffer, &messageIDs, client, cfg)
 		}
-		if len(streams) == 0 && streamID == "0" {
+		if streamID == "0" && appendedMessages == 0 {
 			streamID = ">"
 		}
 	}

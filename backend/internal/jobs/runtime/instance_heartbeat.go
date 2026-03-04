@@ -19,6 +19,7 @@ const (
 	DefaultHeartbeatInterval   = 15 * time.Second
 	DefaultHeartbeatTTL        = 30 * time.Second
 	heartbeatScanBatchSize     = 200
+	heartbeatRetryInterval     = 5 * time.Second
 )
 
 type ActiveInstance struct {
@@ -48,6 +49,11 @@ func CurrentInstance() ActiveInstance {
 func StartInstanceHeartbeat(ctx context.Context, client *redis.Client, keyPrefix string, interval, ttl time.Duration) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if client == nil {
+		log.Warn("Instance heartbeat disabled: redis client is nil")
+		<-ctx.Done()
+		return
 	}
 	instanceID := currentInstanceID()
 	heartbeatKey := heartbeatKeyForInstance(instanceID, keyPrefix)
@@ -91,7 +97,37 @@ func StartInstanceHeartbeat(ctx context.Context, client *redis.Client, keyPrefix
 
 func LaunchInstanceHeartbeat(parent context.Context, client *redis.Client) context.CancelFunc {
 	ctx, cancel := context.WithCancel(parent)
-	go StartInstanceHeartbeat(ctx, client, InstanceHeartbeatKeyPrefix, DefaultHeartbeatInterval, DefaultHeartbeatTTL)
+	go func() {
+		activeClient := client
+		loggedUnavailable := false
+
+		for {
+			if activeClient == nil {
+				retryClient, err := support.GetRedisClient()
+				if err != nil {
+					if !loggedUnavailable {
+						log.Warn("Instance heartbeat postponed until redis is available", "error", err)
+						loggedUnavailable = true
+					}
+
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(heartbeatRetryInterval):
+						continue
+					}
+				}
+
+				activeClient = retryClient
+				if loggedUnavailable {
+					log.Info("Instance heartbeat connected to redis")
+				}
+			}
+
+			StartInstanceHeartbeat(ctx, activeClient, InstanceHeartbeatKeyPrefix, DefaultHeartbeatInterval, DefaultHeartbeatTTL)
+			return
+		}
+	}()
 	return cancel
 }
 

@@ -61,7 +61,7 @@ var runLeaderTaskOnce = support.RunLeaderTaskOnce
 func init() {
 	client, err := support.GetRedisClient()
 	if err != nil {
-		log.Fatal("Could not connect to redis for scrape site queue", "error", err)
+		log.Warn("Redis unavailable during scrape queue init; continuing in degraded mode", "error", err)
 	}
 	PublicScrapeSiteQueue = *NewRedisScrapeSiteQueue(client)
 
@@ -125,8 +125,10 @@ func NewRedisScrapeSiteQueue(client *redis.Client) *RedisScrapeSiteQueue {
 		queueShardKeys: shardKeys,
 		popQueueKeys:   popKeys,
 	}
-	if err := queue.refreshQueueHeads(); err != nil {
-		log.Warn("scrape queue head refresh failed", "error", err)
+	if client != nil {
+		if err := queue.refreshQueueHeads(); err != nil {
+			log.Warn("scrape queue head refresh failed", "error", err)
+		}
 	}
 	return queue
 }
@@ -146,8 +148,37 @@ func buildScrapePopQueueKeys(shardKeys []string) []string {
 	return keys
 }
 
+func (rssq *RedisScrapeSiteQueue) clientOrErr() (*redis.Client, error) {
+	if rssq == nil {
+		return nil, errors.New("redis scrape queue is nil")
+	}
+	if rssq.client != nil {
+		return rssq.client, nil
+	}
+
+	client, err := support.GetRedisClient()
+	if err != nil {
+		return nil, fmt.Errorf("redis scrape queue unavailable: %w", err)
+	}
+	return client, nil
+}
+
+func (rssq *RedisScrapeSiteQueue) baseContext() context.Context {
+	if rssq == nil || rssq.ctx == nil {
+		return context.Background()
+	}
+	return rssq.ctx
+}
+
+func (rssq *RedisScrapeSiteQueue) popKeys() []string {
+	if len(rssq.popQueueKeys) == 0 {
+		return []string{legacyScrapesiteQueueKey}
+	}
+	return rssq.popQueueKeys
+}
+
 func (rssq *RedisScrapeSiteQueue) queueKeyForMember(member string) string {
-	if len(rssq.queueShardKeys) == 0 {
+	if rssq == nil || len(rssq.queueShardKeys) == 0 {
 		return legacyScrapesiteQueueKey
 	}
 	idx := scrapeQueueShardIndex(member, len(rssq.queueShardKeys))
@@ -165,28 +196,30 @@ func scrapeQueueShardIndex(member string, shards int) int {
 }
 
 func (rssq *RedisScrapeSiteQueue) refreshQueueHeads() error {
-	if rssq == nil {
-		return errors.New("redis scrape queue is nil")
+	client, err := rssq.clientOrErr()
+	if err != nil {
+		return err
 	}
+	ctx := rssq.baseContext()
 
-	pipe := rssq.client.Pipeline()
-	pipe.Del(rssq.ctx, scrapesiteQueueHeadKey)
+	pipe := client.Pipeline()
+	pipe.Del(ctx, scrapesiteQueueHeadKey)
 
-	for _, key := range rssq.popQueueKeys {
-		entries, err := rssq.client.ZRangeWithScores(rssq.ctx, key, 0, 0).Result()
+	for _, key := range rssq.popKeys() {
+		entries, err := client.ZRangeWithScores(ctx, key, 0, 0).Result()
 		if err != nil {
 			return err
 		}
 		if len(entries) == 0 {
 			continue
 		}
-		pipe.ZAdd(rssq.ctx, scrapesiteQueueHeadKey, redis.Z{
+		pipe.ZAdd(ctx, scrapesiteQueueHeadKey, redis.Z{
 			Score:  entries[0].Score,
 			Member: key,
 		})
 	}
 
-	if _, err := pipe.Exec(rssq.ctx); err != nil {
+	if _, err := pipe.Exec(ctx); err != nil {
 		return err
 	}
 	return nil
@@ -209,7 +242,13 @@ func (rssq *RedisScrapeSiteQueue) AddToQueue(sites []domain.ScrapeSite) error {
 		return nil
 	}
 
-	pipe := rssq.client.Pipeline()
+	client, err := rssq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rssq.baseContext()
+
+	pipe := client.Pipeline()
 	interval := config.GetTimeBetweenScrapes()
 	now := time.Now()
 	sitesLenDuration := time.Duration(len(filtered))
@@ -226,15 +265,15 @@ func (rssq *RedisScrapeSiteQueue) AddToQueue(sites []domain.ScrapeSite) error {
 			return fmt.Errorf("failed to marshal site: %w", err)
 		}
 
-		pipe.Set(rssq.ctx, siteKey, proxyJSON, 0)
-		pipe.ZAdd(rssq.ctx, queueKey, redis.Z{
+		pipe.Set(ctx, siteKey, proxyJSON, 0)
+		pipe.ZAdd(ctx, queueKey, redis.Z{
 			Score:  float64(nextCheck.UnixMilli()),
 			Member: site.URL,
 		})
 		if queueKey != legacyScrapesiteQueueKey {
-			pipe.ZRem(rssq.ctx, legacyScrapesiteQueueKey, site.URL)
+			pipe.ZRem(ctx, legacyScrapesiteQueueKey, site.URL)
 		}
-		pipe.ZAddArgs(rssq.ctx, scrapesiteQueueHeadKey, redis.ZAddArgs{
+		pipe.ZAddArgs(ctx, scrapesiteQueueHeadKey, redis.ZAddArgs{
 			LT: true,
 			Members: []redis.Z{{
 				Score:  float64(nextCheck.UnixMilli()),
@@ -244,14 +283,14 @@ func (rssq *RedisScrapeSiteQueue) AddToQueue(sites []domain.ScrapeSite) error {
 
 		// Execute in batches to prevent oversized pipelines
 		if i%batchSize == 0 && i > 0 {
-			if _, err := pipe.Exec(rssq.ctx); err != nil {
+			if _, err := pipe.Exec(ctx); err != nil {
 				return fmt.Errorf("batch pipeline failed: %w", err)
 			}
-			pipe = rssq.client.Pipeline()
+			pipe = client.Pipeline()
 		}
 	}
 
-	if _, err := pipe.Exec(rssq.ctx); err != nil {
+	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("final pipeline exec failed: %w", err)
 	}
 
@@ -266,18 +305,24 @@ func (rssq *RedisScrapeSiteQueue) RemoveFromQueue(sites []domain.ScrapeSite) err
 		return nil
 	}
 
+	client, err := rssq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rssq.baseContext()
+
 	const batchSize = 250
-	pipe := rssq.client.Pipeline()
+	pipe := client.Pipeline()
 	opCount := 0
 
 	flush := func() error {
 		if opCount == 0 {
 			return nil
 		}
-		if _, err := pipe.Exec(rssq.ctx); err != nil {
+		if _, err := pipe.Exec(ctx); err != nil {
 			return fmt.Errorf("remove pipeline exec failed: %w", err)
 		}
-		pipe = rssq.client.Pipeline()
+		pipe = client.Pipeline()
 		opCount = 0
 		return nil
 	}
@@ -290,12 +335,12 @@ func (rssq *RedisScrapeSiteQueue) RemoveFromQueue(sites []domain.ScrapeSite) err
 		key := scrapesiteKeyPrefix + site.URL
 		queueKey := rssq.queueKeyForMember(site.URL)
 
-		pipe.Del(rssq.ctx, key)
+		pipe.Del(ctx, key)
 		opCount++
-		pipe.ZRem(rssq.ctx, queueKey, site.URL)
+		pipe.ZRem(ctx, queueKey, site.URL)
 		opCount++
 		if queueKey != legacyScrapesiteQueueKey {
-			pipe.ZRem(rssq.ctx, legacyScrapesiteQueueKey, site.URL)
+			pipe.ZRem(ctx, legacyScrapesiteQueueKey, site.URL)
 		}
 		opCount++
 
@@ -310,12 +355,20 @@ func (rssq *RedisScrapeSiteQueue) RemoveFromQueue(sites []domain.ScrapeSite) err
 }
 
 func (rssq *RedisScrapeSiteQueue) GetNextScrapeSite() (domain.ScrapeSite, time.Time, error) {
-	return rssq.GetNextScrapeSiteContext(rssq.ctx)
+	return rssq.GetNextScrapeSiteContext(rssq.baseContext())
 }
 
 func (rssq *RedisScrapeSiteQueue) GetNextScrapeSiteContext(ctx context.Context) (domain.ScrapeSite, time.Time, error) {
 	if ctx == nil {
-		ctx = rssq.ctx
+		ctx = rssq.baseContext()
+	}
+	client, err := rssq.clientOrErr()
+	if err != nil {
+		return domain.ScrapeSite{}, time.Time{}, err
+	}
+	popScript := rssq.popScript
+	if popScript == nil {
+		popScript = redis.NewScript(luaScrapePopScript)
 	}
 
 	for {
@@ -326,9 +379,9 @@ func (rssq *RedisScrapeSiteQueue) GetNextScrapeSiteContext(ctx context.Context) 
 		}
 
 		currentTimeMs := time.Now().UnixMilli()
-		result, err := rssq.popScript.Run(
+		result, err := popScript.Run(
 			ctx,
-			rssq.client,
+			client,
 			[]string{scrapesiteQueueHeadKey},
 			currentTimeMs,
 			int64(processingLease/time.Millisecond),
@@ -486,6 +539,12 @@ func coerceLuaInt64(value interface{}) (int64, error) {
 }
 
 func (rssq *RedisScrapeSiteQueue) RequeueScrapeSite(site domain.ScrapeSite, lastCheckTime time.Time) error {
+	client, err := rssq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rssq.baseContext()
+
 	interval := rssq.getEffectiveScrapeInterval()
 	base := lastCheckTime
 	if now := time.Now(); now.After(base) {
@@ -500,16 +559,16 @@ func (rssq *RedisScrapeSiteQueue) RequeueScrapeSite(site domain.ScrapeSite, last
 		return fmt.Errorf("failed to marshal proxy: %w", err)
 	}
 
-	pipe := rssq.client.Pipeline()
-	pipe.Set(rssq.ctx, siteKey, proxyJSON, 0)
+	pipe := client.Pipeline()
+	pipe.Set(ctx, siteKey, proxyJSON, 0)
 	if queueKey != legacyScrapesiteQueueKey {
-		pipe.ZRem(rssq.ctx, legacyScrapesiteQueueKey, site.URL)
+		pipe.ZRem(ctx, legacyScrapesiteQueueKey, site.URL)
 	}
-	pipe.ZAdd(rssq.ctx, queueKey, redis.Z{
+	pipe.ZAdd(ctx, queueKey, redis.Z{
 		Score:  float64(nextCheck.UnixMilli()),
 		Member: site.URL,
 	})
-	pipe.ZAddArgs(rssq.ctx, scrapesiteQueueHeadKey, redis.ZAddArgs{
+	pipe.ZAddArgs(ctx, scrapesiteQueueHeadKey, redis.ZAddArgs{
 		LT: true,
 		Members: []redis.Z{{
 			Score:  float64(nextCheck.UnixMilli()),
@@ -517,17 +576,19 @@ func (rssq *RedisScrapeSiteQueue) RequeueScrapeSite(site domain.ScrapeSite, last
 		}},
 	})
 
-	_, err = pipe.Exec(rssq.ctx)
+	_, err = pipe.Exec(ctx)
 	return err
 }
 
 func (rssq *RedisScrapeSiteQueue) getEffectiveScrapeInterval() time.Duration {
 	fallback := config.GetTimeBetweenScrapes()
-	if rssq == nil || rssq.client == nil {
+	client, err := rssq.clientOrErr()
+	if err != nil {
 		return fallback
 	}
+	ctx := rssq.baseContext()
 
-	raw, err := rssq.client.Get(rssq.ctx, scrapeQueueRescheduleStateKey).Result()
+	raw, err := client.Get(ctx, scrapeQueueRescheduleStateKey).Result()
 	if err != nil {
 		return fallback
 	}
@@ -548,9 +609,15 @@ func parseIntervalStateMillis(raw string, fallback time.Duration) time.Duration 
 }
 
 func (rssq *RedisScrapeSiteQueue) GetScrapeSiteCount() (int64, error) {
+	client, err := rssq.clientOrErr()
+	if err != nil {
+		return 0, err
+	}
+	ctx := rssq.baseContext()
+
 	var total int64
-	for _, key := range rssq.popQueueKeys {
-		count, err := rssq.client.ZCard(rssq.ctx, key).Result()
+	for _, key := range rssq.popKeys() {
+		count, err := client.ZCard(ctx, key).Result()
 		if err != nil {
 			return 0, err
 		}
@@ -560,7 +627,11 @@ func (rssq *RedisScrapeSiteQueue) GetScrapeSiteCount() (int64, error) {
 }
 
 func (rssq *RedisScrapeSiteQueue) GetActiveInstances() (int, error) {
-	return runtime.CountActiveInstances(rssq.ctx, rssq.client)
+	client, err := rssq.clientOrErr()
+	if err != nil {
+		return 0, err
+	}
+	return runtime.CountActiveInstances(rssq.baseContext(), client)
 }
 
 func (rssq *RedisScrapeSiteQueue) Close() error {
@@ -572,11 +643,17 @@ func (rssq *RedisScrapeSiteQueue) Reschedule(interval time.Duration) error {
 		return errors.New("redis scrape queue is nil")
 	}
 
+	client, err := rssq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rssq.baseContext()
+
 	if interval <= 0 {
 		interval = time.Second
 	}
 
-	if err := rssq.client.Set(rssq.ctx, scrapeQueueRescheduleStateKey, strconv.FormatInt(interval.Milliseconds(), 10), 0).Err(); err != nil {
+	if err := client.Set(ctx, scrapeQueueRescheduleStateKey, strconv.FormatInt(interval.Milliseconds(), 10), 0).Err(); err != nil {
 		return fmt.Errorf("reschedule: failed to persist interval state: %w", err)
 	}
 	// Existing queue members keep their current due times and converge naturally

@@ -76,7 +76,7 @@ var runLeaderTaskOnce = support.RunLeaderTaskOnce
 func init() {
 	client, err := support.GetRedisClient()
 	if err != nil {
-		log.Fatal("Could not connect to redis for proxy queue", "error", err)
+		log.Warn("Redis unavailable during proxy queue init; continuing in degraded mode", "error", err)
 	}
 	PublicProxyQueue = *NewRedisProxyQueue(client)
 
@@ -140,35 +140,68 @@ func NewRedisProxyQueue(client *redis.Client) *RedisProxyQueue {
 		queueShardKeys: shardKeys,
 		popQueueKeys:   popKeys,
 	}
-	if err := queue.refreshQueueHeads(); err != nil {
-		log.Warn("proxy queue head refresh failed", "error", err)
+	if client != nil {
+		if err := queue.refreshQueueHeads(); err != nil {
+			log.Warn("proxy queue head refresh failed", "error", err)
+		}
 	}
 	return queue
 }
 
-func (rpq *RedisProxyQueue) refreshQueueHeads() error {
+func (rpq *RedisProxyQueue) clientOrErr() (*redis.Client, error) {
 	if rpq == nil {
-		return errors.New("redis proxy queue is nil")
+		return nil, errors.New("redis proxy queue is nil")
+	}
+	if rpq.client != nil {
+		return rpq.client, nil
 	}
 
-	pipe := rpq.client.Pipeline()
-	pipe.Del(rpq.ctx, proxyQueueHeadKey)
+	client, err := support.GetRedisClient()
+	if err != nil {
+		return nil, fmt.Errorf("redis proxy queue unavailable: %w", err)
+	}
+	return client, nil
+}
 
-	for _, key := range rpq.popQueueKeys {
-		entries, err := rpq.client.ZRangeWithScores(rpq.ctx, key, 0, 0).Result()
+func (rpq *RedisProxyQueue) baseContext() context.Context {
+	if rpq == nil || rpq.ctx == nil {
+		return context.Background()
+	}
+	return rpq.ctx
+}
+
+func (rpq *RedisProxyQueue) popKeys() []string {
+	if len(rpq.popQueueKeys) == 0 {
+		return []string{legacyQueueKey}
+	}
+	return rpq.popQueueKeys
+}
+
+func (rpq *RedisProxyQueue) refreshQueueHeads() error {
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rpq.baseContext()
+
+	pipe := client.Pipeline()
+	pipe.Del(ctx, proxyQueueHeadKey)
+
+	for _, key := range rpq.popKeys() {
+		entries, err := client.ZRangeWithScores(ctx, key, 0, 0).Result()
 		if err != nil {
 			return err
 		}
 		if len(entries) == 0 {
 			continue
 		}
-		pipe.ZAdd(rpq.ctx, proxyQueueHeadKey, redis.Z{
+		pipe.ZAdd(ctx, proxyQueueHeadKey, redis.Z{
 			Score:  entries[0].Score,
 			Member: key,
 		})
 	}
 
-	if _, err := pipe.Exec(rpq.ctx); err != nil {
+	if _, err := pipe.Exec(ctx); err != nil {
 		return err
 	}
 	return nil
@@ -190,7 +223,7 @@ func buildPopQueueKeys(shardKeys []string) []string {
 }
 
 func (rpq *RedisProxyQueue) queueKeyForMember(member string) string {
-	if len(rpq.queueShardKeys) == 0 {
+	if rpq == nil || len(rpq.queueShardKeys) == 0 {
 		return legacyQueueKey
 	}
 	idx := proxyQueueShardIndex(member, len(rpq.queueShardKeys))
@@ -212,7 +245,13 @@ func (rpq *RedisProxyQueue) AddToQueue(proxies []domain.Proxy) error {
 		return nil
 	}
 
-	pipe := rpq.client.Pipeline()
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rpq.baseContext()
+
+	pipe := client.Pipeline()
 	interval := config.GetTimeBetweenChecks()
 	now := time.Now()
 	proxyLenDuration := time.Duration(len(proxies))
@@ -230,8 +269,8 @@ func (rpq *RedisProxyQueue) AddToQueue(proxies []domain.Proxy) error {
 			return fmt.Errorf("failed to marshal proxy: %w", err)
 		}
 
-		pipe.Set(rpq.ctx, proxyKey, proxyJSON, 0)
-		pipe.ZAddArgs(rpq.ctx, queueKey, redis.ZAddArgs{
+		pipe.Set(ctx, proxyKey, proxyJSON, 0)
+		pipe.ZAddArgs(ctx, queueKey, redis.ZAddArgs{
 			NX: true,
 			Members: []redis.Z{{
 				Score:  float64(nextCheck.UnixMilli()),
@@ -239,9 +278,9 @@ func (rpq *RedisProxyQueue) AddToQueue(proxies []domain.Proxy) error {
 			}},
 		})
 		if queueKey != legacyQueueKey {
-			pipe.ZRem(rpq.ctx, legacyQueueKey, hashKey)
+			pipe.ZRem(ctx, legacyQueueKey, hashKey)
 		}
-		pipe.ZAddArgs(rpq.ctx, proxyQueueHeadKey, redis.ZAddArgs{
+		pipe.ZAddArgs(ctx, proxyQueueHeadKey, redis.ZAddArgs{
 			LT: true,
 			Members: []redis.Z{{
 				Score:  float64(nextCheck.UnixMilli()),
@@ -251,14 +290,14 @@ func (rpq *RedisProxyQueue) AddToQueue(proxies []domain.Proxy) error {
 
 		// Execute in batches to prevent oversized pipelines
 		if i%batchSize == 0 && i > 0 {
-			if _, err := pipe.Exec(rpq.ctx); err != nil {
+			if _, err := pipe.Exec(ctx); err != nil {
 				return fmt.Errorf("batch pipeline failed: %w", err)
 			}
-			pipe = rpq.client.Pipeline()
+			pipe = client.Pipeline()
 		}
 	}
 
-	if _, err := pipe.Exec(rpq.ctx); err != nil {
+	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("final pipeline exec failed: %w", err)
 	}
 
@@ -273,18 +312,24 @@ func (rpq *RedisProxyQueue) RemoveFromQueue(proxies []domain.Proxy) error {
 		return nil
 	}
 
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rpq.baseContext()
+
 	const batchSize = 500
-	pipe := rpq.client.Pipeline()
+	pipe := client.Pipeline()
 	opCount := 0
 
 	flush := func() error {
 		if opCount == 0 {
 			return nil
 		}
-		if _, err := pipe.Exec(rpq.ctx); err != nil {
+		if _, err := pipe.Exec(ctx); err != nil {
 			return fmt.Errorf("remove pipeline exec failed: %w", err)
 		}
-		pipe = rpq.client.Pipeline()
+		pipe = client.Pipeline()
 		opCount = 0
 		return nil
 	}
@@ -298,12 +343,12 @@ func (rpq *RedisProxyQueue) RemoveFromQueue(proxies []domain.Proxy) error {
 		proxyKey := proxyKeyPrefix + hashKey
 		queueKey := rpq.queueKeyForMember(hashKey)
 
-		pipe.Del(rpq.ctx, proxyKey)
+		pipe.Del(ctx, proxyKey)
 		opCount++
-		pipe.ZRem(rpq.ctx, queueKey, hashKey)
+		pipe.ZRem(ctx, queueKey, hashKey)
 		opCount++
 		if queueKey != legacyQueueKey {
-			pipe.ZRem(rpq.ctx, legacyQueueKey, hashKey)
+			pipe.ZRem(ctx, legacyQueueKey, hashKey)
 			opCount++
 		}
 
@@ -318,12 +363,20 @@ func (rpq *RedisProxyQueue) RemoveFromQueue(proxies []domain.Proxy) error {
 }
 
 func (rpq *RedisProxyQueue) GetNextProxy() (domain.Proxy, time.Time, error) {
-	return rpq.GetNextProxyContext(rpq.ctx)
+	return rpq.GetNextProxyContext(rpq.baseContext())
 }
 
 func (rpq *RedisProxyQueue) GetNextProxyContext(ctx context.Context) (domain.Proxy, time.Time, error) {
 	if ctx == nil {
-		ctx = rpq.ctx
+		ctx = rpq.baseContext()
+	}
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return domain.Proxy{}, time.Time{}, err
+	}
+	popScript := rpq.popScript
+	if popScript == nil {
+		popScript = redis.NewScript(luaPopScript)
 	}
 
 	for {
@@ -334,9 +387,9 @@ func (rpq *RedisProxyQueue) GetNextProxyContext(ctx context.Context) (domain.Pro
 		}
 
 		currentTimeMs := time.Now().UnixMilli()
-		result, err := rpq.popScript.Run(
+		result, err := popScript.Run(
 			ctx,
-			rpq.client,
+			client,
 			[]string{proxyQueueHeadKey},
 			currentTimeMs,
 			int64(processingLease/time.Millisecond),
@@ -367,49 +420,6 @@ func (rpq *RedisProxyQueue) GetNextProxyContext(ctx context.Context) (domain.Pro
 
 		return proxy, time.UnixMilli(popResult.ScoreMs), nil
 	}
-}
-
-func parseProxyPopResult(result interface{}) (proxyPopResult, error) {
-	resSlice, ok := result.([]interface{})
-	if !ok {
-		return proxyPopResult{}, fmt.Errorf("unexpected lua result type %T", result)
-	}
-	if len(resSlice) != 5 {
-		return proxyPopResult{}, fmt.Errorf("unexpected lua result length %d", len(resSlice))
-	}
-
-	foundFlag, err := coerceLuaInt64(resSlice[0])
-	if err != nil {
-		return proxyPopResult{}, fmt.Errorf("invalid found flag: %w", err)
-	}
-
-	if foundFlag == 0 {
-		nextReadyMs, err := coerceLuaInt64(resSlice[3])
-		if err != nil {
-			return proxyPopResult{}, fmt.Errorf("invalid next-ready score: %w", err)
-		}
-		return proxyPopResult{
-			Found:       false,
-			NextReadyMs: nextReadyMs,
-		}, nil
-	}
-
-	proxyJSON, err := coerceLuaString(resSlice[2])
-	if err != nil {
-		return proxyPopResult{}, fmt.Errorf("invalid proxy payload: %w", err)
-	}
-
-	score, err := coerceLuaInt64(resSlice[3])
-	if err != nil {
-		return proxyPopResult{}, fmt.Errorf("invalid score: %w", err)
-	}
-
-	return proxyPopResult{
-		Found:       true,
-		ProxyJSON:   proxyJSON,
-		ScoreMs:     score,
-		NextReadyMs: -1,
-	}, nil
 }
 
 func dequeueWaitDuration(nextReadyMs int64, currentMs int64) time.Duration {
@@ -495,6 +505,12 @@ func coerceLuaInt64(value interface{}) (int64, error) {
 }
 
 func (rpq *RedisProxyQueue) RequeueProxy(proxy domain.Proxy, lastCheckTime time.Time) error {
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rpq.baseContext()
+
 	interval := rpq.getEffectiveCheckInterval()
 	base := lastCheckTime
 	// Clamp to now so overdue proxies don't keep hogging the queue.
@@ -511,16 +527,16 @@ func (rpq *RedisProxyQueue) RequeueProxy(proxy domain.Proxy, lastCheckTime time.
 		return fmt.Errorf("failed to marshal proxy: %w", err)
 	}
 
-	pipe := rpq.client.Pipeline()
-	pipe.Set(rpq.ctx, proxyKey, proxyJSON, 0)
+	pipe := client.Pipeline()
+	pipe.Set(ctx, proxyKey, proxyJSON, 0)
 	if queueKey != legacyQueueKey {
-		pipe.ZRem(rpq.ctx, legacyQueueKey, hashKey)
+		pipe.ZRem(ctx, legacyQueueKey, hashKey)
 	}
-	pipe.ZAdd(rpq.ctx, queueKey, redis.Z{
+	pipe.ZAdd(ctx, queueKey, redis.Z{
 		Score:  float64(nextCheck.UnixMilli()),
 		Member: hashKey,
 	})
-	pipe.ZAddArgs(rpq.ctx, proxyQueueHeadKey, redis.ZAddArgs{
+	pipe.ZAddArgs(ctx, proxyQueueHeadKey, redis.ZAddArgs{
 		LT: true,
 		Members: []redis.Z{{
 			Score:  float64(nextCheck.UnixMilli()),
@@ -528,17 +544,19 @@ func (rpq *RedisProxyQueue) RequeueProxy(proxy domain.Proxy, lastCheckTime time.
 		}},
 	})
 
-	_, err = pipe.Exec(rpq.ctx)
+	_, err = pipe.Exec(ctx)
 	return err
 }
 
 func (rpq *RedisProxyQueue) getEffectiveCheckInterval() time.Duration {
 	fallback := config.GetTimeBetweenChecks()
-	if rpq == nil || rpq.client == nil {
+	client, err := rpq.clientOrErr()
+	if err != nil {
 		return fallback
 	}
+	ctx := rpq.baseContext()
 
-	raw, err := rpq.client.Get(rpq.ctx, queueRescheduleStateKey).Result()
+	raw, err := client.Get(ctx, queueRescheduleStateKey).Result()
 	if err != nil {
 		return fallback
 	}
@@ -636,9 +654,15 @@ func collectQueuedUserIDs(users []domain.User) []uint {
 }
 
 func (rpq *RedisProxyQueue) GetProxyCount() (int64, error) {
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return 0, err
+	}
+	ctx := rpq.baseContext()
+
 	var total int64
-	for _, key := range rpq.popQueueKeys {
-		count, err := rpq.client.ZCard(rpq.ctx, key).Result()
+	for _, key := range rpq.popKeys() {
+		count, err := client.ZCard(ctx, key).Result()
 		if err != nil {
 			return 0, err
 		}
@@ -648,7 +672,11 @@ func (rpq *RedisProxyQueue) GetProxyCount() (int64, error) {
 }
 
 func (rpq *RedisProxyQueue) GetActiveInstances() (int, error) {
-	return runtime.CountActiveInstances(rpq.ctx, rpq.client)
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return 0, err
+	}
+	return runtime.CountActiveInstances(rpq.baseContext(), client)
 }
 
 func (rpq *RedisProxyQueue) Close() error {
@@ -660,11 +688,17 @@ func (rpq *RedisProxyQueue) Reschedule(interval time.Duration) error {
 		return errors.New("redis proxy queue is nil")
 	}
 
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx := rpq.baseContext()
+
 	if interval <= 0 {
 		interval = time.Second
 	}
 
-	if err := rpq.client.Set(rpq.ctx, queueRescheduleStateKey, strconv.FormatInt(interval.Milliseconds(), 10), 0).Err(); err != nil {
+	if err := client.Set(ctx, queueRescheduleStateKey, strconv.FormatInt(interval.Milliseconds(), 10), 0).Err(); err != nil {
 		return fmt.Errorf("reschedule: failed to persist interval state: %w", err)
 	}
 
@@ -676,4 +710,46 @@ func (rpq *RedisProxyQueue) Reschedule(interval time.Duration) error {
 
 	log.Debug("proxy queue interval updated; existing entries converge lazily", "interval", interval)
 	return nil
+}
+func parseProxyPopResult(result interface{}) (proxyPopResult, error) {
+	resSlice, ok := result.([]interface{})
+	if !ok {
+		return proxyPopResult{}, fmt.Errorf("unexpected lua result type %T", result)
+	}
+	if len(resSlice) != 5 {
+		return proxyPopResult{}, fmt.Errorf("unexpected lua result length %d", len(resSlice))
+	}
+
+	foundFlag, err := coerceLuaInt64(resSlice[0])
+	if err != nil {
+		return proxyPopResult{}, fmt.Errorf("invalid found flag: %w", err)
+	}
+
+	if foundFlag == 0 {
+		nextReadyMs, err := coerceLuaInt64(resSlice[3])
+		if err != nil {
+			return proxyPopResult{}, fmt.Errorf("invalid next-ready score: %w", err)
+		}
+		return proxyPopResult{
+			Found:       false,
+			NextReadyMs: nextReadyMs,
+		}, nil
+	}
+
+	proxyJSON, err := coerceLuaString(resSlice[2])
+	if err != nil {
+		return proxyPopResult{}, fmt.Errorf("invalid proxy payload: %w", err)
+	}
+
+	score, err := coerceLuaInt64(resSlice[3])
+	if err != nil {
+		return proxyPopResult{}, fmt.Errorf("invalid score: %w", err)
+	}
+
+	return proxyPopResult{
+		Found:       true,
+		ProxyJSON:   proxyJSON,
+		ScoreMs:     score,
+		NextReadyMs: -1,
+	}, nil
 }

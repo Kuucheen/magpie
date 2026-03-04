@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"strconv"
@@ -57,7 +56,7 @@ func Run() error {
 
 	redisClient, err := support.GetRedisClient()
 	if err != nil {
-		return fmt.Errorf("failed to get redis client: %w", err)
+		log.Warn("Redis unavailable at startup; continuing in degraded mode", "error", err)
 	}
 
 	heartbeatCancel := runtime.LaunchInstanceHeartbeat(rootCtx, redisClient)

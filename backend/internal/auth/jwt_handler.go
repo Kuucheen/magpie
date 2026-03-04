@@ -294,6 +294,9 @@ func validateTokenRevocation(claims map[string]interface{}) error {
 
 	revoked, err := isTokenIDRevoked(tokenID)
 	if err != nil {
+		// Intentional design choice: availability-first auth during revocation-store outages.
+		// If Redis is unavailable and fail-open is enabled, accept tokens that already passed
+		// signature and expiry checks to avoid full auth outage.
 		if errors.Is(err, ErrTokenRevocationStoreUnavailable) && authRevocationFailOpenEnabled() {
 			logRevocationValidationDegraded("token_id", err)
 			return nil
@@ -306,6 +309,7 @@ func validateTokenRevocation(claims map[string]interface{}) error {
 
 	revokedBefore, exists, err := userTokensRevokedBefore(userID)
 	if err != nil {
+		// Same intentional fail-open behavior as token-id revocation checks.
 		if errors.Is(err, ErrTokenRevocationStoreUnavailable) && authRevocationFailOpenEnabled() {
 			logRevocationValidationDegraded("user_cutoff", err)
 			return nil

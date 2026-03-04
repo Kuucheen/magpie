@@ -24,6 +24,7 @@ const (
 	envAuthLoginFailureWindowSeconds = "AUTH_LOGIN_FAILURE_WINDOW_SECONDS"
 	envAuthLoginFailuresPerIP        = "AUTH_LOGIN_FAILURE_LIMIT_PER_IP"
 	envAuthLoginFailuresPerEmail     = "AUTH_LOGIN_FAILURE_LIMIT_PER_EMAIL"
+	envAuthLocalFallbackMaxKeys      = "AUTH_RATE_LIMIT_LOCAL_FALLBACK_MAX_KEYS"
 
 	defaultAuthRequestWindowSeconds      = 60
 	defaultAuthLoginRequestsPerWindow    = 60
@@ -31,6 +32,7 @@ const (
 	defaultAuthLoginFailureWindowSeconds = 15 * 60
 	defaultAuthLoginFailuresPerIP        = 30
 	defaultAuthLoginFailuresPerEmail     = 10
+	defaultAuthLocalFallbackMaxKeys      = 10000
 	authRedisFailureBackoff              = 5 * time.Second
 )
 
@@ -59,9 +61,10 @@ type authRateLimits struct {
 }
 
 type fixedWindowLimiter struct {
-	prefix string
-	limit  int64
-	window time.Duration
+	prefix          string
+	limit           int64
+	window          time.Duration
+	maxLocalEntries int
 
 	mu       sync.Mutex
 	counters map[string]localCounter
@@ -121,28 +124,33 @@ func getAuthRateLimits() *authRateLimits {
 	authRateLimitsOnce.Do(func() {
 		requestWindow := time.Duration(resolvePositiveEnvInt(envAuthRequestWindowSeconds, defaultAuthRequestWindowSeconds)) * time.Second
 		loginFailureWindow := time.Duration(resolvePositiveEnvInt(envAuthLoginFailureWindowSeconds, defaultAuthLoginFailureWindowSeconds)) * time.Second
+		localFallbackMaxKeys := resolvePositiveEnvInt(envAuthLocalFallbackMaxKeys, defaultAuthLocalFallbackMaxKeys)
 
 		globalAuthLimits = authRateLimits{
 			loginRequests: newFixedWindowLimiter(
 				"magpie:ratelimit:login:request",
 				int64(resolvePositiveEnvInt(envAuthLoginRequestsPerWindow, defaultAuthLoginRequestsPerWindow)),
 				requestWindow,
+				localFallbackMaxKeys,
 			),
 			registerRequests: newFixedWindowLimiter(
 				"magpie:ratelimit:register:request",
 				int64(resolvePositiveEnvInt(envAuthRegisterRequestsPerWindow, defaultAuthRegisterRequestsPerWindow)),
 				requestWindow,
+				localFallbackMaxKeys,
 			),
 			loginFailures: &loginFailureLimiter{
 				perIP: newFixedWindowLimiter(
 					"magpie:ratelimit:login:fail:ip",
 					int64(resolvePositiveEnvInt(envAuthLoginFailuresPerIP, defaultAuthLoginFailuresPerIP)),
 					loginFailureWindow,
+					localFallbackMaxKeys,
 				),
 				perEmail: newFixedWindowLimiter(
 					"magpie:ratelimit:login:fail:email",
 					int64(resolvePositiveEnvInt(envAuthLoginFailuresPerEmail, defaultAuthLoginFailuresPerEmail)),
 					loginFailureWindow,
+					localFallbackMaxKeys,
 				),
 			},
 		}
@@ -151,13 +159,18 @@ func getAuthRateLimits() *authRateLimits {
 	return &globalAuthLimits
 }
 
-func newFixedWindowLimiter(prefix string, limit int64, window time.Duration) *fixedWindowLimiter {
+func newFixedWindowLimiter(prefix string, limit int64, window time.Duration, maxLocalEntries int) *fixedWindowLimiter {
+	if maxLocalEntries <= 0 {
+		maxLocalEntries = defaultAuthLocalFallbackMaxKeys
+	}
+
 	limiter := &fixedWindowLimiter{
-		prefix:   prefix,
-		limit:    limit,
-		window:   window,
-		counters: make(map[string]localCounter),
-		expiries: make(localCounterExpiryHeap, 0),
+		prefix:          prefix,
+		limit:           limit,
+		window:          window,
+		maxLocalEntries: maxLocalEntries,
+		counters:        make(map[string]localCounter),
+		expiries:        make(localCounterExpiryHeap, 0),
 	}
 	heap.Init(&limiter.expiries)
 	return limiter
@@ -324,6 +337,7 @@ func (l *fixedWindowLimiter) incrementLocal(key string) (int64, time.Duration) {
 
 	entry, exists := l.counters[key]
 	if !exists {
+		l.enforceLocalCapacityLocked(now)
 		entry = localCounter{count: 1, expiresAt: now.Add(l.window)}
 		l.counters[key] = entry
 		heap.Push(&l.expiries, localCounterExpiry{key: key, expiresAt: entry.expiresAt})
@@ -368,6 +382,41 @@ func (l *fixedWindowLimiter) purgeExpiredLocalLocked(now time.Time) {
 		}
 		delete(l.counters, expired.key)
 	}
+}
+
+func (l *fixedWindowLimiter) enforceLocalCapacityLocked(now time.Time) {
+	if l.maxLocalEntries <= 0 {
+		return
+	}
+
+	l.purgeExpiredLocalLocked(now)
+	for len(l.counters) >= l.maxLocalEntries {
+		if l.evictOneLocalLocked() {
+			continue
+		}
+		for key := range l.counters {
+			delete(l.counters, key)
+			return
+		}
+		return
+	}
+}
+
+func (l *fixedWindowLimiter) evictOneLocalLocked() bool {
+	for len(l.expiries) > 0 {
+		evicted := heap.Pop(&l.expiries).(localCounterExpiry)
+		entry, exists := l.counters[evicted.key]
+		if !exists {
+			continue
+		}
+		if !entry.expiresAt.Equal(evicted.expiresAt) {
+			continue
+		}
+
+		delete(l.counters, evicted.key)
+		return true
+	}
+	return false
 }
 
 func (h localCounterExpiryHeap) Len() int {

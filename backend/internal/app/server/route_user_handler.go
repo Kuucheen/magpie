@@ -267,43 +267,43 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(newConfig.WebsiteBlacklist) > 0 {
-		cleanupResult, err := database.RemoveBlockedWebsitesFromUsers(context.Background(), newConfig.WebsiteBlacklist)
-		if err != nil {
-			log.Error("Failed to purge blocked websites from users", "error", err)
-			writeError(w, "Failed to remove blocked websites from users", http.StatusInternalServerError)
-			return
-		}
-
-		refreshUserJudgeCache(cleanupResult.UpdatedUserJudges)
-
-		if len(cleanupResult.BlockedScrapeSites) > 0 {
-			if err := sitequeue.PublicScrapeSiteQueue.RemoveFromQueue(cleanupResult.BlockedScrapeSites); err != nil {
-				log.Warn("Failed to remove blocked scrape sites from queue", "error", err, "count", len(cleanupResult.BlockedScrapeSites))
-			}
-		}
-
-		if cleanupResult.ScrapeRelationsRemoved > 0 {
-			if removed, err := database.DeleteOrphanScrapeSites(context.Background()); err != nil {
-				log.Warn("Failed to delete orphan scrape sites after blacklist update", "error", err)
-			} else if removed > 0 {
-				log.Info("Deleted orphan scrape sites after blacklist update", "count", removed)
-			}
-		}
-
-		if cleanupResult.JudgeRelationsRemoved > 0 || cleanupResult.ScrapeRelationsRemoved > 0 {
-			log.Info("Purged blocked websites from users",
-				"judge_relations_removed", cleanupResult.JudgeRelationsRemoved,
-				"scrape_relations_removed", cleanupResult.ScrapeRelationsRemoved,
-				"blocked_sites", len(cleanupResult.BlockedScrapeSites),
-			)
-		}
-	}
-
 	if err := config.SetConfig(newConfig); err != nil {
 		log.Error("Failed to apply configuration update", "error", err)
 		writeError(w, "Failed to update configuration", http.StatusInternalServerError)
 		return
+	}
+
+	cleanupWarning := ""
+	if len(newConfig.WebsiteBlacklist) > 0 {
+		cleanupResult, err := database.RemoveBlockedWebsitesFromUsers(context.Background(), newConfig.WebsiteBlacklist)
+		if err != nil {
+			log.Error("Blocked-website cleanup failed after configuration update", "error", err)
+			cleanupWarning = "Configuration was saved, but blocked-site cleanup failed. Retry save after database recovery."
+		} else {
+			refreshUserJudgeCache(cleanupResult.UpdatedUserJudges)
+
+			if len(cleanupResult.BlockedScrapeSites) > 0 {
+				if err := sitequeue.PublicScrapeSiteQueue.RemoveFromQueue(cleanupResult.BlockedScrapeSites); err != nil {
+					log.Warn("Failed to remove blocked scrape sites from queue", "error", err, "count", len(cleanupResult.BlockedScrapeSites))
+				}
+			}
+
+			if cleanupResult.ScrapeRelationsRemoved > 0 {
+				if removed, err := database.DeleteOrphanScrapeSites(context.Background()); err != nil {
+					log.Warn("Failed to delete orphan scrape sites after blacklist update", "error", err)
+				} else if removed > 0 {
+					log.Info("Deleted orphan scrape sites after blacklist update", "count", removed)
+				}
+			}
+
+			if cleanupResult.JudgeRelationsRemoved > 0 || cleanupResult.ScrapeRelationsRemoved > 0 {
+				log.Info("Purged blocked websites from users",
+					"judge_relations_removed", cleanupResult.JudgeRelationsRemoved,
+					"scrape_relations_removed", cleanupResult.ScrapeRelationsRemoved,
+					"blocked_sites", len(cleanupResult.BlockedScrapeSites),
+				)
+			}
+		}
 	}
 
 	if strings.TrimSpace(newConfig.GeoLite.APIKey) != "" {
@@ -313,8 +313,11 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 	if hasNewBlacklistSources(previousCfg.BlacklistSources, newConfig.BlacklistSources) {
 		go blacklist.RunRefresh(context.Background(), "config-save", true)
 	}
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Configuration updated successfully"})
+	response := map[string]any{"message": "Configuration updated successfully"}
+	if cleanupWarning != "" {
+		response["warning"] = cleanupWarning
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func getUserSettings(w http.ResponseWriter, r *http.Request) {

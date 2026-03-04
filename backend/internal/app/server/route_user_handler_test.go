@@ -112,7 +112,7 @@ func TestCreateUserWithFirstAdminRole_AcceptsMatchingBootstrapToken(t *testing.T
 	}
 }
 
-func TestSaveSettings_DoesNotPersistConfigWhenBlacklistCleanupFails(t *testing.T) {
+func TestSaveSettings_PersistsConfigWhenBlacklistCleanupFails(t *testing.T) {
 	withTempServerWorkingDir(t)
 
 	originalCfg := config.GetConfig()
@@ -143,13 +143,21 @@ func TestSaveSettings_DoesNotPersistConfigWhenBlacklistCleanupFails(t *testing.T
 
 	saveSettings(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusInternalServerError)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	got := config.GetConfig()
-	if got.Protocols.HTTP != originalCfg.Protocols.HTTP {
-		t.Fatalf("config was persisted despite cleanup error: protocol_http=%v want %v", got.Protocols.HTTP, originalCfg.Protocols.HTTP)
+	if got.Protocols.HTTP != newCfg.Protocols.HTTP {
+		t.Fatalf("config was not persisted despite successful SetConfig: protocol_http=%v want %v", got.Protocols.HTTP, newCfg.Protocols.HTTP)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if _, ok := payload["warning"]; !ok {
+		t.Fatalf("expected warning in response payload when cleanup fails, got: %v", payload)
 	}
 }
 

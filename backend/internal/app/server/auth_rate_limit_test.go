@@ -7,7 +7,7 @@ import (
 )
 
 func TestFixedWindowLimiter_LocalCounterExpires(t *testing.T) {
-	limiter := newFixedWindowLimiter("test:local", 10, 30*time.Millisecond)
+	limiter := newFixedWindowLimiter("test:local", 10, 30*time.Millisecond, 10)
 
 	count, _ := limiter.incrementLocal("client-a")
 	if count != 1 {
@@ -26,7 +26,7 @@ func TestFixedWindowLimiter_LocalCounterExpires(t *testing.T) {
 }
 
 func TestFixedWindowLimiter_PurgeIgnoresStaleHeapEntries(t *testing.T) {
-	limiter := newFixedWindowLimiter("test:local", 10, time.Hour)
+	limiter := newFixedWindowLimiter("test:local", 10, time.Hour, 10)
 	now := time.Now()
 
 	limiter.mu.Lock()
@@ -47,5 +47,25 @@ func TestFixedWindowLimiter_PurgeIgnoresStaleHeapEntries(t *testing.T) {
 	}
 	if entry.count != 2 {
 		t.Fatalf("counter count = %d, want 2", entry.count)
+	}
+}
+
+func TestFixedWindowLimiter_LocalFallbackEnforcesMaxKeys(t *testing.T) {
+	limiter := newFixedWindowLimiter("test:local", 10, time.Hour, 1)
+
+	if count, _ := limiter.incrementLocal("client-a"); count != 1 {
+		t.Fatalf("incrementLocal(client-a) count = %d, want 1", count)
+	}
+	if count, _ := limiter.incrementLocal("client-b"); count != 1 {
+		t.Fatalf("incrementLocal(client-b) count = %d, want 1", count)
+	}
+
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	if got := len(limiter.counters); got != 1 {
+		t.Fatalf("local counters size = %d, want 1", got)
+	}
+	if _, exists := limiter.counters["client-b"]; !exists {
+		t.Fatalf("expected latest key client-b to be present, got keys: %#v", limiter.counters)
 	}
 }

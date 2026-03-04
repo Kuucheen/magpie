@@ -1,7 +1,12 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 
 	"magpie/internal/config"
@@ -107,6 +112,89 @@ func TestCreateUserWithFirstAdminRole_AcceptsMatchingBootstrapToken(t *testing.T
 	}
 }
 
+func TestSaveSettings_DoesNotPersistConfigWhenBlacklistCleanupFails(t *testing.T) {
+	withTempServerWorkingDir(t)
+
+	originalCfg := config.GetConfig()
+	t.Cleanup(func() {
+		if err := config.SetConfig(originalCfg); err != nil {
+			t.Errorf("restore config: %v", err)
+		}
+	})
+
+	prevDB := database.DB
+	database.DB = nil
+	t.Cleanup(func() {
+		database.DB = prevDB
+	})
+
+	newCfg := originalCfg
+	newCfg.Protocols.HTTP = !originalCfg.Protocols.HTTP
+	newCfg.WebsiteBlacklist = []string{"zz-test-blocked.invalid"}
+
+	body, err := json.Marshal(newCfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/saveSettings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	saveSettings(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+
+	got := config.GetConfig()
+	if got.Protocols.HTTP != originalCfg.Protocols.HTTP {
+		t.Fatalf("config was persisted despite cleanup error: protocol_http=%v want %v", got.Protocols.HTTP, originalCfg.Protocols.HTTP)
+	}
+}
+
+func TestSaveSettings_ReturnsInternalServerErrorWhenSetConfigFails(t *testing.T) {
+	withTempServerWorkingDir(t)
+
+	originalCfg := config.GetConfig()
+	t.Cleanup(func() {
+		if err := config.SetConfig(originalCfg); err != nil {
+			t.Errorf("restore config: %v", err)
+		}
+	})
+
+	if err := os.MkdirAll("data/settings.json", 0o755); err != nil {
+		t.Fatalf("create blocking settings directory: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll("data/settings.json")
+	})
+
+	newCfg := originalCfg
+	newCfg.Protocols.HTTP = !originalCfg.Protocols.HTTP
+	newCfg.WebsiteBlacklist = nil
+
+	body, err := json.Marshal(newCfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/saveSettings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	saveSettings(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+
+	got := config.GetConfig()
+	if got.Protocols.HTTP != originalCfg.Protocols.HTTP {
+		t.Fatalf("config was applied despite SetConfig error: protocol_http=%v want %v", got.Protocols.HTTP, originalCfg.Protocols.HTTP)
+	}
+}
+
 func TestResolveUserRegistrationPolicy_ProductionDefaults(t *testing.T) {
 	prevProduction := config.InProductionMode
 	config.SetProductionMode(true)
@@ -190,4 +278,22 @@ func setupUserRegistrationTestDB(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("setup db: %v", err)
 	}
+}
+
+func withTempServerWorkingDir(t *testing.T) {
+	t.Helper()
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+
+	tempDir := t.TempDir()
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_ = os.Chdir(cwd)
+	})
 }

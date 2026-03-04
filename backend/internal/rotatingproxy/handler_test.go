@@ -170,6 +170,20 @@ func TestBuildHTTPTransport_ConfiguresProxyURL(t *testing.T) {
 	if transport.TLSClientConfig != nil {
 		t.Fatal("expected no TLS config for http proxy")
 	}
+
+	withIPv6 := &dto.RotatingProxyNext{
+		Protocol: "http",
+		IP:       "2001:db8::1",
+		Port:     1080,
+	}
+	transport = buildHTTPTransport(withIPv6)
+	proxyURL, err = transport.Proxy(req)
+	if err != nil {
+		t.Fatalf("proxy func returned error for ipv6 proxy: %v", err)
+	}
+	if proxyURL.Host != "[2001:db8::1]:1080" {
+		t.Fatalf("proxy host = %q, want [2001:db8::1]:1080", proxyURL.Host)
+	}
 }
 
 func TestLoadHandshakeTimeout_DefaultAndClamp(t *testing.T) {

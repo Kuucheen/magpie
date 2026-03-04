@@ -158,13 +158,13 @@ func ReadSettings() error {
 	return nil
 }
 
-func SetConfig(newConfig Config) {
+func SetConfig(newConfig Config) error {
 	if err := applyConfigUpdate(newConfig, configUpdateOptions{persistToFile: true, broadcast: true, source: "local"}); err != nil {
-		log.Error("Error applying configuration update:", err)
-		return
+		return fmt.Errorf("config: apply local settings update: %w", err)
 	}
 
 	log.Debug("Default Configuration updated and written to file successfully")
+	return nil
 }
 
 func UpdateGeoLiteConfig(updater func(cfg *Config)) error {
@@ -197,10 +197,6 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 	normalizeThreadSettings(&newConfig)
 	newConfig.WebsiteBlacklist = NormalizeWebsiteBlacklist(newConfig.WebsiteBlacklist)
 
-	configValue.Store(newConfig)
-	SetBetweenTime()
-	updateWebsiteBlocklist(newConfig.WebsiteBlacklist)
-
 	var errs []error
 
 	if opts.persistToFile {
@@ -222,6 +218,10 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 		}
 	}
 
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+
 	if opts.broadcast {
 		payload, err := json.Marshal(newConfig)
 		if err != nil {
@@ -233,13 +233,21 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 		}
 	}
 
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+
+	configValue.Store(newConfig)
+	SetBetweenTime()
+	updateWebsiteBlocklist(newConfig.WebsiteBlacklist)
+
 	if opts.source != "" {
 		log.Debug("Configuration applied", "source", opts.source)
 	} else {
 		log.Debug("Configuration applied")
 	}
 
-	return errors.Join(errs...)
+	return nil
 }
 
 func normalizeThreadSettings(cfg *Config) {

@@ -387,7 +387,7 @@ func (h *proxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Warn("rotating proxy: upstream request failed",
 			"rotator_id", h.rotator.ID,
 			"upstream_protocol", next.Protocol,
-			"upstream", fmt.Sprintf("%s:%d", next.IP, next.Port),
+			"upstream", net.JoinHostPort(next.IP, strconv.Itoa(int(next.Port))),
 			"error", err,
 		)
 		http.Error(w, "upstream proxy request failed", http.StatusBadGateway)
@@ -475,7 +475,7 @@ func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 		log.Warn("rotating proxy: upstream connect failed",
 			"rotator_id", h.rotator.ID,
 			"upstream_protocol", next.Protocol,
-			"upstream", fmt.Sprintf("%s:%d", next.IP, next.Port),
+			"upstream", net.JoinHostPort(next.IP, strconv.Itoa(int(next.Port))),
 			"target", r.Host,
 			"error", err,
 		)
@@ -532,7 +532,7 @@ func buildHTTPTransport(next *dto.RotatingProxyNext) *http.Transport {
 	case "http", "https":
 		proxyURL := &url.URL{
 			Scheme: "http",
-			Host:   fmt.Sprintf("%s:%d", next.IP, next.Port),
+			Host:   net.JoinHostPort(next.IP, strconv.Itoa(int(next.Port))),
 		}
 		if next.HasAuth {
 			proxyURL.User = url.UserPassword(next.Username, next.Password)
@@ -553,7 +553,7 @@ func buildHTTPTransport(next *dto.RotatingProxyNext) *http.Transport {
 }
 
 func dialUpstream(next *dto.RotatingProxyNext) (net.Conn, error) {
-	address := fmt.Sprintf("%s:%d", next.IP, next.Port)
+	address := net.JoinHostPort(next.IP, strconv.Itoa(int(next.Port)))
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	return dialer.Dial("tcp", address)
 }

@@ -259,8 +259,6 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	config.SetConfig(newConfig)
-
 	if len(newConfig.WebsiteBlacklist) > 0 {
 		cleanupResult, err := database.RemoveBlockedWebsitesFromUsers(context.Background(), newConfig.WebsiteBlacklist)
 		if err != nil {
@@ -292,6 +290,12 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 				"blocked_sites", len(cleanupResult.BlockedScrapeSites),
 			)
 		}
+	}
+
+	if err := config.SetConfig(newConfig); err != nil {
+		log.Error("Failed to apply configuration update", "error", err)
+		writeError(w, "Failed to update configuration", http.StatusInternalServerError)
+		return
 	}
 
 	if strings.TrimSpace(newConfig.GeoLite.APIKey) != "" {

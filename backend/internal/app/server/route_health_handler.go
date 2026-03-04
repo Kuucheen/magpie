@@ -192,7 +192,8 @@ func classifyRedisError(err error, lastErr string) string {
 	switch {
 	case strings.Contains(msg, "redis reconnect deferred"):
 		return "reconnect_deferred"
-	case strings.Contains(msg, "failed to parse redisurl"),
+	case strings.Contains(msg, "failed to parse redis url"),
+		strings.Contains(msg, "failed to parse redisurl"),
 		strings.Contains(msg, "missing redis_master_name"),
 		strings.Contains(msg, "missing redis_sentinel_addrs"),
 		strings.Contains(msg, "invalid redis_mode"):

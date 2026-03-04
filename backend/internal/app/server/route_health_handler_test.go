@@ -137,3 +137,12 @@ func TestReadyz_AllowsStartupBootstrapDegradedWhenRedisDegradedAllowed(t *testin
 		)
 	}
 }
+
+func TestClassifyRedisError_ParseURLClassifiedAsConfigInvalid(t *testing.T) {
+	if got := classifyRedisError(nil, "failed to parse redis URL"); got != "config_invalid" {
+		t.Fatalf("classifyRedisError(new parse msg) = %q, want %q", got, "config_invalid")
+	}
+	if got := classifyRedisError(nil, "failed to parse redisUrl"); got != "config_invalid" {
+		t.Fatalf("classifyRedisError(legacy parse msg) = %q, want %q", got, "config_invalid")
+	}
+}

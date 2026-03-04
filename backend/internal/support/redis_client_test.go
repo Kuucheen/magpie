@@ -143,11 +143,31 @@ func TestBuildRedisClientFromEnv_ParseErrorDoesNotLeakRedisURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected parse error")
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "failed to parse redisurl") {
-		t.Fatalf("expected parse redisUrl error, got: %v", err)
+	if !strings.Contains(strings.ToLower(err.Error()), "failed to parse redis url") {
+		t.Fatalf("expected redis URL parse error, got: %v", err)
 	}
 	if strings.Contains(err.Error(), "super-secret-pass") {
 		t.Fatalf("error leaked redis credentials: %v", err)
+	}
+}
+
+func TestResolveRedisURLFromEnv_PrefersStandardRedisURL(t *testing.T) {
+	t.Setenv(envRedisURLLegacy, "redis://legacy.example:6379")
+	t.Setenv(envRedisURL, "redis://standard.example:6379")
+
+	got := resolveRedisURLFromEnv()
+	if got != "redis://standard.example:6379" {
+		t.Fatalf("resolveRedisURLFromEnv() = %q, want %q", got, "redis://standard.example:6379")
+	}
+}
+
+func TestResolveRedisURLFromEnv_FallsBackToLegacyRedisURL(t *testing.T) {
+	t.Setenv(envRedisURL, "")
+	t.Setenv(envRedisURLLegacy, "redis://legacy.example:6379")
+
+	got := resolveRedisURLFromEnv()
+	if got != "redis://legacy.example:6379" {
+		t.Fatalf("resolveRedisURLFromEnv() = %q, want %q", got, "redis://legacy.example:6379")
 	}
 }
 

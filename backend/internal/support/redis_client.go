@@ -3,6 +3,7 @@ package support
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,8 @@ const (
 	defaultRedisConnectRetryBackoff = 5 * time.Second
 	envRedisConnectRetryBackoffMS   = "REDIS_CONNECT_RETRY_BACKOFF_MS"
 	envRedisMode                    = "REDIS_MODE"
+	envRedisURL                     = "REDIS_URL"
+	envRedisURLLegacy               = "redisUrl"
 	envRedisMasterName              = "REDIS_MASTER_NAME"
 	envRedisSentinelAddrs           = "REDIS_SENTINEL_ADDRS"
 	envRedisPassword                = "REDIS_PASSWORD"
@@ -127,11 +130,11 @@ func buildRedisClientFromEnv() (*redis.Client, error) {
 	mode := redisModeFromEnv()
 	switch mode {
 	case redisModeSingle:
-		redisURL := GetEnv("redisUrl", "redis://localhost:8946")
+		redisURL := resolveRedisURLFromEnv()
 
 		opt, err := redis.ParseURL(redisURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse redisUrl")
+			return nil, fmt.Errorf("failed to parse redis URL")
 		}
 		if opt.Password == "" {
 			opt.Password = strings.TrimSpace(GetEnv(envRedisPassword, ""))
@@ -158,6 +161,24 @@ func buildRedisClientFromEnv() (*redis.Client, error) {
 	default:
 		return nil, fmt.Errorf("invalid %s %q, expected %q or %q", envRedisMode, mode, redisModeSingle, redisModeSentinel)
 	}
+}
+
+func resolveRedisURLFromEnv() string {
+	if value, exists := os.LookupEnv(envRedisURL); exists {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	if value, exists := os.LookupEnv(envRedisURLLegacy); exists {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	return "redis://localhost:8946"
 }
 
 func redisModeFromEnv() string {

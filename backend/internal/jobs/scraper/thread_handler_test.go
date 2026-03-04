@@ -1,6 +1,9 @@
 package scraper
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestResolvePostProcessWorkers_DefaultAndClamp(t *testing.T) {
 	t.Setenv(envPostProcessWorkers, "")
@@ -85,4 +88,43 @@ func TestCalculateRequiredPages_PerInstanceAndCap(t *testing.T) {
 	if capped != 100 {
 		t.Fatalf("capped pages = %d, want 100", capped)
 	}
+}
+
+func TestShouldEmitScrapePopErrorLog_RateLimitAndSuppressedCount(t *testing.T) {
+	resetScrapePopErrorLogStateForTest()
+	t.Cleanup(resetScrapePopErrorLogStateForTest)
+
+	base := time.Date(2026, time.March, 4, 12, 0, 0, 0, time.UTC)
+
+	emit, suppressed := shouldEmitScrapePopErrorLog(base)
+	if !emit || suppressed != 0 {
+		t.Fatalf("first error emit=%t suppressed=%d, want true/0", emit, suppressed)
+	}
+
+	emit, suppressed = shouldEmitScrapePopErrorLog(base.Add(5 * time.Second))
+	if emit || suppressed != 0 {
+		t.Fatalf("within interval emit=%t suppressed=%d, want false/0", emit, suppressed)
+	}
+
+	emit, suppressed = shouldEmitScrapePopErrorLog(base.Add(10 * time.Second))
+	if emit || suppressed != 0 {
+		t.Fatalf("within interval emit=%t suppressed=%d, want false/0", emit, suppressed)
+	}
+
+	emit, suppressed = shouldEmitScrapePopErrorLog(base.Add(scrapePopErrorLogInterval))
+	if !emit || suppressed != 2 {
+		t.Fatalf("interval boundary emit=%t suppressed=%d, want true/2", emit, suppressed)
+	}
+
+	emit, suppressed = shouldEmitScrapePopErrorLog(base.Add(scrapePopErrorLogInterval + time.Second))
+	if emit || suppressed != 0 {
+		t.Fatalf("post-emit immediate repeat emit=%t suppressed=%d, want false/0", emit, suppressed)
+	}
+}
+
+func resetScrapePopErrorLogStateForTest() {
+	scrapePopErrorLogState.mu.Lock()
+	defer scrapePopErrorLogState.mu.Unlock()
+	scrapePopErrorLogState.lastLogAt = time.Time{}
+	scrapePopErrorLogState.suppressed = 0
 }

@@ -14,6 +14,7 @@ import (
 	"math"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 var (
 	currentThreads atomic.Uint32
 	stopThread     = make(chan struct{}) // signals a worker to exit
+	scraperNow     = time.Now
 )
 
 const maxScraperPages = 2000
@@ -38,6 +40,7 @@ const (
 	browserEnsureWaitPoll        = 100 * time.Millisecond
 	browserRestartInitialBackoff = 500 * time.Millisecond
 	browserRestartMaxBackoff     = 15 * time.Second
+	scrapePopErrorLogInterval    = 30 * time.Second
 	defaultPostProcessWorkers    = 8
 	defaultPostProcessQueueSize  = 256
 	maxPostProcessWorkers        = 64
@@ -62,6 +65,12 @@ var (
 	stopPage     = make(chan struct{}) // signals that a page should be closed
 	browserAlive atomic.Bool
 	restartCh    = make(chan struct{}, 1) // coalesced restart signal
+
+	scrapePopErrorLogState struct {
+		mu         sync.Mutex
+		lastLogAt  time.Time
+		suppressed int
+	}
 )
 
 type scrapedHTMLJob struct {
@@ -155,7 +164,7 @@ func scrapeWorker(parent context.Context) {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
-			log.Error("pop scrape site", "err", err)
+			logScrapeQueuePopError(err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -230,6 +239,35 @@ func scrapeWorker(parent context.Context) {
 			log.Error("requeue site", "err", err)
 		}
 	}
+}
+
+func logScrapeQueuePopError(err error) {
+	now := scraperNow()
+	emit, suppressed := shouldEmitScrapePopErrorLog(now)
+	if !emit {
+		return
+	}
+
+	if suppressed > 0 {
+		log.Error("pop scrape site", "err", err, "suppressed_repeats", suppressed)
+		return
+	}
+	log.Error("pop scrape site", "err", err)
+}
+
+func shouldEmitScrapePopErrorLog(now time.Time) (bool, int) {
+	scrapePopErrorLogState.mu.Lock()
+	defer scrapePopErrorLogState.mu.Unlock()
+
+	if scrapePopErrorLogState.lastLogAt.IsZero() || now.Sub(scrapePopErrorLogState.lastLogAt) >= scrapePopErrorLogInterval {
+		suppressed := scrapePopErrorLogState.suppressed
+		scrapePopErrorLogState.lastLogAt = now
+		scrapePopErrorLogState.suppressed = 0
+		return true, suppressed
+	}
+
+	scrapePopErrorLogState.suppressed++
+	return false, 0
 }
 
 /* ─────────────────────────────  auto-sizing  ────────────────────────────── */

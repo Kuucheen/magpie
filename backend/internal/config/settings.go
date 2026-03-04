@@ -97,6 +97,9 @@ const (
 	settingsDirectoryPath = "data"
 	settingsDirectoryMode = 0o700
 	settingsFileMode      = 0o600
+	minThreadSettingLimit = 1
+	defaultThreadFallback = 250
+	maxThreadSettingLimit = 2000
 )
 
 var (
@@ -106,6 +109,9 @@ var (
 	configValue atomic.Value
 	currentIp   atomic.Value
 	configMu    sync.Mutex
+
+	broadcastConfigUpdateFn          = broadcastConfigUpdate
+	enforceSettingsFilePermissionsFn = enforceSettingsFilePermissions
 
 	InProductionMode bool
 )
@@ -139,7 +145,7 @@ func ReadSettings() error {
 		}
 	}
 
-	if err := enforceSettingsFilePermissions(); err != nil {
+	if err := enforceSettingsFilePermissionsFn(); err != nil {
 		log.Warn("Error enforcing settings file permissions", "error", err)
 	}
 
@@ -198,6 +204,12 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 	newConfig.WebsiteBlacklist = NormalizeWebsiteBlacklist(newConfig.WebsiteBlacklist)
 
 	var errs []error
+	var stagedSettingsFilePath string
+	cleanupStagedSettingsFile := func() {
+		if stagedSettingsFilePath != "" {
+			_ = os.Remove(stagedSettingsFilePath)
+		}
+	}
 
 	if opts.persistToFile {
 		data, err := json.MarshalIndent(newConfig, "", "  ")
@@ -208,17 +220,29 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 			if err := ensureSettingsStoragePermissions(); err != nil {
 				log.Error("Error ensuring settings storage permissions:", err)
 				errs = append(errs, err)
-			} else if err := os.WriteFile(settingsFilePath, data, settingsFileMode); err != nil {
-				log.Error("Error writing new configuration to file:", err)
+			} else if stagedFile, err := os.CreateTemp(settingsDirectoryPath, "settings-*.tmp"); err != nil {
+				log.Error("Error creating temporary settings file:", err)
 				errs = append(errs, err)
-			} else if err := enforceSettingsFilePermissions(); err != nil {
-				log.Error("Error enforcing settings file permissions:", err)
-				errs = append(errs, err)
+			} else {
+				stagedSettingsFilePath = stagedFile.Name()
+				if _, err := stagedFile.Write(data); err != nil {
+					log.Error("Error writing temporary settings file:", err)
+					errs = append(errs, err)
+				}
+				if err := stagedFile.Close(); err != nil {
+					log.Error("Error closing temporary settings file:", err)
+					errs = append(errs, err)
+				}
+				if err := os.Chmod(stagedSettingsFilePath, settingsFileMode); err != nil {
+					log.Error("Error setting temporary settings file permissions:", err)
+					errs = append(errs, err)
+				}
 			}
 		}
 	}
 
 	if err := errors.Join(errs...); err != nil {
+		cleanupStagedSettingsFile()
 		return err
 	}
 
@@ -227,13 +251,28 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 		if err != nil {
 			log.Error("Error serializing configuration for broadcast:", err)
 			errs = append(errs, err)
-		} else if err := broadcastConfigUpdate(payload); err != nil {
+		} else if err := broadcastConfigUpdateFn(payload); err != nil {
 			log.Error("Error broadcasting configuration update:", err)
 			errs = append(errs, err)
 		}
 	}
 
 	if err := errors.Join(errs...); err != nil {
+		cleanupStagedSettingsFile()
+		return err
+	}
+
+	if opts.persistToFile {
+		if err := os.Rename(stagedSettingsFilePath, settingsFilePath); err != nil {
+			log.Error("Error replacing settings file with staged configuration:", err)
+			errs = append(errs, err)
+		} else if err := enforceSettingsFilePermissionsFn(); err != nil {
+			log.Warn("Settings update persisted but failed to enforce file permissions", "error", err)
+		}
+	}
+
+	if err := errors.Join(errs...); err != nil {
+		cleanupStagedSettingsFile()
 		return err
 	}
 
@@ -251,18 +290,43 @@ func applyConfigUpdate(newConfig Config, opts configUpdateOptions) error {
 }
 
 func normalizeThreadSettings(cfg *Config) {
-	cfg.Checker.MaxThreads = normalizeMaxThreads(cfg.Checker.MaxThreads, cfg.Checker.Threads, 250)
-	cfg.Scraper.MaxThreads = normalizeMaxThreads(cfg.Scraper.MaxThreads, cfg.Scraper.Threads, 250)
+	checkerThreads := cfg.Checker.Threads
+	checkerMaxThreads := cfg.Checker.MaxThreads
+	cfg.Checker.Threads = clampThreadCount(checkerThreads)
+	cfg.Checker.MaxThreads = normalizeMaxThreads(checkerMaxThreads, checkerThreads, defaultThreadFallback, maxThreadSettingLimit)
+
+	scraperThreads := cfg.Scraper.Threads
+	scraperMaxThreads := cfg.Scraper.MaxThreads
+	cfg.Scraper.Threads = clampThreadCount(scraperThreads)
+	cfg.Scraper.MaxThreads = normalizeMaxThreads(scraperMaxThreads, scraperThreads, defaultThreadFallback, maxThreadSettingLimit)
 }
 
-func normalizeMaxThreads(maxThreads uint32, threads uint32, fallback uint32) uint32 {
+func normalizeMaxThreads(maxThreads uint32, threads uint32, fallback uint32, cap uint32) uint32 {
 	if maxThreads > 0 {
-		return maxThreads
+		return clampThreadCountWithCap(maxThreads, cap)
 	}
 	if threads > 0 {
-		return threads
+		return clampThreadCountWithCap(threads, cap)
 	}
-	return fallback
+	return clampThreadCountWithCap(fallback, cap)
+}
+
+func clampThreadCount(threads uint32) uint32 {
+	return clampThreadCountWithBounds(threads, minThreadSettingLimit, maxThreadSettingLimit)
+}
+
+func clampThreadCountWithCap(value uint32, cap uint32) uint32 {
+	return clampThreadCountWithBounds(value, minThreadSettingLimit, cap)
+}
+
+func clampThreadCountWithBounds(value uint32, min uint32, max uint32) uint32 {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
 }
 
 func applyLegacyDefaults(raw []byte, cfg *Config) {

@@ -118,13 +118,17 @@ func ThreadDispatcher(ctx context.Context) {
 			target = cfg.Scraper.Threads
 		}
 
-		for currentThreads.Load() < target {
-			go scrapeWorker(ctx)
-			currentThreads.Add(1)
+		activeThreads := currentThreads.Load()
+		for activeThreads < target {
+			launchScraperWorker(ctx)
+			activeThreads = currentThreads.Load()
 		}
-		for currentThreads.Load() > target {
-			stopThread <- struct{}{}
-			currentThreads.Add(^uint32(0)) // decrement
+		// Non-blocking stop requests avoid dispatcher stalls when counts drift.
+		for activeThreads > target {
+			if !requestScraperWorkerStop() {
+				break
+			}
+			activeThreads--
 		}
 
 		log.Debug("Scraper threads", "active", currentThreads.Load())
@@ -133,6 +137,29 @@ func ThreadDispatcher(ctx context.Context) {
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+func launchScraperWorker(ctx context.Context) {
+	currentThreads.Add(1)
+	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Error("scraper worker panicked", "panic", recovered)
+			}
+			currentThreads.Add(^uint32(0))
+		}()
+
+		scrapeWorker(ctx)
+	}()
+}
+
+func requestScraperWorkerStop() bool {
+	select {
+	case stopThread <- struct{}{}:
+		return true
+	default:
+		return false
 	}
 }
 

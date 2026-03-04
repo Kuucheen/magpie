@@ -120,11 +120,15 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go bootstrap.AddDefaultJudgesToUsers()
+	registrationWarning := ""
 	sites, err := database.SaveScrapingSourcesOfUsers(user.ID, cfg.Scraper.ScrapeSites) // default scrape sites
 	if err != nil {
 		log.Warn("Could not add default Scraping Sources to user", "err", err)
 	} else {
-		sitequeue.PublicScrapeSiteQueue.AddToQueue(sites)
+		if err := enqueueScrapeSitesOrRollback(user.ID, sites); err != nil {
+			log.Error("Could not queue default scraping sources for user", "user_id", user.ID, "error", err)
+			registrationWarning = "Default scrape sources could not be queued and were rolled back. Add sources again later."
+		}
 	}
 
 	token, err := auth.GenerateJWT(user.ID, user.Role)
@@ -133,7 +137,11 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]string{"token": token})
+	response := map[string]any{"token": token}
+	if registrationWarning != "" {
+		response["warning"] = registrationWarning
+	}
+	writeJSON(w, http.StatusCreated, response)
 }
 
 func loginUser(w http.ResponseWriter, r *http.Request) {

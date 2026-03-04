@@ -76,16 +76,18 @@ func ThreadDispatcher(ctx context.Context) {
 			targetThreads = cfg.Checker.Threads
 		}
 
-		// Start threads if currentThreads is less than targetThreads
-		for currentThreads.Load() < targetThreads {
-			go work(ctx)
-			currentThreads.Add(1)
+		activeThreads := currentThreads.Load()
+		for activeThreads < targetThreads {
+			launchCheckerWorker(ctx)
+			activeThreads = currentThreads.Load()
 		}
 
-		// Stop threads if currentThreads is greater than targetThreads
-		for currentThreads.Load() > targetThreads {
-			stopChannel <- struct{}{}
-			currentThreads.Add(^uint32(0)) // Decrement by 1
+		// Non-blocking stop requests avoid dispatcher stalls when counts drift.
+		for activeThreads > targetThreads {
+			if !requestCheckerWorkerStop() {
+				break
+			}
+			activeThreads--
 		}
 
 		log.Debug("Checker threads", "active", currentThreads.Load())
@@ -94,6 +96,29 @@ func ThreadDispatcher(ctx context.Context) {
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+func launchCheckerWorker(ctx context.Context) {
+	currentThreads.Add(1)
+	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Error("checker worker panicked", "panic", recovered)
+			}
+			currentThreads.Add(^uint32(0))
+		}()
+
+		work(ctx)
+	}()
+}
+
+func requestCheckerWorkerStop() bool {
+	select {
+	case stopChannel <- struct{}{}:
+		return true
+	default:
+		return false
 	}
 }
 

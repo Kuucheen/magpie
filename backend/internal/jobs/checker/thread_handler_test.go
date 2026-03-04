@@ -2,7 +2,9 @@ package checker
 
 import (
 	"errors"
+	"runtime"
 	"testing"
+	"time"
 
 	"magpie/internal/domain"
 	"magpie/internal/support"
@@ -148,5 +150,60 @@ func TestProcessJudgeAssignments_RecordsFailedCheckOnce(t *testing.T) {
 	}
 	if userSuccess[10] || userSuccess[11] {
 		t.Fatalf("expected users to remain unsuccessful on failed check, got %#v", userSuccess)
+	}
+}
+
+func TestRequestCheckerWorkerStop_DoesNotBlockWithoutListener(t *testing.T) {
+	originalStopChannel := stopChannel
+	stopChannel = make(chan struct{})
+	t.Cleanup(func() {
+		stopChannel = originalStopChannel
+	})
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- requestCheckerWorkerStop()
+	}()
+
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("requestCheckerWorkerStop should return false when no worker is listening")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("requestCheckerWorkerStop blocked without listener")
+	}
+}
+
+func TestRequestCheckerWorkerStop_SucceedsWithListener(t *testing.T) {
+	originalStopChannel := stopChannel
+	stopChannel = make(chan struct{})
+	t.Cleanup(func() {
+		stopChannel = originalStopChannel
+	})
+
+	stopped := make(chan struct{})
+	go func() {
+		<-stopChannel
+		close(stopped)
+	}()
+
+	deadline := time.Now().Add(100 * time.Millisecond)
+	delivered := false
+	for time.Now().Before(deadline) {
+		if requestCheckerWorkerStop() {
+			delivered = true
+			break
+		}
+		runtime.Gosched()
+	}
+	if !delivered {
+		t.Fatal("requestCheckerWorkerStop should return true when a worker listener is available")
+	}
+
+	select {
+	case <-stopped:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected stop signal to be delivered")
 	}
 }

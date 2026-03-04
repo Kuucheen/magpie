@@ -245,7 +245,11 @@ func saveScrapingSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sitequeue.PublicScrapeSiteQueue.AddToQueue(sites)
+	if err := enqueueScrapeSitesOrRollback(userID, sites); err != nil {
+		log.Error("Could not queue scrape sources", "user_id", userID, "error", err)
+		writeError(w, "Could not queue scrape sources; saved changes were rolled back", http.StatusServiceUnavailable)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]int{"sourceCount": len(sites)})

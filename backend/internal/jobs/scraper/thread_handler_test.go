@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"runtime"
 	"testing"
 	"time"
 )
@@ -127,4 +128,59 @@ func resetScrapePopErrorLogStateForTest() {
 	defer scrapePopErrorLogState.mu.Unlock()
 	scrapePopErrorLogState.lastLogAt = time.Time{}
 	scrapePopErrorLogState.suppressed = 0
+}
+
+func TestRequestScraperWorkerStop_DoesNotBlockWithoutListener(t *testing.T) {
+	originalStopThread := stopThread
+	stopThread = make(chan struct{})
+	t.Cleanup(func() {
+		stopThread = originalStopThread
+	})
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- requestScraperWorkerStop()
+	}()
+
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("requestScraperWorkerStop should return false when no worker is listening")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("requestScraperWorkerStop blocked without listener")
+	}
+}
+
+func TestRequestScraperWorkerStop_SucceedsWithListener(t *testing.T) {
+	originalStopThread := stopThread
+	stopThread = make(chan struct{})
+	t.Cleanup(func() {
+		stopThread = originalStopThread
+	})
+
+	stopped := make(chan struct{})
+	go func() {
+		<-stopThread
+		close(stopped)
+	}()
+
+	deadline := time.Now().Add(100 * time.Millisecond)
+	delivered := false
+	for time.Now().Before(deadline) {
+		if requestScraperWorkerStop() {
+			delivered = true
+			break
+		}
+		runtime.Gosched()
+	}
+	if !delivered {
+		t.Fatal("requestScraperWorkerStop should return true when a worker listener is available")
+	}
+
+	select {
+	case <-stopped:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected stop signal to be delivered")
+	}
 }

@@ -27,7 +27,9 @@ import (
 const (
 	connectEstablishedResponse          = "HTTP/1.1 200 Connection Established\r\nProxy-Agent: Magpie Rotator\r\n\r\n"
 	envRotatingProxyMaxRequestBodyBytes = "ROTATING_PROXY_MAX_REQUEST_BODY_BYTES"
+	envRotatingProxyHandshakeTimeoutMS  = "ROTATING_PROXY_HANDSHAKE_TIMEOUT_MS"
 	defaultMaxRequestBodyBytes          = 10 * 1024 * 1024
+	defaultHandshakeTimeout             = 15 * time.Second
 )
 
 var (
@@ -36,6 +38,7 @@ var (
 	performUpstreamConnectFunc = performUpstreamConnect
 	connectThroughUpstreamFunc = connectThroughUpstream
 	maxRequestBodyBytes        = loadMaxRequestBodyBytes()
+	handshakeTimeout           = loadHandshakeTimeout()
 )
 
 type proxyHandler struct {
@@ -51,6 +54,7 @@ func newSocksProxyHandler(rotator domain.RotatingProxy) *socksProxyHandler {
 }
 
 func (h *socksProxyHandler) handle(conn net.Conn) {
+	applyConnDeadline(conn, handshakeTimeout)
 	switch strings.ToLower(strings.TrimSpace(listenProtocolName(h.rotator))) {
 	case "socks4":
 		h.handleSocks4(conn)
@@ -89,6 +93,8 @@ func (h *socksProxyHandler) handleSocks5(conn net.Conn) {
 		return
 	}
 
+	clearConnDeadline(conn)
+	clearConnDeadline(upstreamConn)
 	pipeConnections(conn, upstreamConn)
 }
 
@@ -255,6 +261,8 @@ func (h *socksProxyHandler) handleSocks4(conn net.Conn) {
 		return
 	}
 
+	clearConnDeadline(conn)
+	clearConnDeadline(upstreamConn)
 	pipeConnections(conn, upstreamConn)
 }
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -404,6 +412,14 @@ func loadMaxRequestBodyBytes() int {
 	return limit
 }
 
+func loadHandshakeTimeout() time.Duration {
+	ms := support.GetEnvInt(envRotatingProxyHandshakeTimeoutMS, int(defaultHandshakeTimeout/time.Millisecond))
+	if ms <= 0 {
+		ms = int(defaultHandshakeTimeout / time.Millisecond)
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
 func readRequestBodyWithLimit(body io.Reader, limit int) ([]byte, error) {
 	if body == nil {
 		return nil, nil
@@ -467,11 +483,14 @@ func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	applyConnDeadline(clientConn, handshakeTimeout)
 	if _, err := clientConn.Write([]byte(connectEstablishedResponse)); err != nil {
 		_ = upConn.Close()
 		return
 	}
 
+	clearConnDeadline(clientConn)
+	clearConnDeadline(upConn)
 	pipeConnections(clientConn, upConn)
 }
 
@@ -540,6 +559,9 @@ func dialUpstream(next *dto.RotatingProxyNext) (net.Conn, error) {
 }
 
 func performUpstreamConnect(conn net.Conn, targetHost string, next *dto.RotatingProxyNext) error {
+	applyConnDeadline(conn, handshakeTimeout)
+	defer clearConnDeadline(conn)
+
 	request := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\nProxy-Connection: Keep-Alive\r\n", targetHost, targetHost)
 	if next.HasAuth {
 		auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", next.Username, next.Password)))
@@ -739,6 +761,9 @@ func connectThroughUpstream(target string, next *dto.RotatingProxyNext) (net.Con
 }
 
 func performSocks5UpstreamConnect(conn net.Conn, target string, next *dto.RotatingProxyNext) error {
+	applyConnDeadline(conn, handshakeTimeout)
+	defer clearConnDeadline(conn)
+
 	greeting := []byte{0x05, 0x01, 0x00}
 	if next.HasAuth {
 		greeting[2] = 0x02
@@ -800,6 +825,9 @@ func performSocks5UpstreamConnect(conn net.Conn, target string, next *dto.Rotati
 }
 
 func performSocks4UpstreamConnect(conn net.Conn, target string, next *dto.RotatingProxyNext) error {
+	applyConnDeadline(conn, handshakeTimeout)
+	defer clearConnDeadline(conn)
+
 	host, port, err := splitTargetAddress(target)
 	if err != nil {
 		return err
@@ -929,4 +957,18 @@ func splitTargetAddress(target string) (string, uint16, error) {
 	}
 
 	return host, uint16(port), nil
+}
+
+func applyConnDeadline(conn net.Conn, timeout time.Duration) {
+	if conn == nil || timeout <= 0 {
+		return
+	}
+	_ = conn.SetDeadline(time.Now().Add(timeout))
+}
+
+func clearConnDeadline(conn net.Conn) {
+	if conn == nil {
+		return
+	}
+	_ = conn.SetDeadline(time.Time{})
 }

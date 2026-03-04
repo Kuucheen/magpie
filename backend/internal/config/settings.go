@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -115,7 +116,7 @@ func init() {
 	currentIp.Store("")
 }
 
-func ReadSettings() {
+func ReadSettings() error {
 
 	data, err := os.ReadFile(settingsFilePath)
 	if err != nil {
@@ -124,20 +125,17 @@ func ReadSettings() {
 
 			err = ensureSettingsStoragePermissions()
 			if err != nil {
-				log.Error("Error creating directory for settings file:", err)
-				return
+				return fmt.Errorf("config: ensure settings storage: %w", err)
 			}
 
 			err = os.WriteFile(settingsFilePath, defaultConfig, settingsFileMode)
 			if err != nil {
-				log.Error("Error writing default settings file:", err)
-				return
+				return fmt.Errorf("config: write default settings: %w", err)
 			}
 
 			data = defaultConfig
 		} else {
-			log.Error("Error reading settings file:", err)
-			return
+			return fmt.Errorf("config: read settings file: %w", err)
 		}
 	}
 
@@ -148,17 +146,16 @@ func ReadSettings() {
 	var newConfig Config
 	err = json.Unmarshal(data, &newConfig)
 	if err != nil {
-		log.Error("Error unmarshalling settings file:", err)
-		return
+		return fmt.Errorf("config: parse settings file: %w", err)
 	}
 	applyLegacyDefaults(data, &newConfig)
 
 	if err := applyConfigUpdate(newConfig, configUpdateOptions{source: "file"}); err != nil {
-		log.Error("Error applying configuration from settings file:", err)
-		return
+		return fmt.Errorf("config: apply settings from file: %w", err)
 	}
 
 	log.Debug("Settings file loaded successfully")
+	return nil
 }
 
 func SetConfig(newConfig Config) {

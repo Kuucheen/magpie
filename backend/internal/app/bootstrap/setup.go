@@ -38,7 +38,9 @@ func Setup(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
-	config.ReadSettings()
+	if err := config.ReadSettings(); err != nil {
+		return fmt.Errorf("failed to load settings: %w", err)
+	}
 
 	if redisClient, err := support.GetRedisClient(); err != nil {
 		log.Warn("Redis synchronization disabled", "error", err)

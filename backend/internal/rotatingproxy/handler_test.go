@@ -172,6 +172,23 @@ func TestBuildHTTPTransport_ConfiguresProxyURL(t *testing.T) {
 	}
 }
 
+func TestLoadHandshakeTimeout_DefaultAndClamp(t *testing.T) {
+	t.Setenv(envRotatingProxyHandshakeTimeoutMS, "")
+	if got := loadHandshakeTimeout(); got != defaultHandshakeTimeout {
+		t.Fatalf("handshake timeout = %s, want %s", got, defaultHandshakeTimeout)
+	}
+
+	t.Setenv(envRotatingProxyHandshakeTimeoutMS, "0")
+	if got := loadHandshakeTimeout(); got != defaultHandshakeTimeout {
+		t.Fatalf("handshake timeout with zero = %s, want %s", got, defaultHandshakeTimeout)
+	}
+
+	t.Setenv(envRotatingProxyHandshakeTimeoutMS, "2500")
+	if got := loadHandshakeTimeout(); got != 2500*time.Millisecond {
+		t.Fatalf("handshake timeout = %s, want %s", got, 2500*time.Millisecond)
+	}
+}
+
 func TestHandleConnect_ProxiesDataThroughUpstream(t *testing.T) {
 	handler := &proxyHandler{
 		rotator: domain.RotatingProxy{

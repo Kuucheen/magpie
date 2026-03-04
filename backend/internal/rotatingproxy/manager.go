@@ -240,6 +240,7 @@ func (ps *proxyServer) startSocksServer() error {
 				log.Error("rotating proxy server: accept error", "rotator_id", ps.rotator.ID, "error", err)
 				continue
 			}
+			applyConnDeadline(conn, handshakeTimeout)
 			if !ps.dispatchSocksConnection(conn, handler.handle) {
 				ps.logSocksConcurrencyLimit()
 			}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -115,8 +114,8 @@ func normalizeOrigin(origin string) string {
 	return strings.TrimRight(origin, "/")
 }
 
-func isSameHostOrigin(origin string, requestHost string) bool {
-	if strings.TrimSpace(origin) == "" || strings.TrimSpace(requestHost) == "" {
+func isSameHostOrigin(origin string, request *http.Request) bool {
+	if strings.TrimSpace(origin) == "" || request == nil {
 		return false
 	}
 
@@ -124,18 +123,85 @@ func isSameHostOrigin(origin string, requestHost string) bool {
 	if err != nil {
 		return false
 	}
+	originScheme := strings.TrimSpace(strings.ToLower(parsedOrigin.Scheme))
+	if originScheme != "http" && originScheme != "https" {
+		return false
+	}
 
 	originHostname := strings.TrimSpace(strings.ToLower(parsedOrigin.Hostname()))
 	if originHostname == "" {
 		return false
 	}
-
-	requestHostname := strings.TrimSpace(strings.ToLower(requestHost))
-	if host, _, splitErr := net.SplitHostPort(requestHost); splitErr == nil {
-		requestHostname = strings.TrimSpace(strings.ToLower(host))
+	originPort, ok := normalizePort(originScheme, parsedOrigin.Port())
+	if !ok {
+		return false
 	}
 
-	return originHostname == requestHostname
+	requestScheme := requestSchemeForOriginCheck(request)
+	requestHostname, requestPort, ok := parseHostAndPort(request.Host, requestScheme)
+	if !ok {
+		return false
+	}
+
+	return originHostname == requestHostname && originScheme == requestScheme && originPort == requestPort
+}
+
+func requestSchemeForOriginCheck(request *http.Request) string {
+	if request == nil {
+		return ""
+	}
+	if request.TLS != nil {
+		return "https"
+	}
+
+	forwardedProto := strings.TrimSpace(strings.ToLower(request.Header.Get("X-Forwarded-Proto")))
+	if idx := strings.IndexByte(forwardedProto, ','); idx >= 0 {
+		forwardedProto = strings.TrimSpace(forwardedProto[:idx])
+	}
+	if forwardedProto == "http" || forwardedProto == "https" {
+		return forwardedProto
+	}
+	return "http"
+}
+
+func parseHostAndPort(hostport string, scheme string) (string, string, bool) {
+	hostport = strings.TrimSpace(hostport)
+	if hostport == "" {
+		return "", "", false
+	}
+
+	parsed, err := url.Parse("http://" + hostport)
+	if err != nil {
+		return "", "", false
+	}
+
+	hostname := strings.TrimSpace(strings.ToLower(parsed.Hostname()))
+	if hostname == "" {
+		return "", "", false
+	}
+
+	port, ok := normalizePort(scheme, parsed.Port())
+	if !ok {
+		return "", "", false
+	}
+
+	return hostname, port, true
+}
+
+func normalizePort(scheme, port string) (string, bool) {
+	port = strings.TrimSpace(port)
+	if port != "" {
+		return port, true
+	}
+
+	switch strings.ToLower(strings.TrimSpace(scheme)) {
+	case "http":
+		return "80", true
+	case "https":
+		return "443", true
+	default:
+		return "", false
+	}
 }
 
 func resolveUploadMaxBodyBytes() int64 {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"container/heap"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -64,12 +65,20 @@ type fixedWindowLimiter struct {
 
 	mu       sync.Mutex
 	counters map[string]localCounter
+	expiries localCounterExpiryHeap
 }
 
 type localCounter struct {
 	count     int64
 	expiresAt time.Time
 }
+
+type localCounterExpiry struct {
+	key       string
+	expiresAt time.Time
+}
+
+type localCounterExpiryHeap []localCounterExpiry
 
 type loginFailureLimiter struct {
 	perIP    *fixedWindowLimiter
@@ -143,12 +152,15 @@ func getAuthRateLimits() *authRateLimits {
 }
 
 func newFixedWindowLimiter(prefix string, limit int64, window time.Duration) *fixedWindowLimiter {
-	return &fixedWindowLimiter{
+	limiter := &fixedWindowLimiter{
 		prefix:   prefix,
 		limit:    limit,
 		window:   window,
 		counters: make(map[string]localCounter),
+		expiries: make(localCounterExpiryHeap, 0),
 	}
+	heap.Init(&limiter.expiries)
+	return limiter
 }
 
 func (l *fixedWindowLimiter) wrap(next http.Handler, message string, scope string) http.Handler {
@@ -314,6 +326,7 @@ func (l *fixedWindowLimiter) incrementLocal(key string) (int64, time.Duration) {
 	if !exists {
 		entry = localCounter{count: 1, expiresAt: now.Add(l.window)}
 		l.counters[key] = entry
+		heap.Push(&l.expiries, localCounterExpiry{key: key, expiresAt: entry.expiresAt})
 		return entry.count, time.Until(entry.expiresAt)
 	}
 
@@ -339,11 +352,53 @@ func (l *fixedWindowLimiter) currentLocal(key string) (int64, time.Duration) {
 }
 
 func (l *fixedWindowLimiter) purgeExpiredLocalLocked(now time.Time) {
-	for key, entry := range l.counters {
-		if !entry.expiresAt.After(now) {
-			delete(l.counters, key)
+	for len(l.expiries) > 0 {
+		next := l.expiries[0]
+		if next.expiresAt.After(now) {
+			return
 		}
+
+		expired := heap.Pop(&l.expiries).(localCounterExpiry)
+		entry, exists := l.counters[expired.key]
+		if !exists {
+			continue
+		}
+		if !entry.expiresAt.Equal(expired.expiresAt) {
+			continue
+		}
+		delete(l.counters, expired.key)
 	}
+}
+
+func (h localCounterExpiryHeap) Len() int {
+	return len(h)
+}
+
+func (h localCounterExpiryHeap) Less(i, j int) bool {
+	return h[i].expiresAt.Before(h[j].expiresAt)
+}
+
+func (h localCounterExpiryHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *localCounterExpiryHeap) Push(x any) {
+	entry, ok := x.(localCounterExpiry)
+	if !ok {
+		return
+	}
+	*h = append(*h, entry)
+}
+
+func (h *localCounterExpiryHeap) Pop() any {
+	old := *h
+	n := len(old)
+	if n == 0 {
+		return localCounterExpiry{}
+	}
+	entry := old[n-1]
+	*h = old[:n-1]
+	return entry
 }
 
 func (l *fixedWindowLimiter) redisKey(key string) string {

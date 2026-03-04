@@ -22,10 +22,12 @@ type cachedRegex struct {
 }
 
 const (
-	regexCacheTTL             = 5 * time.Minute
-	regexCacheCleanupInterval = 1 * time.Minute
-	envCheckerMaxResponseBody = "CHECKER_MAX_RESPONSE_BODY_BYTES"
-	defaultCheckerMaxBodySize = 1 << 20 // 1 MiB
+	regexCacheTTL                       = 5 * time.Minute
+	regexCacheCleanupInterval           = 1 * time.Minute
+	envCheckerMaxResponseBody           = "CHECKER_MAX_RESPONSE_BODY_BYTES"
+	envCheckerDefaultRequestTimeoutMS   = "CHECKER_DEFAULT_REQUEST_TIMEOUT_MS"
+	defaultCheckerMaxBodySize           = 1 << 20 // 1 MiB
+	defaultCheckerDefaultRequestTimeout = 10 * time.Second
 )
 
 var (
@@ -160,11 +162,24 @@ func evictExpiredRegexEntriesLocked(now time.Time) {
 }
 
 func DefaultRequest(siteName string) (string, error) {
+	return DefaultRequestWithContext(context.Background(), siteName)
+}
+
+func DefaultRequestWithContext(ctx context.Context, siteName string) (string, error) {
 	if config.IsWebsiteBlocked(siteName) {
 		return "", fmt.Errorf("target website is blocked: %s", siteName)
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	response, err := http.Get(siteName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, siteName, nil)
+	if err != nil {
+		return "", err
+	}
+
+	client := &http.Client{Timeout: checkerDefaultRequestTimeout()}
+	response, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -187,4 +202,12 @@ func checkerMaxResponseBodyBytes() int64 {
 		limit = defaultCheckerMaxBodySize
 	}
 	return int64(limit)
+}
+
+func checkerDefaultRequestTimeout() time.Duration {
+	ms := support.GetEnvInt(envCheckerDefaultRequestTimeoutMS, int(defaultCheckerDefaultRequestTimeout/time.Millisecond))
+	if ms <= 0 {
+		return defaultCheckerDefaultRequestTimeout
+	}
+	return time.Duration(ms) * time.Millisecond
 }

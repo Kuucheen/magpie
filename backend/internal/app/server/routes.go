@@ -29,7 +29,7 @@ func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" {
-			if !cors.isAllowed(origin) && !isSameHostOrigin(origin, r.Host) {
+			if !cors.isAllowed(origin) && !isSameHostOrigin(origin, r) {
 				log.Warn("Blocked CORS origin", "origin", origin, "request_host", r.Host)
 				writeError(w, "CORS origin is not allowed", http.StatusForbidden)
 				return

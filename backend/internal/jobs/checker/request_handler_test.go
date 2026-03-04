@@ -1,11 +1,14 @@
 package checker
 
 import (
+	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"magpie/internal/domain"
 	"magpie/internal/support"
@@ -86,5 +89,39 @@ func TestProxyCheckRequest_DoesNotForceConnectionClose(t *testing.T) {
 
 	if got := connectionHeader.Load().(string); strings.EqualFold(got, "close") {
 		t.Fatalf("expected Connection header to avoid forced close, got %q", got)
+	}
+}
+
+func TestDefaultRequest_UsesTimeout(t *testing.T) {
+	t.Setenv(envCheckerDefaultRequestTimeoutMS, "20")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		_, _ = w.Write([]byte("late"))
+	}))
+	t.Cleanup(server.Close)
+
+	startedAt := time.Now()
+	_, err := DefaultRequest(server.URL)
+	elapsed := time.Since(startedAt)
+	if err == nil {
+		t.Fatal("DefaultRequest unexpectedly succeeded despite timeout")
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("DefaultRequest timeout took too long: %s", elapsed)
+	}
+}
+
+func TestDefaultRequestWithContext_RespectsCancellation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := DefaultRequestWithContext(ctx, server.URL)
+	if err == nil {
+		t.Fatal("DefaultRequestWithContext unexpectedly succeeded with canceled context")
 	}
 }

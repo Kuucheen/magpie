@@ -113,7 +113,7 @@ func Setup(ctx context.Context) error {
 			default:
 			}
 
-			html, err := checker.DefaultRequest(cfg.Checker.IpLookup)
+			html, err := checker.DefaultRequestWithContext(ctx, cfg.Checker.IpLookup)
 			if err != nil {
 				log.Error("Error checking IP address:", err)
 				select {

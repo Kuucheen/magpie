@@ -12,8 +12,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -21,10 +23,11 @@ const jwtSecretEnv = "JWT_SECRET"
 const jwtSecretMinLength = 32
 
 const (
-	envJWTTTLMinutes = "JWT_TTL_MINUTES"
-	defaultJWTTTL    = 24 * 7 * time.Hour
-	minJWTTTL        = 15 * time.Minute
-	maxJWTTTL        = 24 * 7 * time.Hour
+	envJWTTTLMinutes          = "JWT_TTL_MINUTES"
+	defaultJWTTTL             = 24 * 7 * time.Hour
+	minJWTTTL                 = 15 * time.Minute
+	maxJWTTTL                 = 24 * 7 * time.Hour
+	envAuthRevocationFailOpen = "AUTH_REVOCATION_FAIL_OPEN"
 
 	jwtClaimUserID   = "user_id"
 	jwtClaimRole     = "role"
@@ -33,12 +36,16 @@ const (
 	jwtClaimTokenID  = "jti"
 	jwtClaimIssuedNs = "iat_ns"
 	jwtTokenIDBytes  = 16
+
+	authRevocationDegradedLogEvery = 30 * time.Second
 )
 
 var (
 	jwtSecretOnce sync.Once
 	jwtKey        []byte
 	jwtKeyErr     error
+
+	authRevocationLastDegradedLog atomic.Int64
 )
 
 func RequireJWTSecretConfigured() error {
@@ -275,14 +282,6 @@ func validateTokenRevocation(claims map[string]interface{}) error {
 		return errors.New("invalid token")
 	}
 
-	revoked, err := isTokenIDRevoked(tokenID)
-	if err != nil {
-		return errors.New("invalid token")
-	}
-	if revoked {
-		return errors.New("invalid token")
-	}
-
 	userID, ok := claimUint(claims, jwtClaimUserID)
 	if !ok || userID == 0 {
 		return errors.New("invalid token")
@@ -293,8 +292,24 @@ func validateTokenRevocation(claims map[string]interface{}) error {
 		return errors.New("invalid token")
 	}
 
+	revoked, err := isTokenIDRevoked(tokenID)
+	if err != nil {
+		if errors.Is(err, ErrTokenRevocationStoreUnavailable) && authRevocationFailOpenEnabled() {
+			logRevocationValidationDegraded("token_id", err)
+			return nil
+		}
+		return errors.New("invalid token")
+	}
+	if revoked {
+		return errors.New("invalid token")
+	}
+
 	revokedBefore, exists, err := userTokensRevokedBefore(userID)
 	if err != nil {
+		if errors.Is(err, ErrTokenRevocationStoreUnavailable) && authRevocationFailOpenEnabled() {
+			logRevocationValidationDegraded("user_cutoff", err)
+			return nil
+		}
 		return errors.New("invalid token")
 	}
 	if exists && issuedAtNs <= revokedBefore.UnixNano() {
@@ -302,6 +317,37 @@ func validateTokenRevocation(claims map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+func authRevocationFailOpenEnabled() bool {
+	raw := strings.TrimSpace(os.Getenv(envAuthRevocationFailOpen))
+	if raw == "" {
+		return true
+	}
+
+	enabled, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true
+	}
+	return enabled
+}
+
+func logRevocationValidationDegraded(check string, err error) {
+	now := time.Now().Unix()
+	last := authRevocationLastDegradedLog.Load()
+	if now-last < int64(authRevocationDegradedLogEvery/time.Second) {
+		return
+	}
+	if !authRevocationLastDegradedLog.CompareAndSwap(last, now) {
+		return
+	}
+
+	log.Warn(
+		"JWT revocation validation degraded: accepting token while revocation store is unavailable",
+		"check", check,
+		"error", err,
+		"fail_open", true,
+	)
 }
 
 func claimString(claims map[string]interface{}, key string) (string, bool) {

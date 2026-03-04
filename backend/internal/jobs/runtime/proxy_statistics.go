@@ -31,9 +31,11 @@ const (
 	reputationRecalcBatch             = 5000
 	reputationRecalcPerTick           = 4
 	statisticsProducerRetryDelay      = 250 * time.Millisecond
+	defaultStatisticsProducerMaxBlock = 500 * time.Millisecond
 	defaultStatisticsIngestWorkers    = 4
 	maxStatisticsIngestWorkers        = 32
 	envProxyStatisticsIngestWorkers   = "PROXY_STATISTICS_INGEST_WORKERS"
+	envProxyStatisticsProducerBlockMS = "PROXY_STATISTICS_PRODUCER_BLOCK_TIMEOUT_MS"
 
 	envProxyStatisticsRedisStreamEnabled        = "PROXY_STATISTICS_REDIS_STREAM_ENABLED"
 	envProxyStatisticsRedisStreamKey            = "PROXY_STATISTICS_REDIS_STREAM_KEY"
@@ -87,6 +89,13 @@ func AddProxyStatistic(proxyStatistic domain.ProxyStatistic) {
 
 func AddProxyStatisticForUsers(proxyStatistic domain.ProxyStatistic, userIDs []uint) {
 	policy := resolveStatisticsOverloadPolicy(userIDs)
+	blockDeadline := time.Time{}
+	if policy != statisticsOverloadPolicyDropNew {
+		maxBlock := resolveStatisticsProducerMaxBlock()
+		if maxBlock > 0 {
+			blockDeadline = time.Now().Add(maxBlock)
+		}
+	}
 
 	if proxyStatisticStreamReady.Load() {
 		for {
@@ -97,12 +106,15 @@ func AddProxyStatisticForUsers(proxyStatistic domain.ProxyStatistic, userIDs []u
 			if policy != statisticsOverloadPolicyBlock {
 				break
 			}
+			if !blockDeadline.IsZero() && !time.Now().Before(blockDeadline) {
+				break
+			}
 			recordProxyStatisticBackpressure(policy)
 			time.Sleep(statisticsProducerRetryDelay)
 		}
 	}
 
-	if enqueueProxyStatistic(proxyStatistic, policy) {
+	if enqueueProxyStatistic(proxyStatistic, policy, blockDeadline) {
 		return
 	}
 
@@ -156,7 +168,7 @@ func enqueueProxyStatisticToStream(proxyStatistic domain.ProxyStatistic, policy 
 	return true, true
 }
 
-func enqueueProxyStatistic(proxyStatistic domain.ProxyStatistic, policy string) bool {
+func enqueueProxyStatistic(proxyStatistic domain.ProxyStatistic, policy string, blockDeadline time.Time) bool {
 	if policy == statisticsOverloadPolicyDropNew {
 		select {
 		case proxyStatisticQueue <- proxyStatistic:
@@ -171,8 +183,23 @@ func enqueueProxyStatistic(proxyStatistic domain.ProxyStatistic, policy string) 
 		return true
 	default:
 		recordProxyStatisticBackpressure(policy)
-		proxyStatisticQueue <- proxyStatistic
-		return true
+		if blockDeadline.IsZero() {
+			return false
+		}
+
+		remaining := time.Until(blockDeadline)
+		if remaining <= 0 {
+			return false
+		}
+
+		timer := time.NewTimer(remaining)
+		defer timer.Stop()
+		select {
+		case proxyStatisticQueue <- proxyStatistic:
+			return true
+		case <-timer.C:
+			return false
+		}
 	}
 }
 
@@ -676,6 +703,14 @@ func resolveStatisticsIngestWorkers() int {
 		return maxStatisticsIngestWorkers
 	}
 	return workers
+}
+
+func resolveStatisticsProducerMaxBlock() time.Duration {
+	ms := support.GetEnvInt(envProxyStatisticsProducerBlockMS, int(defaultStatisticsProducerMaxBlock/time.Millisecond))
+	if ms <= 0 {
+		return 0
+	}
+	return time.Duration(ms) * time.Millisecond
 }
 
 func publishDirtyProxyIDs(ch chan<- []uint64, proxyIDs []uint64) {

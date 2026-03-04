@@ -1,6 +1,6 @@
 # Magpie Backend Production Runbook
 
-_Last updated: 2026-02-28_
+_Last updated: 2026-03-04_
 
 ## First 15 Minutes Checklist
 
@@ -82,12 +82,14 @@ Actions:
 ### Redis unavailable
 Symptoms:
 - `/readyz` reports `redis=down` or `redis=degraded`
-- auth/token validation and queue operations may fail
+- queue operations may fail
+- JWT signature/expiry validation continues, but revocation checks run in degraded fail-open mode by default (`AUTH_REVOCATION_FAIL_OPEN=true`)
 
 Actions:
 1. Verify Redis endpoint and connectivity.
 2. Ensure persistence/replication status is healthy.
 3. If running in degraded mode, restore Redis ASAP and disable degraded mode after recovery.
+4. If checker throughput drops due stats-ingest pressure, tune `PROXY_STATISTICS_PRODUCER_BLOCK_TIMEOUT_MS` lower to reduce producer-side waiting.
 
 ### Startup queue bootstrap stuck
 Symptoms:
@@ -110,6 +112,12 @@ Actions:
 - Allowed range: `15-10080` minutes (default `10080`, i.e. 7 days).
 - Startup fails fast if the configured value is outside range or invalid.
 - In multi-instance deployments, keep the same value on all instances.
+
+### JWT revocation outage mode (`AUTH_REVOCATION_FAIL_OPEN`)
+- Default: `true` (prefer auth availability during Redis incidents).
+- When `true`, if Redis revocation store is unavailable, signature/expiry-valid tokens are accepted and revocation checks are temporarily bypassed.
+- Set to `false` to enforce strict fail-closed revocation validation.
+- In multi-instance deployments, keep this value identical on all instances.
 
 ### Proxy encryption key (`PROXY_ENCRYPTION_KEY`)
 - Rotate only with explicit migration/export plan.

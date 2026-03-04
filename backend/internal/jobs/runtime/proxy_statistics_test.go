@@ -10,7 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func TestAddProxyStatistic_BlocksUntilQueueCapacityAvailable(t *testing.T) {
+func TestAddProxyStatistic_DropsWhenQueueStaysFullPastBlockTimeout(t *testing.T) {
 	originalQueue := proxyStatisticQueue
 	originalLastLog := proxyStatisticLastBackpressureLog.Load()
 	originalDropped := proxyStatisticDroppedCount.Load()
@@ -27,6 +27,7 @@ func TestAddProxyStatistic_BlocksUntilQueueCapacityAvailable(t *testing.T) {
 	})
 
 	t.Setenv(envProxyStatisticsRedisStreamEnabled, "false")
+	t.Setenv(envProxyStatisticsProducerBlockMS, "20")
 	proxyStatisticStreamReady.Store(false)
 	proxyStatisticStreamCfg = proxyStatisticStreamConfig{}
 	proxyStatisticStreamClient = nil
@@ -43,27 +44,19 @@ func TestAddProxyStatistic_BlocksUntilQueueCapacityAvailable(t *testing.T) {
 
 	select {
 	case <-done:
-		t.Fatal("expected AddProxyStatistic to block on full queue")
-	case <-time.After(50 * time.Millisecond):
+	case <-time.After(time.Second):
+		t.Fatal("AddProxyStatistic did not return after bounded block timeout")
 	}
 
+	if got := len(proxyStatisticQueue); got != 1 {
+		t.Fatalf("queue length = %d, want 1 (new stat should be dropped)", got)
+	}
 	first := <-proxyStatisticQueue
 	if first.ProxyID != 1 {
-		t.Fatalf("unexpected first queue entry ProxyID = %d, want %d", first.ProxyID, 1)
+		t.Fatalf("unexpected retained queue entry ProxyID = %d, want %d", first.ProxyID, 1)
 	}
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("AddProxyStatistic did not unblock after queue drain")
-	}
-
-	second := <-proxyStatisticQueue
-	if second.ProxyID != 2 {
-		t.Fatalf("unexpected second queue entry ProxyID = %d, want %d", second.ProxyID, 2)
-	}
-	if got := proxyStatisticDroppedCount.Load(); got != 0 {
-		t.Fatalf("dropped count = %d, want 0", got)
+	if got := proxyStatisticDroppedCount.Load(); got != 1 {
+		t.Fatalf("dropped count = %d, want 1", got)
 	}
 }
 
@@ -84,6 +77,7 @@ func TestAddProxyStatistic_EnqueuesWhenCapacityAvailable(t *testing.T) {
 	})
 
 	t.Setenv(envProxyStatisticsRedisStreamEnabled, "false")
+	t.Setenv(envProxyStatisticsProducerBlockMS, "50")
 	proxyStatisticStreamReady.Store(false)
 	proxyStatisticStreamCfg = proxyStatisticStreamConfig{}
 	proxyStatisticStreamClient = nil
@@ -95,6 +89,64 @@ func TestAddProxyStatistic_EnqueuesWhenCapacityAvailable(t *testing.T) {
 
 	if got := len(proxyStatisticQueue); got != 1 {
 		t.Fatalf("queue length = %d, want 1", got)
+	}
+	if got := proxyStatisticDroppedCount.Load(); got != 0 {
+		t.Fatalf("dropped count = %d, want 0", got)
+	}
+}
+
+func TestAddProxyStatistic_EnqueuesWhenQueueFreedBeforeTimeout(t *testing.T) {
+	originalQueue := proxyStatisticQueue
+	originalLastLog := proxyStatisticLastBackpressureLog.Load()
+	originalDropped := proxyStatisticDroppedCount.Load()
+	originalReady := proxyStatisticStreamReady.Load()
+	originalCfg := proxyStatisticStreamCfg
+	originalClient := proxyStatisticStreamClient
+	t.Cleanup(func() {
+		proxyStatisticQueue = originalQueue
+		proxyStatisticLastBackpressureLog.Store(originalLastLog)
+		proxyStatisticDroppedCount.Store(originalDropped)
+		proxyStatisticStreamReady.Store(originalReady)
+		proxyStatisticStreamCfg = originalCfg
+		proxyStatisticStreamClient = originalClient
+	})
+
+	t.Setenv(envProxyStatisticsRedisStreamEnabled, "false")
+	t.Setenv(envProxyStatisticsProducerBlockMS, "300")
+	proxyStatisticStreamReady.Store(false)
+	proxyStatisticStreamCfg = proxyStatisticStreamConfig{}
+	proxyStatisticStreamClient = nil
+	proxyStatisticQueue = make(chan domain.ProxyStatistic, 1)
+	proxyStatisticLastBackpressureLog.Store(time.Now().Unix())
+	proxyStatisticDroppedCount.Store(0)
+	proxyStatisticQueue <- domain.ProxyStatistic{ProxyID: 1}
+
+	done := make(chan struct{})
+	go func() {
+		AddProxyStatistic(domain.ProxyStatistic{ProxyID: 2})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("expected AddProxyStatistic to wait while queue is full")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	first := <-proxyStatisticQueue
+	if first.ProxyID != 1 {
+		t.Fatalf("unexpected first queue entry ProxyID = %d, want %d", first.ProxyID, 1)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("AddProxyStatistic did not enqueue after capacity became available")
+	}
+
+	second := <-proxyStatisticQueue
+	if second.ProxyID != 2 {
+		t.Fatalf("unexpected second queue entry ProxyID = %d, want %d", second.ProxyID, 2)
 	}
 	if got := proxyStatisticDroppedCount.Load(); got != 0 {
 		t.Fatalf("dropped count = %d, want 0", got)

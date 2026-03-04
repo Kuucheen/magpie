@@ -10,6 +10,9 @@ import (
 
 	"magpie/internal/database"
 	"magpie/internal/support"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestHealthz_ReturnsLivenessPayload(t *testing.T) {
@@ -88,5 +91,49 @@ func TestCheckRedisComponent_ReportsModeAndErrorDetails(t *testing.T) {
 	}
 	if strings.Contains(component.Details, "super-secret-pass") {
 		t.Fatalf("redis details leaked sensitive value: %q", component.Details)
+	}
+}
+
+func TestReadyz_AllowsStartupBootstrapDegradedWhenRedisDegradedAllowed(t *testing.T) {
+	prevDB := database.DB
+	db, err := gorm.Open(sqlite.Open("file:readyz-degraded?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	database.DB = db
+	t.Cleanup(func() {
+		database.DB = prevDB
+	})
+
+	t.Setenv(envReadyzAllowRedisDegraded, "true")
+	t.Setenv("REDIS_MODE", "single")
+	t.Setenv("redisUrl", "redis://127.0.0.1:1")
+	_ = support.CloseRedisClient()
+	t.Cleanup(func() {
+		_ = support.CloseRedisClient()
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rr := httptest.NewRecorder()
+
+	readyz(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload probeResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if payload.Status != "degraded" {
+		t.Fatalf("status field = %q, want degraded", payload.Status)
+	}
+	if payload.Components["startup_queue_bootstrap"].Status != componentStatusDegraded {
+		t.Fatalf(
+			"startup_queue_bootstrap status = %q, want %q",
+			payload.Components["startup_queue_bootstrap"].Status,
+			componentStatusDegraded,
+		)
 	}
 }

@@ -64,21 +64,25 @@ func readyz(w http.ResponseWriter, r *http.Request) {
 		ctx = r.Context()
 	}
 
+	redisRequired := !support.GetEnvBool(envReadyzAllowRedisDegraded, false)
+	redisComponent := checkRedisComponent(ctx)
 	components := map[string]probeComponent{
-		"database":                checkDatabaseComponent(ctx),
-		"redis":                   checkRedisComponent(ctx),
-		"startup_queue_bootstrap": checkStartupBootstrapComponent(),
+		"database": checkDatabaseComponent(ctx),
+		"redis":    redisComponent,
+		"startup_queue_bootstrap": checkStartupBootstrapComponent(
+			redisComponent,
+			redisRequired,
+		),
 	}
 
-	redisRequired := !support.GetEnvBool(envReadyzAllowRedisDegraded, false)
+	startupReady := components["startup_queue_bootstrap"].Status == componentStatusUp ||
+		components["startup_queue_bootstrap"].Status == componentStatusDegraded
 	ready := components["database"].Status == componentStatusUp &&
-		components["startup_queue_bootstrap"].Status == componentStatusUp &&
+		startupReady &&
 		(components["redis"].Status == componentStatusUp || !redisRequired)
 
-	degraded := components["redis"].Status != componentStatusUp
-	if redisRequired && degraded {
-		degraded = false
-	}
+	degraded := components["redis"].Status == componentStatusDegraded ||
+		components["startup_queue_bootstrap"].Status == componentStatusDegraded
 
 	responseStatus := http.StatusOK
 	overallStatus := "ready"
@@ -150,9 +154,16 @@ func checkRedisComponent(ctx context.Context) probeComponent {
 	return probeComponent{Status: componentStatusUp, Details: formatRedisComponentDetails(status, nil)}
 }
 
-func checkStartupBootstrapComponent() probeComponent {
+func checkStartupBootstrapComponent(redis probeComponent, redisRequired bool) probeComponent {
 	if bootstrap.StartupQueueBootstrapCompleted() {
 		return probeComponent{Status: componentStatusUp}
+	}
+
+	if !redisRequired && redis.Status != componentStatusUp {
+		return probeComponent{
+			Status:  componentStatusDegraded,
+			Details: "startup queue bootstrap deferred while redis is unavailable",
+		}
 	}
 
 	return probeComponent{Status: componentStatusStarting, Details: "startup queue bootstrap still running"}

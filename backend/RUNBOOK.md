@@ -27,7 +27,7 @@ Example:
 curl -X POST http://localhost:5656/api/register   -H "Content-Type: application/json"   -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
 ```
 
-Production mode (`-production`) defaults:
+Production mode (`-production` or runtime env markers `APP_ENV`/`ENVIRONMENT`/`GO_ENV`/`MAGPIE_ENV` = `prod`/`production`) defaults:
 - `DISABLE_PUBLIC_REGISTRATION=true`
 - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=false`
 
@@ -61,7 +61,7 @@ For load-balanced multi-instance deployments, apply the same values for
 Checks:
 - DB ping
 - Redis ping (`degraded` state possible when `READYZ_ALLOW_REDIS_DEGRADED=true`)
-- startup queue bootstrap completion
+- startup queue bootstrap completion (or `degraded` when Redis degradation is explicitly allowed and Redis is unavailable)
 
 Routing guidance:
 - Route traffic only when `/readyz` returns `200`.
@@ -149,7 +149,8 @@ Actions:
 ### JWT secret (`JWT_SECRET`)
 - Rotate during maintenance window.
 - Expect all existing tokens to become invalid; users must re-authenticate.
-- With `STRICT_SECRET_VALIDATION=true` (default in production mode), weak/placeholder values are rejected at startup.
+- With `STRICT_SECRET_VALIDATION=true`, weak/placeholder values are rejected at startup.
+- If `STRICT_SECRET_VALIDATION` is unset, strict mode defaults on when `-production` is enabled or runtime env indicates production (`APP_ENV`/`ENVIRONMENT`/`GO_ENV`/`MAGPIE_ENV` = `prod`/`production`).
 
 ### JWT access token lifetime (`JWT_TTL_MINUTES`)
 - Optional bounded override for access token lifetime.
@@ -166,11 +167,11 @@ Actions:
 ### Proxy encryption key (`PROXY_ENCRYPTION_KEY`)
 - Rotate only with explicit migration/export plan.
 - Changing key without migration breaks decryption of stored proxy secrets.
-- With `STRICT_SECRET_VALIDATION=true` (default in production mode), weak/placeholder values are rejected at startup.
+- With `STRICT_SECRET_VALIDATION=true`, weak/placeholder values are rejected at startup.
 
 ### Secret validation mode (`STRICT_SECRET_VALIDATION`)
 - Local default: `false`
-- Production mode default: `true`
+- Production default: `true` when `-production` is enabled or runtime env indicates production (`APP_ENV`/`ENVIRONMENT`/`GO_ENV`/`MAGPIE_ENV` = `prod`/`production`)
 - Explicit env override (`true` or `false`) always wins.
 
 

@@ -38,7 +38,7 @@ func Run() error {
 	productionFlag := flag.Bool("production", false, "Run in production mode")
 	flag.Parse()
 
-	config.SetProductionMode(*productionFlag)
+	config.SetProductionMode(*productionFlag || config.RuntimeEnvironmentIndicatesProduction())
 
 	if err := auth.RequireJWTSecretConfigured(); err != nil {
 		return err

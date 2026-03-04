@@ -28,8 +28,10 @@ const (
 	connectEstablishedResponse          = "HTTP/1.1 200 Connection Established\r\nProxy-Agent: Magpie Rotator\r\n\r\n"
 	envRotatingProxyMaxRequestBodyBytes = "ROTATING_PROXY_MAX_REQUEST_BODY_BYTES"
 	envRotatingProxyHandshakeTimeoutMS  = "ROTATING_PROXY_HANDSHAKE_TIMEOUT_MS"
+	envRotatingProxyUpstreamTimeoutMS   = "ROTATING_PROXY_UPSTREAM_TIMEOUT_MS"
 	defaultMaxRequestBodyBytes          = 10 * 1024 * 1024
 	defaultHandshakeTimeout             = 15 * time.Second
+	defaultUpstreamTimeout              = 30 * time.Second
 )
 
 var (
@@ -39,6 +41,7 @@ var (
 	connectThroughUpstreamFunc = connectThroughUpstream
 	maxRequestBodyBytes        = loadMaxRequestBodyBytes()
 	handshakeTimeout           = loadHandshakeTimeout()
+	upstreamTimeout            = loadUpstreamTimeout()
 )
 
 type proxyHandler struct {
@@ -322,6 +325,10 @@ func writeProxyAuthRequired(w http.ResponseWriter) {
 }
 
 func (h *proxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Body != nil {
+		defer r.Body.Close()
+	}
+
 	next, err := getNextRotatingProxyFunc(h.rotator.UserID, h.rotator.ID)
 	if err != nil {
 		http.Error(w, "failed to acquire upstream proxy", http.StatusBadGateway)
@@ -334,17 +341,11 @@ func (h *proxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if maxRequestBodyBytes > 0 && r.ContentLength > int64(maxRequestBodyBytes) {
-		if r.Body != nil {
-			_ = r.Body.Close()
-		}
 		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
-	bodyBytes, err := readRequestBodyWithLimit(r.Body, maxRequestBodyBytes)
-	if r.Body != nil {
-		_ = r.Body.Close()
-	}
+	upstreamBody, upstreamContentLength, err := prepareUpstreamRequestBody(r.Body, r.ContentLength, maxRequestBodyBytes)
 	if err != nil {
 		if errors.Is(err, errRequestBodyTooLarge) {
 			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
@@ -372,18 +373,37 @@ func (h *proxyHandler) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	newReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), bytes.NewReader(bodyBytes))
+	ctx := r.Context()
+	if upstreamTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, upstreamTimeout)
+		defer cancel()
+	}
+
+	newReq, err := http.NewRequestWithContext(ctx, r.Method, targetURL.String(), upstreamBody)
 	if err != nil {
 		http.Error(w, "failed to build upstream request", http.StatusInternalServerError)
 		return
+	}
+	if upstreamContentLength >= 0 {
+		newReq.ContentLength = upstreamContentLength
 	}
 
 	newReq.Header = r.Header.Clone()
 	newReq.Header.Del("Proxy-Authorization")
 
-	transport := buildHTTPTransport(next)
+	connectFn := connectThroughUpstreamFunc
+	transport := buildHTTPTransportWithConnector(next, connectFn)
 	resp, err := transport.RoundTrip(newReq)
 	if err != nil {
+		if isRequestBodyTooLarge(err) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			http.Error(w, "upstream proxy timed out", http.StatusGatewayTimeout)
+			return
+		}
 		log.Warn("rotating proxy: upstream request failed",
 			"rotator_id", h.rotator.ID,
 			"upstream_protocol", next.Protocol,
@@ -420,6 +440,36 @@ func loadHandshakeTimeout() time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
+func loadUpstreamTimeout() time.Duration {
+	ms := support.GetEnvInt(envRotatingProxyUpstreamTimeoutMS, int(defaultUpstreamTimeout/time.Millisecond))
+	if ms <= 0 {
+		ms = int(defaultUpstreamTimeout / time.Millisecond)
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
+func prepareUpstreamRequestBody(body io.ReadCloser, contentLength int64, limit int) (io.ReadCloser, int64, error) {
+	if body == nil {
+		return nil, 0, nil
+	}
+	if limit <= 0 {
+		return body, contentLength, nil
+	}
+	if contentLength >= 0 {
+		if contentLength > int64(limit) {
+			return nil, 0, errRequestBodyTooLarge
+		}
+		return wrapRequestBodyWithLimit(body, limit), contentLength, nil
+	}
+
+	payload, err := readRequestBodyWithLimit(body, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return io.NopCloser(bytes.NewReader(payload)), int64(len(payload)), nil
+}
+
 func readRequestBodyWithLimit(body io.Reader, limit int) ([]byte, error) {
 	if body == nil {
 		return nil, nil
@@ -438,6 +488,116 @@ func readRequestBodyWithLimit(body io.Reader, limit int) ([]byte, error) {
 	}
 
 	return payload, nil
+}
+
+func wrapRequestBodyWithLimit(body io.ReadCloser, limit int) io.ReadCloser {
+	if body == nil {
+		return nil
+	}
+	if limit <= 0 {
+		return body
+	}
+	return &requestBodyLimitReader{
+		body:      body,
+		remaining: int64(limit),
+	}
+}
+
+func isRequestBodyTooLarge(err error) bool {
+	if errors.Is(err, errRequestBodyTooLarge) {
+		return true
+	}
+	var maxBytesErr *http.MaxBytesError
+	return errors.As(err, &maxBytesErr)
+}
+
+type requestBodyLimitReader struct {
+	body      io.ReadCloser
+	remaining int64
+	eof       bool
+}
+
+func (r *requestBodyLimitReader) Read(p []byte) (int, error) {
+	if r.body == nil {
+		return 0, io.EOF
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	if r.remaining <= 0 {
+		if r.eof {
+			return 0, io.EOF
+		}
+
+		var probe [1]byte
+		n, err := r.body.Read(probe[:])
+		if n > 0 || err == nil {
+			return 0, errRequestBodyTooLarge
+		}
+		if err == io.EOF {
+			r.eof = true
+			return 0, io.EOF
+		}
+		return 0, err
+	}
+
+	if int64(len(p)) > r.remaining {
+		p = p[:r.remaining]
+	}
+	n, err := r.body.Read(p)
+	r.remaining -= int64(n)
+	if err == io.EOF {
+		r.eof = true
+	}
+	return n, err
+}
+
+func (r *requestBodyLimitReader) Close() error {
+	if r.body == nil {
+		return nil
+	}
+	return r.body.Close()
+}
+
+type upstreamDialResult struct {
+	conn net.Conn
+	err  error
+}
+
+type upstreamConnectFunc func(target string, next *dto.RotatingProxyNext) (net.Conn, error)
+
+func connectThroughUpstreamWithContext(ctx context.Context, target string, next *dto.RotatingProxyNext, connectFn upstreamConnectFunc) (net.Conn, error) {
+	if connectFn == nil {
+		connectFn = connectThroughUpstreamFunc
+	}
+	if ctx == nil {
+		return connectFn(target, next)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	done := make(chan struct{})
+	resultCh := make(chan upstreamDialResult, 1)
+	go func() {
+		conn, err := connectFn(target, next)
+		select {
+		case <-done:
+			if conn != nil {
+				_ = conn.Close()
+			}
+		case resultCh <- upstreamDialResult{conn: conn, err: err}:
+		}
+	}()
+	defer close(done)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-resultCh:
+		return result.conn, result.err
+	}
 }
 
 func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
@@ -522,10 +682,17 @@ func supportedUpstream(protocol string) bool {
 }
 
 func buildHTTPTransport(next *dto.RotatingProxyNext) *http.Transport {
+	return buildHTTPTransportWithConnector(next, connectThroughUpstreamFunc)
+}
+
+func buildHTTPTransportWithConnector(next *dto.RotatingProxyNext, connectFn upstreamConnectFunc) *http.Transport {
 	transport := &http.Transport{
-		DisableKeepAlives: true,
-		MaxIdleConns:      0,
-		IdleConnTimeout:   0,
+		DisableKeepAlives:     true,
+		MaxIdleConns:          0,
+		IdleConnTimeout:       0,
+		TLSHandshakeTimeout:   handshakeTimeout,
+		ResponseHeaderTimeout: upstreamTimeout,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 
 	switch strings.ToLower(strings.TrimSpace(next.Protocol)) {
@@ -544,8 +711,8 @@ func buildHTTPTransport(next *dto.RotatingProxyNext) *http.Transport {
 	case "socks4", "socks5":
 		transport.Proxy = nil
 		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			_ = ctx
-			return connectThroughUpstreamFunc(addr, next)
+			_ = network
+			return connectThroughUpstreamWithContext(ctx, addr, next, connectFn)
 		}
 	}
 

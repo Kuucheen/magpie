@@ -8,6 +8,11 @@ import (
 	"magpie/internal/domain"
 )
 
+const (
+	defaultProxyHistoryLimit = 24
+	maxProxyHistoryLimit     = 720
+)
+
 // SaveProxyHistorySnapshot stores a snapshot of the proxy count for every user at the time of invocation.
 // It records zero counts as well so we can track when users have no proxies.
 func SaveProxyHistorySnapshot(ctx context.Context) error {
@@ -72,9 +77,7 @@ func GetProxyHistoryEntries(userID uint, limit int) []dto.ProxyHistoryEntry {
 		return nil
 	}
 
-	if limit <= 0 {
-		limit = 24
-	}
+	limit = normalizeProxyHistoryLimit(limit)
 
 	rows := make([]domain.ProxyHistory, 0, limit)
 
@@ -97,4 +100,14 @@ func GetProxyHistoryEntries(userID uint, limit int) []dto.ProxyHistoryEntry {
 	}
 
 	return entries
+}
+
+func normalizeProxyHistoryLimit(limit int) int {
+	if limit <= 0 {
+		return defaultProxyHistoryLimit
+	}
+	if limit > maxProxyHistoryLimit {
+		return maxProxyHistoryLimit
+	}
+	return limit
 }

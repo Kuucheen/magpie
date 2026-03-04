@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -149,6 +150,9 @@ func TestBuildHTTPTransport_ConfiguresProxyURL(t *testing.T) {
 	if transport.TLSClientConfig != nil {
 		t.Fatal("expected no TLS config when dialing upstream proxy")
 	}
+	if transport.ResponseHeaderTimeout != upstreamTimeout {
+		t.Fatalf("response header timeout = %s, want %s", transport.ResponseHeaderTimeout, upstreamTimeout)
+	}
 
 	withoutAuth := &dto.RotatingProxyNext{
 		Protocol: "http",
@@ -200,6 +204,23 @@ func TestLoadHandshakeTimeout_DefaultAndClamp(t *testing.T) {
 	t.Setenv(envRotatingProxyHandshakeTimeoutMS, "2500")
 	if got := loadHandshakeTimeout(); got != 2500*time.Millisecond {
 		t.Fatalf("handshake timeout = %s, want %s", got, 2500*time.Millisecond)
+	}
+}
+
+func TestLoadUpstreamTimeout_DefaultAndClamp(t *testing.T) {
+	t.Setenv(envRotatingProxyUpstreamTimeoutMS, "")
+	if got := loadUpstreamTimeout(); got != defaultUpstreamTimeout {
+		t.Fatalf("upstream timeout = %s, want %s", got, defaultUpstreamTimeout)
+	}
+
+	t.Setenv(envRotatingProxyUpstreamTimeoutMS, "0")
+	if got := loadUpstreamTimeout(); got != defaultUpstreamTimeout {
+		t.Fatalf("upstream timeout with zero = %s, want %s", got, defaultUpstreamTimeout)
+	}
+
+	t.Setenv(envRotatingProxyUpstreamTimeoutMS, "4100")
+	if got := loadUpstreamTimeout(); got != 4100*time.Millisecond {
+		t.Fatalf("upstream timeout = %s, want %s", got, 4100*time.Millisecond)
 	}
 }
 
@@ -337,6 +358,52 @@ func TestHandleHTTP_RejectsOversizedRequestBody(t *testing.T) {
 	}
 }
 
+func TestHandleHTTP_RejectsOversizedUnknownLengthBodyWithoutDialing(t *testing.T) {
+	handler := &proxyHandler{
+		rotator: domain.RotatingProxy{
+			ID:     42,
+			UserID: 7,
+		},
+	}
+
+	originalGetNext := getNextRotatingProxyFunc
+	getNextRotatingProxyFunc = func(userID uint, rotatorID uint64) (*dto.RotatingProxyNext, error) {
+		return &dto.RotatingProxyNext{
+			ProxyID:  1,
+			IP:       "192.0.2.10",
+			Port:     8080,
+			Protocol: "socks5",
+		}, nil
+	}
+	t.Cleanup(func() { getNextRotatingProxyFunc = originalGetNext })
+
+	originalConnect := connectThroughUpstreamFunc
+	var connectCalls atomic.Int64
+	connectThroughUpstreamFunc = func(target string, next *dto.RotatingProxyNext) (net.Conn, error) {
+		connectCalls.Add(1)
+		return nil, io.EOF
+	}
+	t.Cleanup(func() { connectThroughUpstreamFunc = originalConnect })
+
+	originalLimit := maxRequestBodyBytes
+	maxRequestBodyBytes = 4
+	t.Cleanup(func() { maxRequestBodyBytes = originalLimit })
+
+	request := httptest.NewRequest(http.MethodPost, "http://example.com/upload", bytes.NewReader([]byte("ping!")))
+	request.Host = "example.com"
+	request.ContentLength = -1
+	recorder := httptest.NewRecorder()
+
+	handler.handleHTTP(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusRequestEntityTooLarge)
+	}
+	if calls := connectCalls.Load(); calls != 0 {
+		t.Fatalf("connectThroughUpstreamFunc calls = %d, want 0", calls)
+	}
+}
+
 func TestHandleHTTP_ForwardsBodyWithinLimit(t *testing.T) {
 	handler := &proxyHandler{
 		rotator: domain.RotatingProxy{
@@ -413,6 +480,131 @@ func TestHandleHTTP_ForwardsBodyWithinLimit(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("upstream test server did not finish")
 	}
+}
+
+func TestHandleHTTP_ReturnsGatewayTimeoutWhenUpstreamHangs(t *testing.T) {
+	handler := &proxyHandler{
+		rotator: domain.RotatingProxy{
+			ID:     42,
+			UserID: 7,
+		},
+	}
+
+	originalGetNext := getNextRotatingProxyFunc
+	getNextRotatingProxyFunc = func(userID uint, rotatorID uint64) (*dto.RotatingProxyNext, error) {
+		return &dto.RotatingProxyNext{
+			ProxyID:  1,
+			IP:       "192.0.2.10",
+			Port:     8080,
+			Protocol: "socks5",
+		}, nil
+	}
+	t.Cleanup(func() { getNextRotatingProxyFunc = originalGetNext })
+
+	var upstreamConns []net.Conn
+	originalConnect := connectThroughUpstreamFunc
+	connectThroughUpstreamFunc = func(target string, next *dto.RotatingProxyNext) (net.Conn, error) {
+		client, server := net.Pipe()
+		upstreamConns = append(upstreamConns, client, server)
+		return server, nil
+	}
+	t.Cleanup(func() {
+		connectThroughUpstreamFunc = originalConnect
+		for _, conn := range upstreamConns {
+			_ = conn.Close()
+		}
+	})
+
+	originalTimeout := upstreamTimeout
+	upstreamTimeout = 60 * time.Millisecond
+	t.Cleanup(func() { upstreamTimeout = originalTimeout })
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/slow", nil)
+	request.Host = "example.com"
+	recorder := httptest.NewRecorder()
+
+	start := time.Now()
+	handler.handleHTTP(recorder, request)
+	elapsed := time.Since(start)
+
+	if recorder.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusGatewayTimeout)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("handleHTTP timeout took too long: %s", elapsed)
+	}
+}
+
+func TestHandleHTTP_ReturnsGatewayTimeoutWhenSocksDialBlocks(t *testing.T) {
+	handler := &proxyHandler{
+		rotator: domain.RotatingProxy{
+			ID:     42,
+			UserID: 7,
+		},
+	}
+
+	originalGetNext := getNextRotatingProxyFunc
+	getNextRotatingProxyFunc = func(userID uint, rotatorID uint64) (*dto.RotatingProxyNext, error) {
+		return &dto.RotatingProxyNext{
+			ProxyID:  1,
+			IP:       "192.0.2.10",
+			Port:     8080,
+			Protocol: "socks5",
+		}, nil
+	}
+	t.Cleanup(func() { getNextRotatingProxyFunc = originalGetNext })
+
+	originalConnect := connectThroughUpstreamFunc
+	connectThroughUpstreamFunc = func(target string, next *dto.RotatingProxyNext) (net.Conn, error) {
+		time.Sleep(250 * time.Millisecond)
+		return nil, io.EOF
+	}
+	t.Cleanup(func() { connectThroughUpstreamFunc = originalConnect })
+
+	originalTimeout := upstreamTimeout
+	upstreamTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { upstreamTimeout = originalTimeout })
+
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/slow-dial", nil)
+	request.Host = "example.com"
+	recorder := httptest.NewRecorder()
+
+	start := time.Now()
+	handler.handleHTTP(recorder, request)
+	elapsed := time.Since(start)
+
+	if recorder.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusGatewayTimeout)
+	}
+	if elapsed > 150*time.Millisecond {
+		t.Fatalf("handleHTTP timeout took too long: %s", elapsed)
+	}
+}
+
+func TestRequestBodyLimitReader(t *testing.T) {
+	t.Run("allows bodies within the limit", func(t *testing.T) {
+		reader := wrapRequestBodyWithLimit(io.NopCloser(bytes.NewReader([]byte("ping"))), 4)
+		payload, err := io.ReadAll(reader)
+		_ = reader.Close()
+		if err != nil {
+			t.Fatalf("io.ReadAll failed: %v", err)
+		}
+		if string(payload) != "ping" {
+			t.Fatalf("payload = %q, want ping", string(payload))
+		}
+	})
+
+	t.Run("rejects bodies that exceed the limit", func(t *testing.T) {
+		reader := wrapRequestBodyWithLimit(io.NopCloser(bytes.NewReader([]byte("ping!"))), 4)
+		payload, err := io.ReadAll(reader)
+		_ = reader.Close()
+		if !errors.Is(err, errRequestBodyTooLarge) {
+			t.Fatalf("expected errRequestBodyTooLarge, got %v", err)
+		}
+		if string(payload) != "ping" {
+			t.Fatalf("payload = %q, want ping", string(payload))
+		}
+	})
 }
 
 func TestSocks5Handler_WithAuthenticationAndPiping(t *testing.T) {

@@ -102,28 +102,8 @@ func SetupDB(opts ...Option) (*gorm.DB, error) {
 	}
 
 	if cfg.AutoMigrate {
-		if err := ensureProxyReputationSchema(DB); err != nil {
-			log.Error("Failed to ensure proxy reputation schema", "error", err)
-		}
-
-		if err := ensureProxyStatisticsRetentionSchema(DB); err != nil {
-			log.Error("Failed to ensure proxy statistics retention schema", "error", err)
-		}
-
-		if err := ensureProxyTimelineRetentionSchema(DB); err != nil {
-			log.Error("Failed to ensure proxy timeline retention schema", "error", err)
-		}
-
-		if err := ensureProxyQueryIndexSchema(DB); err != nil {
-			log.Error("Failed to ensure proxy query index schema", "error", err)
-		}
-
-		if err := ensureRotatingProxySchema(DB); err != nil {
-			log.Error("Failed to ensure rotating proxy schema", "error", err)
-		}
-
-		if err := ensureBlacklistSchema(DB); err != nil {
-			log.Error("Failed to ensure blacklist schema", "error", err)
+		if err := ensurePostMigrateSchemas(DB); err != nil {
+			return nil, err
 		}
 	}
 
@@ -300,9 +280,39 @@ func ensureProtocols(db *gorm.DB) error {
 	return db.Create(&protocols).Error
 }
 
+type schemaEnsureStep struct {
+	name string
+	run  func(*gorm.DB) error
+}
+
+func ensurePostMigrateSchemas(db *gorm.DB) error {
+	steps := []schemaEnsureStep{
+		{name: "proxy reputation schema", run: ensureProxyReputationSchema},
+		{name: "proxy statistics retention schema", run: ensureProxyStatisticsRetentionSchema},
+		{name: "proxy timeline retention schema", run: ensureProxyTimelineRetentionSchema},
+		{name: "proxy query index schema", run: ensureProxyQueryIndexSchema},
+		{name: "rotating proxy schema", run: ensureRotatingProxySchema},
+		{name: "blacklist schema", run: ensureBlacklistSchema},
+	}
+
+	return runSchemaEnsureSteps(db, steps)
+}
+
+func runSchemaEnsureSteps(db *gorm.DB, steps []schemaEnsureStep) error {
+	for _, step := range steps {
+		if err := step.run(db); err != nil {
+			return fmt.Errorf("database: ensure %s: %w", step.name, err)
+		}
+	}
+	return nil
+}
+
 func ensureBlacklistSchema(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("nil database connection")
+	}
+	if !isPostgresDialect(db) {
+		return nil
 	}
 
 	stmts := []string{
@@ -351,6 +361,9 @@ func ensureBlacklistSchema(db *gorm.DB) error {
 func ensureRotatingProxySchema(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("nil database connection")
+	}
+	if !isPostgresDialect(db) {
+		return nil
 	}
 	if !db.Migrator().HasTable(&domain.RotatingProxy{}) {
 		return nil

@@ -10,7 +10,10 @@ import (
 	"gorm.io/gorm"
 )
 
-const defaultProxySnapshotLimit = 96
+const (
+	defaultProxySnapshotLimit = 96
+	maxProxySnapshotLimit     = 720
+)
 
 // SaveProxySnapshots stores snapshots for alive and scraped proxies per user.
 func SaveProxySnapshots(ctx context.Context) error {
@@ -79,9 +82,7 @@ func GetProxySnapshotEntries(userID uint, metric string, limit int) []dto.ProxyS
 		return nil
 	}
 
-	if limit <= 0 {
-		limit = defaultProxySnapshotLimit
-	}
+	limit = normalizeProxySnapshotLimit(limit)
 
 	rows := make([]domain.ProxySnapshot, 0, limit)
 
@@ -104,6 +105,16 @@ func GetProxySnapshotEntries(userID uint, metric string, limit int) []dto.ProxyS
 	}
 
 	return entries
+}
+
+func normalizeProxySnapshotLimit(limit int) int {
+	if limit <= 0 {
+		return defaultProxySnapshotLimit
+	}
+	if limit > maxProxySnapshotLimit {
+		return maxProxySnapshotLimit
+	}
+	return limit
 }
 
 func aliveProxyCountByUser(tx *gorm.DB, userIDs []uint) (map[uint]int64, error) {

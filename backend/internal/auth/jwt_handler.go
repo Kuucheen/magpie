@@ -322,12 +322,12 @@ func validateTokenRevocation(claims map[string]interface{}) error {
 func authRevocationFailOpenEnabled() bool {
 	raw := strings.TrimSpace(os.Getenv(envAuthRevocationFailOpen))
 	if raw == "" {
-		return true
+		return false
 	}
 
 	enabled, err := strconv.ParseBool(raw)
 	if err != nil {
-		return true
+		return false
 	}
 	return enabled
 }

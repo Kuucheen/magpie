@@ -19,6 +19,12 @@ type viewerData struct {
 	settings map[string]interface{}
 }
 
+const (
+	defaultViewerProxyHistoryLimit = 168
+	maxViewerProxyHistoryLimit     = 720
+	maxViewerProxySnapshotLimit    = 720
+)
+
 func NewSchema() (gql.Schema, error) {
 	simpleJudgeType := gql.NewObject(gql.ObjectConfig{
 		Name: "SimpleUserJudge",
@@ -305,9 +311,9 @@ func NewSchema() (gql.Schema, error) {
 					"limit": &gql.ArgumentConfig{Type: gql.Int},
 				},
 				Resolve: func(p gql.ResolveParams) (interface{}, error) {
-					limit := 168
+					limit := defaultViewerProxyHistoryLimit
 					if raw, ok := p.Args["limit"].(int); ok && raw > 0 {
-						limit = raw
+						limit = clampPositiveLimit(raw, maxViewerProxyHistoryLimit)
 					}
 					if data, ok := p.Source.(*viewerData); ok {
 						return buildProxyHistory(data.user.ID, limit), nil
@@ -323,7 +329,7 @@ func NewSchema() (gql.Schema, error) {
 				Resolve: func(p gql.ResolveParams) (interface{}, error) {
 					limit := 0
 					if raw, ok := p.Args["limit"].(int); ok && raw > 0 {
-						limit = raw
+						limit = clampPositiveLimit(raw, maxViewerProxySnapshotLimit)
 					}
 					if data, ok := p.Source.(*viewerData); ok {
 						alive := database.GetProxySnapshotEntries(data.user.ID, domain.ProxySnapshotMetricAlive, limit)
@@ -539,6 +545,16 @@ func ensureLatestAliveSnapshot(entries []dto.ProxySnapshotEntry, currentCount in
 		Count:      currentCount,
 		RecordedAt: now,
 	})
+}
+
+func clampPositiveLimit(limit, max int) int {
+	if limit <= 0 {
+		return 0
+	}
+	if limit > max {
+		return max
+	}
+	return limit
 }
 
 func buildProxyPage(userID uint, page int) map[string]interface{} {

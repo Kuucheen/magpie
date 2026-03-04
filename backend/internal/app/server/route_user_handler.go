@@ -27,12 +27,13 @@ import (
 )
 
 const (
-	firstUserAdminAdvisoryLockKey      int64 = 941_843_229_541
-	invalidAuthCredentialsMessage            = "Invalid email or password"
-	envDisablePublicRegistration             = "DISABLE_PUBLIC_REGISTRATION"
-	envEnablePublicFirstAdminBootstrap       = "ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP"
-	envAdminBootstrapToken                   = "ADMIN_BOOTSTRAP_TOKEN"
-	headAdminBootstrapToken                  = "X-Admin-Bootstrap-Token"
+	firstUserAdminAdvisoryLockKey        int64 = 941_843_229_541
+	invalidAuthCredentialsMessage              = "Invalid email or password"
+	envDisablePublicRegistration               = "DISABLE_PUBLIC_REGISTRATION"
+	envEnablePublicFirstAdminBootstrap         = "ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP"
+	envAdminBootstrapToken                     = "ADMIN_BOOTSTRAP_TOKEN"
+	envAllowInsecureRegistrationDefaults       = "ALLOW_INSECURE_REGISTRATION_DEFAULTS"
+	headAdminBootstrapToken                    = "X-Admin-Bootstrap-Token"
 )
 
 var (
@@ -570,22 +571,21 @@ func createUserWithFirstAdminRole(user *domain.User, policy userRegistrationPoli
 }
 
 func resolveUserRegistrationPolicy() userRegistrationPolicy {
-	disablePublicDefault := false
-	if config.InProductionMode {
-		disablePublicDefault = true
+	disablePublicDefault := true
+	if !config.InProductionMode && support.GetEnvBool(envAllowInsecureRegistrationDefaults, false) {
+		disablePublicDefault = false
 	}
 
 	policy := userRegistrationPolicy{
 		DisablePublicRegistration: support.GetEnvBool(envDisablePublicRegistration, disablePublicDefault),
 	}
 
-	if config.InProductionMode {
-		bootstrapEnabled := support.GetEnvBool(envEnablePublicFirstAdminBootstrap, false)
-		policy.DisablePublicFirstAdminBootstrap = !bootstrapEnabled
-		if bootstrapEnabled {
-			policy.RequireAdminBootstrapToken = true
-			policy.AdminBootstrapToken = strings.TrimSpace(support.GetEnv(envAdminBootstrapToken, ""))
-		}
+	bootstrapEnabled := support.GetEnvBool(envEnablePublicFirstAdminBootstrap, false)
+	policy.DisablePublicFirstAdminBootstrap = !bootstrapEnabled
+	if bootstrapEnabled {
+		// Public first-admin bootstrap always requires a token, regardless of mode.
+		policy.RequireAdminBootstrapToken = true
+		policy.AdminBootstrapToken = strings.TrimSpace(support.GetEnv(envAdminBootstrapToken, ""))
 	}
 
 	return policy

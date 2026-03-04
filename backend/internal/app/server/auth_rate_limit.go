@@ -107,17 +107,17 @@ func withRegisterRateLimit(next http.Handler) http.Handler {
 
 func loginFailuresBlocked(r *http.Request, email string) (bool, time.Duration) {
 	limits := getAuthRateLimits()
-	return limits.loginFailures.isBlocked(getAuthClientIP(r), email)
+	return limits.loginFailures.isBlocked(getAuthRateLimitKey(r), email)
 }
 
 func recordLoginFailure(r *http.Request, email string) {
 	limits := getAuthRateLimits()
-	limits.loginFailures.recordFailure(getAuthClientIP(r), email)
+	limits.loginFailures.recordFailure(getAuthRateLimitKey(r), email)
 }
 
 func clearLoginFailures(r *http.Request, email string) {
 	limits := getAuthRateLimits()
-	limits.loginFailures.recordSuccess(getAuthClientIP(r), email)
+	limits.loginFailures.recordSuccess(getAuthRateLimitKey(r), email)
 }
 
 func getAuthRateLimits() *authRateLimits {
@@ -182,8 +182,7 @@ func (l *fixedWindowLimiter) wrap(next http.Handler, message string, scope strin
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getAuthClientIP(r)
-		key := l.key(ip)
+		key := l.key(getAuthRateLimitKey(r))
 
 		allowed, retryAfter := l.allow(key)
 		if !allowed {

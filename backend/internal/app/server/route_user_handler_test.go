@@ -219,6 +219,9 @@ func TestResolveUserRegistrationPolicy_ProductionDefaults(t *testing.T) {
 	if !policy.DisablePublicFirstAdminBootstrap {
 		t.Fatal("expected DisablePublicFirstAdminBootstrap=true in production by default")
 	}
+	if policy.RequireAdminBootstrapToken {
+		t.Fatal("expected RequireAdminBootstrapToken=false when bootstrap is disabled")
+	}
 }
 
 func TestResolveUserRegistrationPolicy_ProductionOverrides(t *testing.T) {
@@ -255,14 +258,52 @@ func TestResolveUserRegistrationPolicy_LocalDefaultsRemainOpen(t *testing.T) {
 	})
 
 	policy := resolveUserRegistrationPolicy()
-	if policy.DisablePublicRegistration {
-		t.Fatal("expected DisablePublicRegistration=false outside production by default")
+	if !policy.DisablePublicRegistration {
+		t.Fatal("expected DisablePublicRegistration=true by default for safer startup")
 	}
-	if policy.DisablePublicFirstAdminBootstrap {
-		t.Fatal("expected DisablePublicFirstAdminBootstrap=false outside production by default")
+	if !policy.DisablePublicFirstAdminBootstrap {
+		t.Fatal("expected DisablePublicFirstAdminBootstrap=true by default")
 	}
 	if policy.RequireAdminBootstrapToken {
-		t.Fatal("expected RequireAdminBootstrapToken=false outside production by default")
+		t.Fatal("expected RequireAdminBootstrapToken=false when bootstrap is disabled")
+	}
+}
+
+func TestResolveUserRegistrationPolicy_LocalOverrideAllowsLegacyOpenDefaults(t *testing.T) {
+	prevProduction := config.InProductionMode
+	config.SetProductionMode(false)
+	t.Cleanup(func() {
+		config.SetProductionMode(prevProduction)
+	})
+	t.Setenv(envAllowInsecureRegistrationDefaults, "true")
+
+	policy := resolveUserRegistrationPolicy()
+	if policy.DisablePublicRegistration {
+		t.Fatal("expected DisablePublicRegistration=false when insecure local override is enabled")
+	}
+	if !policy.DisablePublicFirstAdminBootstrap {
+		t.Fatal("expected DisablePublicFirstAdminBootstrap=true unless explicitly enabled")
+	}
+}
+
+func TestResolveUserRegistrationPolicy_BootstrapAlwaysRequiresTokenWhenEnabled(t *testing.T) {
+	prevProduction := config.InProductionMode
+	config.SetProductionMode(false)
+	t.Cleanup(func() {
+		config.SetProductionMode(prevProduction)
+	})
+	t.Setenv(envEnablePublicFirstAdminBootstrap, "true")
+	t.Setenv(envAdminBootstrapToken, "local-bootstrap-token")
+
+	policy := resolveUserRegistrationPolicy()
+	if policy.DisablePublicFirstAdminBootstrap {
+		t.Fatal("expected DisablePublicFirstAdminBootstrap=false when explicitly enabled")
+	}
+	if !policy.RequireAdminBootstrapToken {
+		t.Fatal("expected RequireAdminBootstrapToken=true whenever bootstrap is enabled")
+	}
+	if policy.AdminBootstrapToken != "local-bootstrap-token" {
+		t.Fatalf("expected AdminBootstrapToken from env, got %q", policy.AdminBootstrapToken)
 	}
 }
 

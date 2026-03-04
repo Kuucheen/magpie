@@ -163,6 +163,15 @@ func requestScraperWorkerStop() bool {
 	}
 }
 
+func requestScraperPageStop() bool {
+	select {
+	case stopPage <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 /* ─────────────────────────────  worker  ─────────────────────────────────── */
 
 func scrapeWorker(parent context.Context) {
@@ -364,12 +373,19 @@ func ManagePagePool() {
 		}
 
 		for currentPages.Load() > targetPages {
+			shrunk := false
 			select {
 			case p := <-pagePool:
 				_ = safeClosePage(p)
 				currentPages.Add(-1)
+				shrunk = true
 			default:
-				stopPage <- struct{}{}
+				if requestScraperPageStop() {
+					shrunk = true
+				}
+			}
+			if !shrunk {
+				break
 			}
 		}
 

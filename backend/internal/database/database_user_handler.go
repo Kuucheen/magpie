@@ -500,3 +500,13 @@ func ChangePassword(userID uint, password string) error {
 	err := DB.Model(&domain.User{}).Where("ID = ?", userID).Update("password", password).Error
 	return err
 }
+
+func ChangePasswordIfCurrent(userID uint, expectedPassword string, newPassword string) (bool, error) {
+	result := DB.Model(&domain.User{}).
+		Where("ID = ? AND password = ?", userID, expectedPassword).
+		Update("password", newPassword)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}

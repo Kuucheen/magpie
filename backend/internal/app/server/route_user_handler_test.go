@@ -9,9 +9,11 @@ import (
 	"os"
 	"testing"
 
+	"magpie/internal/api/dto"
 	"magpie/internal/config"
 	"magpie/internal/database"
 	"magpie/internal/domain"
+	"magpie/internal/support"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -261,6 +263,222 @@ func TestResolveUserRegistrationPolicy_LocalDefaultsRemainOpen(t *testing.T) {
 	}
 	if policy.RequireAdminBootstrapToken {
 		t.Fatal("expected RequireAdminBootstrapToken=false outside production by default")
+	}
+}
+
+func TestChangePasswordWithSessionRevocation_RejectsInvalidOldPassword(t *testing.T) {
+	originalChange := changePasswordInStore
+	originalRollback := rollbackPasswordIfCurrentInStore
+	originalRevoke := revokeUserSessions
+	t.Cleanup(func() {
+		changePasswordInStore = originalChange
+		rollbackPasswordIfCurrentInStore = originalRollback
+		revokeUserSessions = originalRevoke
+	})
+
+	changeCalled := false
+	rollbackCalled := false
+	revokeCalled := false
+	changePasswordInStore = func(userID uint, newPassword string) error {
+		changeCalled = true
+		return nil
+	}
+	rollbackPasswordIfCurrentInStore = func(userID uint, expectedPassword string, newPassword string) (bool, error) {
+		rollbackCalled = true
+		return true, nil
+	}
+	revokeUserSessions = func(userID uint) error {
+		revokeCalled = true
+		return nil
+	}
+
+	currentHash, err := support.HashPassword("correct-old")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
+		OldPassword: "wrong-old",
+		NewPassword: "new-secret",
+	})
+	if !errors.Is(err, errInvalidOldPassword) {
+		t.Fatalf("expected errInvalidOldPassword, got %v", err)
+	}
+	if revokeCalled {
+		t.Fatal("expected revokeUserSessions not to be called for invalid old password")
+	}
+	if changeCalled {
+		t.Fatal("expected changePasswordInStore not to be called for invalid old password")
+	}
+	if rollbackCalled {
+		t.Fatal("expected rollbackPasswordIfCurrentInStore not to be called for invalid old password")
+	}
+}
+
+func TestChangePasswordWithSessionRevocation_RevocationFailureDoesNotChangePassword(t *testing.T) {
+	originalChange := changePasswordInStore
+	originalRollback := rollbackPasswordIfCurrentInStore
+	originalRevoke := revokeUserSessions
+	t.Cleanup(func() {
+		changePasswordInStore = originalChange
+		rollbackPasswordIfCurrentInStore = originalRollback
+		revokeUserSessions = originalRevoke
+	})
+
+	currentHash, err := support.HashPassword("correct-old")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	storedHash := currentHash
+	revokeUserSessions = func(userID uint) error {
+		return errors.New("redis down")
+	}
+	changePasswordInStore = func(userID uint, newPassword string) error {
+		storedHash = newPassword
+		return nil
+	}
+	rollbackPasswordIfCurrentInStore = func(userID uint, expectedPassword string, newPassword string) (bool, error) {
+		if storedHash != expectedPassword {
+			return false, nil
+		}
+		storedHash = newPassword
+		return true, nil
+	}
+
+	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
+		OldPassword: "correct-old",
+		NewPassword: "new-secret",
+	})
+	if !errors.Is(err, errRevokeActiveSessions) {
+		t.Fatalf("expected errRevokeActiveSessions, got %v", err)
+	}
+	if storedHash != currentHash {
+		t.Fatal("expected password to be rolled back to current hash when revocation fails")
+	}
+}
+
+func TestChangePasswordWithSessionRevocation_RollbackFailureIsSurfaced(t *testing.T) {
+	originalChange := changePasswordInStore
+	originalRollback := rollbackPasswordIfCurrentInStore
+	originalRevoke := revokeUserSessions
+	t.Cleanup(func() {
+		changePasswordInStore = originalChange
+		rollbackPasswordIfCurrentInStore = originalRollback
+		revokeUserSessions = originalRevoke
+	})
+
+	revokeUserSessions = func(userID uint) error {
+		return errors.New("redis down")
+	}
+	changePasswordInStore = func(userID uint, newPassword string) error {
+		return nil
+	}
+	rollbackPasswordIfCurrentInStore = func(userID uint, expectedPassword string, newPassword string) (bool, error) {
+		return false, errors.New("db unavailable")
+	}
+
+	currentHash, err := support.HashPassword("correct-old")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
+		OldPassword: "correct-old",
+		NewPassword: "new-secret",
+	})
+	if !errors.Is(err, errPasswordRollbackFailed) {
+		t.Fatalf("expected errPasswordRollbackFailed, got %v", err)
+	}
+}
+
+func TestChangePasswordWithSessionRevocation_RollbackDoesNotClobberConcurrentPasswordChange(t *testing.T) {
+	originalChange := changePasswordInStore
+	originalRollback := rollbackPasswordIfCurrentInStore
+	originalRevoke := revokeUserSessions
+	t.Cleanup(func() {
+		changePasswordInStore = originalChange
+		rollbackPasswordIfCurrentInStore = originalRollback
+		revokeUserSessions = originalRevoke
+	})
+
+	currentHash, err := support.HashPassword("correct-old")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	competingHash, err := support.HashPassword("competing-secret")
+	if err != nil {
+		t.Fatalf("hash competing password: %v", err)
+	}
+
+	storedHash := currentHash
+	revokeUserSessions = func(userID uint) error {
+		return errors.New("redis down")
+	}
+	changePasswordInStore = func(userID uint, newPassword string) error {
+		storedHash = newPassword
+		return nil
+	}
+	rollbackPasswordIfCurrentInStore = func(userID uint, expectedPassword string, newPassword string) (bool, error) {
+		// Simulate a concurrent successful password change before rollback.
+		storedHash = competingHash
+		if storedHash != expectedPassword {
+			return false, nil
+		}
+		storedHash = newPassword
+		return true, nil
+	}
+
+	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
+		OldPassword: "correct-old",
+		NewPassword: "new-secret",
+	})
+	if !errors.Is(err, errRevokeActiveSessions) {
+		t.Fatalf("expected errRevokeActiveSessions, got %v", err)
+	}
+	if storedHash != competingHash {
+		t.Fatal("expected stale rollback to skip and preserve concurrent password change")
+	}
+}
+
+func TestChangePasswordWithSessionRevocation_ChangesPasswordBeforeRevocation(t *testing.T) {
+	originalChange := changePasswordInStore
+	originalRollback := rollbackPasswordIfCurrentInStore
+	originalRevoke := revokeUserSessions
+	t.Cleanup(func() {
+		changePasswordInStore = originalChange
+		rollbackPasswordIfCurrentInStore = originalRollback
+		revokeUserSessions = originalRevoke
+	})
+
+	callOrder := make([]string, 0, 2)
+	revokeUserSessions = func(userID uint) error {
+		callOrder = append(callOrder, "revoke")
+		return nil
+	}
+	changePasswordInStore = func(userID uint, newPassword string) error {
+		callOrder = append(callOrder, "change")
+		return nil
+	}
+	rollbackPasswordIfCurrentInStore = func(userID uint, expectedPassword string, newPassword string) (bool, error) {
+		callOrder = append(callOrder, "rollback")
+		return true, nil
+	}
+
+	currentHash, err := support.HashPassword("correct-old")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
+		OldPassword: "correct-old",
+		NewPassword: "new-secret",
+	})
+	if err != nil {
+		t.Fatalf("changePasswordWithSessionRevocation returned error: %v", err)
+	}
+	if len(callOrder) != 2 || callOrder[0] != "change" || callOrder[1] != "revoke" {
+		t.Fatalf("unexpected call order: %v", callOrder)
 	}
 }
 

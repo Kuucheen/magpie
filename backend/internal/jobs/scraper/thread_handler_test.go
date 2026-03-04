@@ -184,3 +184,58 @@ func TestRequestScraperWorkerStop_SucceedsWithListener(t *testing.T) {
 		t.Fatal("expected stop signal to be delivered")
 	}
 }
+
+func TestRequestScraperPageStop_DoesNotBlockWithoutListener(t *testing.T) {
+	originalStopPage := stopPage
+	stopPage = make(chan struct{})
+	t.Cleanup(func() {
+		stopPage = originalStopPage
+	})
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- requestScraperPageStop()
+	}()
+
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("requestScraperPageStop should return false when no page worker is listening")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("requestScraperPageStop blocked without listener")
+	}
+}
+
+func TestRequestScraperPageStop_SucceedsWithListener(t *testing.T) {
+	originalStopPage := stopPage
+	stopPage = make(chan struct{})
+	t.Cleanup(func() {
+		stopPage = originalStopPage
+	})
+
+	stopped := make(chan struct{})
+	go func() {
+		<-stopPage
+		close(stopped)
+	}()
+
+	deadline := time.Now().Add(100 * time.Millisecond)
+	delivered := false
+	for time.Now().Before(deadline) {
+		if requestScraperPageStop() {
+			delivered = true
+			break
+		}
+		runtime.Gosched()
+	}
+	if !delivered {
+		t.Fatal("requestScraperPageStop should return true when a page worker listener is available")
+	}
+
+	select {
+	case <-stopped:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected page stop signal to be delivered")
+	}
+}

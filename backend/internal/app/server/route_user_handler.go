@@ -41,9 +41,18 @@ var (
 	errPublicFirstAdminBootstrap  = errors.New("public first-admin bootstrap is disabled")
 	errInvalidAdminBootstrapToken = errors.New("invalid admin bootstrap token")
 	errAdminBootstrapTokenNotSet  = errors.New("admin bootstrap token is not configured")
+	errInvalidOldPassword         = errors.New("invalid old password")
+	errHashNewPassword            = errors.New("failed to hash new password")
+	errRevokeActiveSessions       = errors.New("failed to revoke active sessions")
+	errChangePassword             = errors.New("failed to change password")
+	errPasswordRollbackFailed     = errors.New("failed to rollback password after revocation failure")
 
 	loginFallbackPasswordHashOnce sync.Once
 	loginFallbackPasswordHash     string
+
+	changePasswordInStore            = database.ChangePassword
+	rollbackPasswordIfCurrentInStore = database.ChangePasswordIfCurrent
+	revokeUserSessions               = auth.RevokeAllUserJWTs
 )
 
 type userRegistrationPolicy struct {
@@ -399,35 +408,59 @@ func changePassword(w http.ResponseWriter, r *http.Request) {
 
 	user := database.GetUserFromId(userID)
 
-	var changeUserPassword dto.ChangePassword
-	if !decodeJSONBodyLimited(w, r, &changeUserPassword, resolveJSONMaxBodyBytes()) {
+	var payload dto.ChangePassword
+	if !decodeJSONBodyLimited(w, r, &payload, resolveJSONMaxBodyBytes()) {
 		return
 	}
 
-	if !support.CheckPasswordHash(changeUserPassword.OldPassword, user.Password) {
-		writeError(w, "Invalid old password", http.StatusUnauthorized)
-		return
-	}
-
-	hashed, err := support.HashPassword(changeUserPassword.NewPassword)
-	if err != nil {
-		writeError(w, "Failed to hash password", http.StatusInternalServerError)
-		return
-	}
-
-	err = database.ChangePassword(userID, hashed)
-	if err != nil {
-		writeError(w, "Failed to change password", http.StatusInternalServerError)
-		log.Error(err)
-		return
-	}
-
-	if err := auth.RevokeAllUserJWTs(userID); err != nil {
-		writeError(w, "Failed to revoke active sessions", http.StatusInternalServerError)
+	if err := changePasswordWithSessionRevocation(userID, user.Password, payload); err != nil {
+		switch {
+		case errors.Is(err, errInvalidOldPassword):
+			writeError(w, "Invalid old password", http.StatusUnauthorized)
+		case errors.Is(err, errHashNewPassword):
+			writeError(w, "Failed to hash password", http.StatusInternalServerError)
+		case errors.Is(err, errPasswordRollbackFailed):
+			writeError(w, "Failed to revoke active sessions and rollback password state", http.StatusInternalServerError)
+		case errors.Is(err, errRevokeActiveSessions):
+			writeError(w, "Failed to revoke active sessions; password change was not finalized", http.StatusServiceUnavailable)
+		case errors.Is(err, errChangePassword):
+			writeError(w, "Failed to change password", http.StatusInternalServerError)
+		default:
+			writeError(w, "Failed to change password", http.StatusInternalServerError)
+		}
+		log.Error("change password failed", "user_id", userID, "error", err)
 		return
 	}
 
 	json.NewEncoder(w).Encode("Password changed successfully")
+}
+
+func changePasswordWithSessionRevocation(userID uint, currentPasswordHash string, payload dto.ChangePassword) error {
+	if !support.CheckPasswordHash(payload.OldPassword, currentPasswordHash) {
+		return errInvalidOldPassword
+	}
+
+	hashedPassword, err := support.HashPassword(payload.NewPassword)
+	if err != nil {
+		return errors.Join(errHashNewPassword, err)
+	}
+
+	if err := changePasswordInStore(userID, hashedPassword); err != nil {
+		return errors.Join(errChangePassword, err)
+	}
+
+	if err := revokeUserSessions(userID); err != nil {
+		rolledBack, rollbackErr := rollbackPasswordIfCurrentInStore(userID, hashedPassword, currentPasswordHash)
+		if rollbackErr != nil {
+			return errors.Join(errRevokeActiveSessions, errPasswordRollbackFailed, err, rollbackErr)
+		}
+		if !rolledBack {
+			log.Warn("password rollback skipped because password changed concurrently", "user_id", userID)
+		}
+		return errors.Join(errRevokeActiveSessions, err)
+	}
+
+	return nil
 }
 
 func deleteAccount(w http.ResponseWriter, r *http.Request) {

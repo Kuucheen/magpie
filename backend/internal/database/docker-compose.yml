@@ -13,10 +13,11 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     container_name: magpie_redis
     ports:
       - "8946:6379"
+    command: ["redis-server", "--appendonly", "yes"]
     restart: unless-stopped
 
 

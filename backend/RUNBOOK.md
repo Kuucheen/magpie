@@ -82,6 +82,7 @@ Actions:
 ### Redis unavailable
 Symptoms:
 - `/readyz` reports `redis=down` or `redis=degraded`
+- redis probe details include mode/error class context, e.g. `mode=sentinel; error_class=connect_failed; retry_after=...`
 - queue operations may fail
 - JWT signature/expiry validation continues, but revocation checks run in degraded fail-open mode by default (`AUTH_REVOCATION_FAIL_OPEN=true`)
 
@@ -90,6 +91,49 @@ Actions:
 2. Ensure persistence/replication status is healthy.
 3. If running in degraded mode, restore Redis ASAP and disable degraded mode after recovery.
 4. If checker throughput drops due stats-ingest pressure, tune `PROXY_STATISTICS_PRODUCER_BLOCK_TIMEOUT_MS` lower to reduce producer-side waiting.
+
+### Redis Sentinel HA configuration
+
+Use sentinel mode for multi-node Redis:
+
+```bash
+REDIS_MODE=sentinel
+REDIS_MASTER_NAME=magpie-master
+REDIS_SENTINEL_ADDRS=redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379
+
+# Optional (when Redis/Sentinel auth is enabled)
+REDIS_PASSWORD=<redis-password>
+REDIS_SENTINEL_PASSWORD=<sentinel-password>
+```
+
+Single-node fallback remains available:
+
+```bash
+REDIS_MODE=single
+redisUrl=redis://redis:6379
+```
+
+### Redis Sentinel failover procedure
+
+1. Verify current readiness details include `mode=sentinel`:
+   - `curl -fsS http://<backend-host>:5656/readyz`
+2. Identify current Redis master:
+   - `redis-cli -p 26379 SENTINEL get-master-addr-by-name <REDIS_MASTER_NAME>`
+3. Simulate primary failure (example with Docker):
+   - `docker pause magpie_redis_primary`
+4. Wait for sentinel promotion (usually within seconds) and verify new master:
+   - `redis-cli -p 26379 SENTINEL get-master-addr-by-name <REDIS_MASTER_NAME>`
+5. Confirm backend recovery:
+   - `curl -fsS http://<backend-host>:5656/readyz`
+   - verify queue/auth/stat writes succeed in logs
+6. Restore failed node and confirm it rejoins as replica.
+   - `docker unpause magpie_redis_primary`
+
+Automated failover integration test:
+
+```bash
+go test -tags integration ./internal/support -run TestRedisSentinelFailover_RecoversWritesAfterPrimaryDown -count=1
+```
 
 ### Startup queue bootstrap stuck
 Symptoms:

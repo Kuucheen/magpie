@@ -9,7 +9,12 @@ services:
     environment:
       - PROXY_ENCRYPTION_KEY=${PROXY_ENCRYPTION_KEY:?Set PROXY_ENCRYPTION_KEY in .env}
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
-      - redisUrl=redis://redis:6379
+      - redisUrl=${REDIS_URL:-redis://redis:6379}
+      - REDIS_MODE=${REDIS_MODE:-single}
+      - REDIS_MASTER_NAME=${REDIS_MASTER_NAME:-magpie-master}
+      - REDIS_SENTINEL_ADDRS=${REDIS_SENTINEL_ADDRS:-redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_SENTINEL_PASSWORD=${REDIS_SENTINEL_PASSWORD:-}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-magpie}
@@ -68,10 +73,22 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     container_name: magpie_redis
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -n "$${REDIS_PASSWORD:-}" ]; then
+          exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}" --masterauth "$${REDIS_PASSWORD}"
+        fi
+        exec redis-server --appendonly yes
     ports:
       - "127.0.0.1:8946:6379"
+    volumes:
+      - redis_data:/data
     deploy:
       resources:
         limits:
@@ -84,3 +101,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:

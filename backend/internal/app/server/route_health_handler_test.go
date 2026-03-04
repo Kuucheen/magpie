@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"magpie/internal/database"
@@ -61,5 +63,30 @@ func TestReadyz_FailsWhenDatabaseUnavailable(t *testing.T) {
 	}
 	if payload.Components["database"].Status != componentStatusDown {
 		t.Fatalf("database component status = %q, want %q", payload.Components["database"].Status, componentStatusDown)
+	}
+}
+
+func TestCheckRedisComponent_ReportsModeAndErrorDetails(t *testing.T) {
+	_ = support.CloseRedisClient()
+	t.Cleanup(func() {
+		_ = support.CloseRedisClient()
+	})
+
+	t.Setenv(envReadyzAllowRedisDegraded, "false")
+	t.Setenv("redisUrl", "redis://user:super-secret-pass@127.0.0.1:1")
+	t.Setenv("REDIS_MODE", "single")
+
+	component := checkRedisComponent(context.Background())
+	if component.Status != componentStatusDown {
+		t.Fatalf("redis component status = %q, want %q", component.Status, componentStatusDown)
+	}
+	if !strings.Contains(component.Details, "mode=single") {
+		t.Fatalf("redis details = %q, want mode=single", component.Details)
+	}
+	if !strings.Contains(component.Details, "error_class=") {
+		t.Fatalf("redis details = %q, expected error_class detail", component.Details)
+	}
+	if strings.Contains(component.Details, "super-secret-pass") {
+		t.Fatalf("redis details leaked sensitive value: %q", component.Details)
 	}
 }

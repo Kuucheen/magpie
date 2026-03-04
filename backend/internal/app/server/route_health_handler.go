@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"magpie/internal/app/bootstrap"
@@ -122,24 +124,30 @@ func checkDatabaseComponent(ctx context.Context) probeComponent {
 }
 
 func checkRedisComponent(ctx context.Context) probeComponent {
+	status := support.GetRedisClientStatus()
 	redisClient, err := support.GetRedisClient()
 	if err != nil {
+		status = support.GetRedisClientStatus()
+		details := formatRedisComponentDetails(status, err)
 		if support.GetEnvBool(envReadyzAllowRedisDegraded, false) {
-			return probeComponent{Status: componentStatusDegraded, Details: "redis unavailable"}
+			return probeComponent{Status: componentStatusDegraded, Details: details}
 		}
-		return probeComponent{Status: componentStatusDown, Details: "redis unavailable"}
+		return probeComponent{Status: componentStatusDown, Details: details}
 	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if err := redisClient.Ping(pingCtx).Err(); err != nil {
+		status = support.GetRedisClientStatus()
+		details := formatRedisComponentDetails(status, fmt.Errorf("redis ping failed: %w", err))
 		if support.GetEnvBool(envReadyzAllowRedisDegraded, false) {
-			return probeComponent{Status: componentStatusDegraded, Details: "redis ping failed"}
+			return probeComponent{Status: componentStatusDegraded, Details: details}
 		}
-		return probeComponent{Status: componentStatusDown, Details: "redis ping failed"}
+		return probeComponent{Status: componentStatusDown, Details: details}
 	}
 
-	return probeComponent{Status: componentStatusUp}
+	status = support.GetRedisClientStatus()
+	return probeComponent{Status: componentStatusUp, Details: formatRedisComponentDetails(status, nil)}
 }
 
 func checkStartupBootstrapComponent() probeComponent {
@@ -148,4 +156,41 @@ func checkStartupBootstrapComponent() probeComponent {
 	}
 
 	return probeComponent{Status: componentStatusStarting, Details: "startup queue bootstrap still running"}
+}
+
+func formatRedisComponentDetails(status support.RedisClientStatus, err error) string {
+	details := fmt.Sprintf("mode=%s", status.Mode)
+	if errorClass := classifyRedisError(err, status.LastError); errorClass != "" {
+		details += fmt.Sprintf("; error_class=%s", errorClass)
+	}
+	if status.RetryAfter > 0 {
+		details += fmt.Sprintf("; retry_after=%s", status.RetryAfter)
+	}
+	return details
+}
+
+func classifyRedisError(err error, lastErr string) string {
+	msg := strings.ToLower(strings.TrimSpace(lastErr))
+	if err != nil {
+		msg = strings.ToLower(strings.TrimSpace(err.Error()))
+	}
+	if msg == "" {
+		return ""
+	}
+
+	switch {
+	case strings.Contains(msg, "redis reconnect deferred"):
+		return "reconnect_deferred"
+	case strings.Contains(msg, "failed to parse redisurl"),
+		strings.Contains(msg, "missing redis_master_name"),
+		strings.Contains(msg, "missing redis_sentinel_addrs"),
+		strings.Contains(msg, "invalid redis_mode"):
+		return "config_invalid"
+	case strings.Contains(msg, "redis ping failed"):
+		return "ping_failed"
+	case strings.Contains(msg, "failed to connect to redis"):
+		return "connect_failed"
+	default:
+		return "unavailable"
+	}
 }

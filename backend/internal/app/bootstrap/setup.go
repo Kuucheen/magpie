@@ -171,6 +171,7 @@ func Setup(ctx context.Context) error {
 	go jobruntime.StartGeoLiteUpdateRoutine(ctx)
 	go blacklist.StartRefreshRoutine(ctx)
 	go checker.ThreadDispatcher(ctx)
+	scraper.StartInfrastructure()
 	go scraper.ThreadDispatcher(ctx)
 
 	return nil

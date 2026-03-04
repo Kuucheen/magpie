@@ -35,6 +35,8 @@ signals from managePagePool). This keeps the request code tiny while
 all pool housekeeping lives in thread_handler.go.
 */
 func ScraperRequest(url string, timeout time.Duration) (string, error) {
+	StartInfrastructure()
+
 	if config.IsWebsiteBlocked(url) {
 		return "", fmt.Errorf("scrape blocked by website blacklist: %s", url)
 	}

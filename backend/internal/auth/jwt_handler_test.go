@@ -175,8 +175,35 @@ func TestValidateJWTRejectsTokenWithoutJTI(t *testing.T) {
 	}
 }
 
-func TestValidateJWTFailsClosedWhenRevocationStoreUnavailableByDefault(t *testing.T) {
+func TestValidateJWTFailOpensWhenRevocationStoreUnavailableByDefault(t *testing.T) {
 	resetJWTStateForTests(t)
+
+	token, err := GenerateJWT(42, "user")
+	if err != nil {
+		t.Fatalf("GenerateJWT failed: %v", err)
+	}
+
+	if _, err := ValidateJWT(token); err != nil {
+		t.Fatalf("ValidateJWT failed before redis outage: %v", err)
+	}
+
+	t.Setenv("redisUrl", "redis://127.0.0.1:1")
+	if err := support.CloseRedisClient(); err != nil {
+		t.Fatalf("CloseRedisClient failed: %v", err)
+	}
+
+	tokenRevocationMu.Lock()
+	redisRetryAfter = time.Time{}
+	tokenRevocationMu.Unlock()
+
+	if _, err := ValidateJWT(token); err != nil {
+		t.Fatalf("ValidateJWT should fail-open while revocation store is unavailable by default, got: %v", err)
+	}
+}
+
+func TestValidateJWTFailsClosedWhenRevocationStoreUnavailableWhenDisabled(t *testing.T) {
+	resetJWTStateForTests(t)
+	t.Setenv(envAuthRevocationFailOpen, "false")
 
 	token, err := GenerateJWT(42, "user")
 	if err != nil {
@@ -197,34 +224,7 @@ func TestValidateJWTFailsClosedWhenRevocationStoreUnavailableByDefault(t *testin
 	tokenRevocationMu.Unlock()
 
 	if _, err := ValidateJWT(token); err == nil {
-		t.Fatal("ValidateJWT accepted token while revocation store was unavailable and fail-open was unset")
-	}
-}
-
-func TestValidateJWTFailOpensWhenRevocationStoreUnavailableAndEnabled(t *testing.T) {
-	resetJWTStateForTests(t)
-	t.Setenv(envAuthRevocationFailOpen, "true")
-
-	token, err := GenerateJWT(42, "user")
-	if err != nil {
-		t.Fatalf("GenerateJWT failed: %v", err)
-	}
-
-	if _, err := ValidateJWT(token); err != nil {
-		t.Fatalf("ValidateJWT failed before redis outage: %v", err)
-	}
-
-	t.Setenv("redisUrl", "redis://127.0.0.1:1")
-	if err := support.CloseRedisClient(); err != nil {
-		t.Fatalf("CloseRedisClient failed: %v", err)
-	}
-
-	tokenRevocationMu.Lock()
-	redisRetryAfter = time.Time{}
-	tokenRevocationMu.Unlock()
-
-	if _, err := ValidateJWT(token); err != nil {
-		t.Fatalf("ValidateJWT should fail-open while revocation store is unavailable when enabled, got: %v", err)
+		t.Fatal("ValidateJWT accepted token while revocation store was unavailable and fail-open was explicitly disabled")
 	}
 }
 

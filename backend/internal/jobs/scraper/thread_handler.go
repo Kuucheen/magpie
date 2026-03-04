@@ -57,7 +57,7 @@ const (
 
 var (
 	browser      *rod.Browser
-	pagePool     chan *rod.Page
+	pagePool     = make(chan *rod.Page, maxScraperPages)
 	currentPages atomic.Int32
 
 	postProcessQueue chan scrapedHTMLJob
@@ -65,6 +65,7 @@ var (
 	stopPage     = make(chan struct{}) // signals that a page should be closed
 	browserAlive atomic.Bool
 	restartCh    = make(chan struct{}, 1) // coalesced restart signal
+	startOnce    sync.Once
 
 	scrapePopErrorLogState struct {
 		mu         sync.Mutex
@@ -78,16 +79,16 @@ type scrapedHTMLJob struct {
 	html string
 }
 
-/* ─────────────────────────────  init  ───────────────────────────────────── */
+/* ─────────────────────────────  startup  ─────────────────────────────────── */
 
-func init() {
-	pagePool = make(chan *rod.Page, maxScraperPages)
-	postProcessQueue = make(chan scrapedHTMLJob, resolvePostProcessQueueSize())
-
-	go BrowserWatchdog() // listen for restart requests
-	requestRestartBrowser()
-	go ManagePagePool() // keep pool aligned with demand
-	startScrapedHTMLWorkers(resolvePostProcessWorkers())
+func StartInfrastructure() {
+	startOnce.Do(func() {
+		postProcessQueue = make(chan scrapedHTMLJob, resolvePostProcessQueueSize())
+		go BrowserWatchdog() // listen for restart requests
+		requestRestartBrowser()
+		go ManagePagePool() // keep pool aligned with demand
+		startScrapedHTMLWorkers(resolvePostProcessWorkers())
+	})
 }
 
 /* ─────────────────────────────  dispatcher  ─────────────────────────────── */
@@ -96,6 +97,7 @@ func ThreadDispatcher(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	StartInfrastructure()
 
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()

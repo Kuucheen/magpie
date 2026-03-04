@@ -84,7 +84,7 @@ Symptoms:
 - `/readyz` reports `redis=down` or `redis=degraded`
 - redis probe details include mode/error class context, e.g. `mode=sentinel; error_class=connect_failed; retry_after=...`
 - queue operations may fail
-- JWT signature/expiry validation continues, and revocation checks fail closed by default (`AUTH_REVOCATION_FAIL_OPEN=false`)
+- JWT signature/expiry validation continues, and revocation checks fail open by default (`AUTH_REVOCATION_FAIL_OPEN=true`)
 
 Actions:
 1. Verify Redis endpoint and connectivity.
@@ -158,9 +158,9 @@ Actions:
 - In multi-instance deployments, keep the same value on all instances.
 
 ### JWT revocation outage mode (`AUTH_REVOCATION_FAIL_OPEN`)
-- Default: `false` (prefer security when Redis is unavailable).
-- When `false`, if Redis revocation store is unavailable, token validation fails closed.
-- Set to `true` to temporarily allow signature/expiry-valid tokens during a revocation-store outage.
+- Default: `true` (prefer availability when Redis is unavailable).
+- When `true`, if Redis revocation store is unavailable, token validation accepts signature/expiry-valid tokens.
+- Set to `false` to fail closed during a revocation-store outage.
 - In multi-instance deployments, keep this value identical on all instances.
 
 ### Proxy encryption key (`PROXY_ENCRYPTION_KEY`)

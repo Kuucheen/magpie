@@ -15,6 +15,7 @@ func TestIsValidURL(t *testing.T) {
 		{"https", "https://example.com/path", true},
 		{"missing scheme", "example.com", false},
 		{"unsupported scheme", "ftp://example.com", false},
+		{"userinfo not allowed", "https://user:pass@example.com", false},
 		{"invalid", "://missing-scheme", false},
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"magpie/internal/config"
+	"magpie/internal/support"
 	"net/http"
 	"net/url"
 	"sync"
@@ -38,6 +39,12 @@ func CheckRobotsAllowance(targetURL string, timeout time.Duration) (RobotsCheckR
 		return RobotsCheckResult{Allowed: false}, fmt.Errorf("website is blocked: %s", targetURL)
 	}
 
+	validationCtx, cancel := context.WithTimeout(context.Background(), effectiveRobotsTimeout(timeout))
+	defer cancel()
+	if _, err := support.ValidateOutboundHTTPURLContext(validationCtx, targetURL); err != nil {
+		return RobotsCheckResult{Allowed: false}, fmt.Errorf("unsafe robots target: %w", err)
+	}
+
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
 		return RobotsCheckResult{Allowed: true}, fmt.Errorf("parse robots target: %w", err)
@@ -46,10 +53,7 @@ func CheckRobotsAllowance(targetURL string, timeout time.Duration) (RobotsCheckR
 		return RobotsCheckResult{Allowed: true}, fmt.Errorf("parse robots target: missing host in %q", targetURL)
 	}
 
-	robotsTimeout := timeout
-	if robotsTimeout <= 0 {
-		robotsTimeout = 10 * time.Second
-	}
+	robotsTimeout := effectiveRobotsTimeout(timeout)
 
 	entry, fetchErr := loadRobotsEntry(parsed, robotsTimeout)
 	if fetchErr != nil {
@@ -128,7 +132,8 @@ func fetchRobotsEntry(parsed *url.URL, timeout time.Duration) (robotsCacheEntry,
 	}
 	req.Header.Set("User-Agent", scraperUserAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := support.NewRestrictedOutboundHTTPClient(timeout)
+	resp, err := client.Do(req)
 	if err != nil {
 		return robotsCacheEntry{}, err
 	}
@@ -160,4 +165,12 @@ func robotsURLFor(parsed *url.URL) string {
 		scheme = "https"
 	}
 	return fmt.Sprintf("%s://%s/robots.txt", scheme, parsed.Host)
+}
+
+func effectiveRobotsTimeout(timeout time.Duration) time.Duration {
+	robotsTimeout := timeout
+	if robotsTimeout <= 0 {
+		robotsTimeout = 10 * time.Second
+	}
+	return robotsTimeout
 }

@@ -35,6 +35,10 @@ signals from managePagePool). This keeps the request code tiny while
 all pool housekeeping lives in thread_handler.go.
 */
 func ScraperRequest(url string, timeout time.Duration) (string, error) {
+	if err := validateScrapeTarget(url, timeout); err != nil {
+		return "", err
+	}
+
 	StartInfrastructure()
 
 	if config.IsWebsiteBlocked(url) {
@@ -64,6 +68,17 @@ func ScraperRequest(url string, timeout time.Duration) (string, error) {
 
 	// Ensure network events are available so we can pull raw responses.
 	_ = proto.NetworkEnable{}.Call(page)
+	if err := (proto.FetchEnable{
+		Patterns: []*proto.FetchRequestPattern{
+			{URLPattern: "http://*", RequestStage: proto.FetchRequestStageRequest},
+			{URLPattern: "https://*", RequestStage: proto.FetchRequestStageRequest},
+		},
+	}).Call(page); err != nil {
+		return "", fmt.Errorf("enable browser request guard: %w", err)
+	}
+	defer func() {
+		_ = proto.FetchDisable{}.Call(page)
+	}()
 
 	var (
 		capturedBody         string
@@ -82,8 +97,36 @@ func ScraperRequest(url string, timeout time.Duration) (string, error) {
 	capturedBodyLimit := scraperCapturedMaxResponseBodyBytes()
 
 	waitResponse := page.Context(eventCtx).EachEvent(
+		func(e *proto.FetchRequestPaused) {
+			if e == nil || e.Request == nil {
+				return
+			}
+
+			if err := validateScrapeRuntimeURL(e.Request.URL, timeout); err != nil {
+				responseCaptureError = fmt.Errorf("unsafe browser request target: %w", err)
+				_ = proto.FetchFailRequest{
+					RequestID:   e.RequestID,
+					ErrorReason: proto.NetworkErrorReasonAccessDenied,
+				}.Call(page)
+				_ = page.StopLoading()
+				doneOnce.Do(func() { close(done) })
+				return
+			}
+
+			if err := (proto.FetchContinueRequest{RequestID: e.RequestID}).Call(page); err != nil {
+				responseCaptureError = fmt.Errorf("continue browser request: %w", err)
+				doneOnce.Do(func() { close(done) })
+			}
+		},
 		func(e *proto.NetworkRequestWillBeSent) {
 			if e.FrameID != "" && e.FrameID != page.FrameID {
+				return
+			}
+
+			if err := validateScrapeRuntimeURL(e.Request.URL, timeout); err != nil {
+				responseCaptureError = fmt.Errorf("unsafe browser request target: %w", err)
+				_ = page.StopLoading()
+				doneOnce.Do(func() { close(done) })
 				return
 			}
 			if e.Type == proto.NetworkResourceTypeDocument {
@@ -104,6 +147,12 @@ func ScraperRequest(url string, timeout time.Duration) (string, error) {
 			}
 			if mainRequestID != "" && e.RequestID != mainRequestID {
 				return false
+			}
+			if err := validateScrapeRemoteIP(e.Response.RemoteIPAddress); err != nil {
+				responseCaptureError = fmt.Errorf("unsafe browser remote address: %w", err)
+				_ = page.StopLoading()
+				doneOnce.Do(func() { close(done) })
+				return true
 			}
 
 			if contentLengthExceedsLimit(e.Response.Headers, capturedBodyLimit) {
@@ -319,13 +368,18 @@ func fetchDirect(url string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	validatedURL, err := support.ValidateOutboundHTTPURLContext(ctx, url)
+	if err != nil {
+		return "", fmt.Errorf("unsafe fallback target: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, validatedURL.String(), nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("User-Agent", scraperUserAgent)
 
-	client := &http.Client{}
+	client := support.NewRestrictedOutboundHTTPClient(limit)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -377,4 +431,48 @@ func contentLengthExceedsLimit(headers proto.NetworkHeaders, limit int64) bool {
 		return false
 	}
 	return length > limit
+}
+
+func validateScrapeTarget(rawURL string, timeout time.Duration) error {
+	limit := 5 * time.Second
+	if timeout > 0 && timeout < limit {
+		limit = timeout
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+
+	if _, err := support.ValidateOutboundHTTPURLContext(ctx, rawURL); err != nil {
+		return fmt.Errorf("unsafe scrape target: %w", err)
+	}
+
+	return nil
+}
+
+func validateScrapeRuntimeURL(rawURL string, timeout time.Duration) error {
+	lower := strings.ToLower(strings.TrimSpace(rawURL))
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+		return nil
+	}
+
+	limit := 2 * time.Second
+	if timeout > 0 && timeout < limit {
+		limit = timeout
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+
+	if _, err := support.ValidateOutboundHTTPURLContext(ctx, rawURL); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateScrapeRemoteIP(rawIP string) error {
+	if strings.TrimSpace(rawIP) == "" {
+		return nil
+	}
+	return support.ValidateOutboundIPLiteral(rawIP)
 }

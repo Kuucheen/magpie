@@ -8,6 +8,7 @@ _Last updated: 2026-03-04_
 2. Check liveness/readiness:
    - `curl -fsS http://<backend-host>:5656/healthz`
    - `curl -fsS http://<backend-host>:5656/readyz`
+   - if observability protection is enabled, add `-H "X-Observability-Token: <OBSERVABILITY_TOKEN>"`
 3. Validate dependencies:
    - PostgreSQL reachable and accepting queries.
    - Redis reachable (or readiness explicitly allowed to degrade via `READYZ_ALLOW_REDIS_DEGRADED=true`).
@@ -66,6 +67,17 @@ Checks:
 Routing guidance:
 - Route traffic only when `/readyz` returns `200`.
 - `503` indicates instance should be removed from load balancer.
+
+### Observability endpoint access control
+- Endpoints: `/healthz`, `/readyz`, `/metrics`
+- Local/non-production default: public.
+- Production default: protected unless explicitly opened.
+- Controls:
+  - `ALLOW_PUBLIC_OBSERVABILITY_ENDPOINTS=true|false`
+  - `OBSERVABILITY_TOKEN=<strong-random-token>` (send via `X-Observability-Token`)
+- When protection is enabled:
+  - loopback requests are allowed without token
+  - non-loopback requests must provide `X-Observability-Token` matching `OBSERVABILITY_TOKEN`
 
 ## Common Failure Modes
 
@@ -143,6 +155,13 @@ Actions:
 1. Check DB and Redis connectivity.
 2. Inspect backend logs for queue bootstrap retry errors.
 3. Restart instance only after root cause is addressed.
+
+## Scraper Egress Guard
+
+- Scraping and robots checks reject private/special-use network targets by default.
+- This prevents authenticated SSRF to localhost/internal addresses.
+- To explicitly allow private egress (local/testing only), set:
+  - `ALLOW_PRIVATE_NETWORK_EGRESS=true`
 
 ## Token/Secret Rotation
 

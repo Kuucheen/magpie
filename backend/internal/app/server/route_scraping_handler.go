@@ -220,8 +220,12 @@ func saveScrapingSources(w http.ResponseWriter, r *http.Request) {
 	// Parse the merged content into a slice of sources
 	sources := support.ParseTextToSources(mergedContent)
 
-	var allowedSources, blockedSources []string
+	var allowedSources, blockedSources, unsafeSources []string
 	for _, src := range sources {
+		if _, err := support.ValidateOutboundHTTPLiteral(src); err != nil {
+			unsafeSources = append(unsafeSources, src)
+			continue
+		}
 		if config.IsWebsiteBlocked(src) {
 			blockedSources = append(blockedSources, src)
 			continue
@@ -229,12 +233,19 @@ func saveScrapingSources(w http.ResponseWriter, r *http.Request) {
 		allowedSources = append(allowedSources, src)
 	}
 
-	if len(blockedSources) > 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{
-			"error":            "One or more scrape sources are blocked",
-			"blocked_sources":  dedupeStrings(blockedSources),
-			"websiteBlacklist": config.GetConfig().WebsiteBlacklist,
-		})
+	if len(blockedSources) > 0 || len(unsafeSources) > 0 {
+		payload := map[string]any{
+			"error": "One or more scrape sources are not allowed",
+		}
+		if len(blockedSources) > 0 {
+			payload["blocked_sources"] = dedupeStrings(blockedSources)
+			payload["websiteBlacklist"] = config.GetConfig().WebsiteBlacklist
+		}
+		if len(unsafeSources) > 0 {
+			payload["unsafe_sources"] = dedupeStrings(unsafeSources)
+		}
+
+		writeJSON(w, http.StatusBadRequest, payload)
 		return
 	}
 
@@ -276,6 +287,12 @@ func checkScrapeSourceRobots(w http.ResponseWriter, r *http.Request) {
 			"error":            "This website is blocked",
 			"blocked_website":  rawURL,
 			"websiteBlacklist": config.GetConfig().WebsiteBlacklist,
+		})
+		return
+	}
+	if _, err := support.ValidateOutboundHTTPURLContext(r.Context(), rawURL); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": "URL points to a disallowed network target",
 		})
 		return
 	}

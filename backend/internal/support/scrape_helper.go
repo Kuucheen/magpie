@@ -3,7 +3,6 @@ package support
 import (
 	"fmt"
 	"html"
-	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -12,8 +11,8 @@ import (
 )
 
 func IsValidURL(raw string) bool {
-	u, err := url.ParseRequestURI(raw)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https")
+	_, err := parseOutboundHTTPURL(raw)
+	return err == nil
 }
 
 func GetProxiesOfHTML(rawHTML string) []string {

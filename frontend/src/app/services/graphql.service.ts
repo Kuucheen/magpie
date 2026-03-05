@@ -5,7 +5,7 @@ import {Observable, throwError} from 'rxjs';
 import {map, catchError} from 'rxjs/operators';
 
 const DASHBOARD_QUERY = `#graphql
-  query DashboardData($proxyPage: Int!) {
+  query DashboardData {
     viewer {
       dashboard {
         totalChecks
@@ -31,21 +31,13 @@ const DASHBOARD_QUERY = `#graphql
       }
       proxyCount
       proxyLimit
-      proxies(page: $proxyPage) {
-        page
-        pageSize
-        totalCount
-        items {
-          id
-          ip
-          port
-          estimatedType
-          responseTime
-          country
-          anonymityLevel
-          alive
-          latestCheck
-        }
+      recentProxyChecks(limit: 8) {
+        id
+        ip
+        port
+        responseTime
+        alive
+        latestCheck
       }
       proxyHistory(limit: 168) {
         count
@@ -78,7 +70,7 @@ export interface DashboardViewer {
   dashboard: DashboardInfo;
   proxyCount: number;
   proxyLimit: number | null;
-  proxies: ProxyPage;
+  recentProxyChecks: RecentProxyCheck[];
   proxyHistory: ProxyHistoryEntry[];
   proxySnapshots: ProxySnapshots;
   scrapeSourceCount: number;
@@ -113,22 +105,11 @@ export interface JudgeValidProxy {
   transparentProxies: number;
 }
 
-export interface ProxyPage {
-  page: number;
-  pageSize: number;
-  totalCount: number;
-  items: ProxyNode[];
-}
-
-export interface ProxyNode {
+export interface RecentProxyCheck {
   id: number;
   ip: string;
   port: number;
-  estimatedType: string;
   responseTime: number;
-  country: string;
-  anonymityLevel: string;
-  protocol: string;
   alive: boolean;
   latestCheck?: string;
 }
@@ -159,11 +140,10 @@ export class GraphqlService {
 
   constructor(private http: HttpClient) {}
 
-  fetchDashboardData(proxyPage = 1): Observable<DashboardQueryData> {
+  fetchDashboardData(): Observable<DashboardQueryData> {
     return this.http
       .post<GraphQLResponse<DashboardQueryData>>(this.graphqlUrl, {
-        query: DASHBOARD_QUERY,
-        variables: { proxyPage }
+        query: DASHBOARD_QUERY
       })
       .pipe(
         map((response) => {

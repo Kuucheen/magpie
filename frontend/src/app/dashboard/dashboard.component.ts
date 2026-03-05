@@ -15,7 +15,7 @@ import {
   GraphqlService,
   JudgeValidProxy,
   ProxyHistoryEntry,
-  ProxyNode,
+  RecentProxyCheck,
   ProxySnapshotEntry,
   ProxySnapshots,
   ReputationBreakdown,
@@ -180,12 +180,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     this.updateKpis(viewer.dashboard, viewer.proxyCount, viewer.proxySnapshots, viewer.proxyHistory);
-    this.updateCountryBreakdown(
-      viewer.proxies?.items ?? [],
-      viewer.dashboard?.countryBreakdown ?? []
-    );
+    this.updateCountryBreakdown(viewer.dashboard?.countryBreakdown ?? []);
     this.updateReputationOverview(viewer.dashboard);
-    this.updateProxyHistory(viewer.proxies?.items ?? []);
+    this.updateProxyHistory(viewer.recentProxyChecks ?? []);
     this.updateAnonymitySummary(viewer.dashboard?.judgeValidProxies ?? []);
     this.updateJudgeBreakdown(viewer.dashboard?.judgeValidProxies ?? []);
     this.buildProxiesLineChart(viewer.proxyHistory ?? [], viewer.proxyLimit);
@@ -269,18 +266,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     };
   }
 
-  private updateCountryBreakdown(
-    proxies: ProxyNode[],
-    breakdown: CountryBreakdownEntry[] = []
-  ): void {
-    const aggregated = breakdown.length
-      ? breakdown
-        .filter((entry) => entry.count > 0)
-        .map((entry) => ({
-          name: entry.country?.trim() || 'Unknown',
-          value: entry.count
-        }))
-      : this.buildCountryCountsFromProxies(proxies);
+  private updateCountryBreakdown(breakdown: CountryBreakdownEntry[] = []): void {
+    const aggregated = breakdown
+      .filter((entry) => entry.count > 0)
+      .map((entry) => ({
+        name: entry.country?.trim() || 'Unknown',
+        value: entry.count
+      }));
 
     const sorted = aggregated
       .filter((entry) => entry.value > 0)
@@ -294,17 +286,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     })));
   }
 
-  private buildCountryCountsFromProxies(proxies: ProxyNode[]): Array<{ name: string; value: number }> {
-    const counts = new Map<string, number>();
-    proxies.forEach((proxy) => {
-      const key = proxy.country?.trim() || 'Unknown';
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    });
-
-    return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
-  }
-
-  private updateProxyHistory(proxies: ProxyNode[]): void {
+  private updateProxyHistory(proxies: RecentProxyCheck[]): void {
     this.proxyHistory.set(
       proxies
         .map((proxy): ProxyCheck | null => {

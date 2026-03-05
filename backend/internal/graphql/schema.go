@@ -15,14 +15,15 @@ import (
 )
 
 type viewerData struct {
-	user     domain.User
-	settings map[string]interface{}
+	user domain.User
 }
 
 const (
 	defaultViewerProxyHistoryLimit = 168
 	maxViewerProxyHistoryLimit     = 720
 	maxViewerProxySnapshotLimit    = 720
+	defaultRecentProxyChecksLimit  = 8
+	maxRecentProxyChecksLimit      = 50
 )
 
 func NewSchema() (gql.Schema, error) {
@@ -105,6 +106,18 @@ func NewSchema() (gql.Schema, error) {
 		Fields: gql.Fields{
 			"count":      &gql.Field{Type: gql.NewNonNull(gql.Int)},
 			"recordedAt": &gql.Field{Type: gql.NewNonNull(gql.DateTime)},
+		},
+	})
+
+	recentProxyCheckType := gql.NewObject(gql.ObjectConfig{
+		Name: "RecentProxyCheck",
+		Fields: gql.Fields{
+			"id":           &gql.Field{Type: gql.NewNonNull(gql.Int)},
+			"ip":           &gql.Field{Type: gql.NewNonNull(gql.String)},
+			"port":         &gql.Field{Type: gql.NewNonNull(gql.Int)},
+			"responseTime": &gql.Field{Type: gql.NewNonNull(gql.Int)},
+			"alive":        &gql.Field{Type: gql.NewNonNull(gql.Boolean)},
+			"latestCheck":  &gql.Field{Type: gql.DateTime},
 		},
 	})
 
@@ -229,7 +242,9 @@ func NewSchema() (gql.Schema, error) {
 				Type: gql.NewNonNull(userSettingsType),
 				Resolve: func(p gql.ResolveParams) (interface{}, error) {
 					if data, ok := p.Source.(*viewerData); ok {
-						return data.settings, nil
+						judges := database.GetUserJudges(data.user.ID)
+						sources := database.GetScrapingSourcesOfUsers(data.user.ID)
+						return buildUserSettings(data.user, judges, sources), nil
 					}
 					return nil, nil
 				},
@@ -238,9 +253,7 @@ func NewSchema() (gql.Schema, error) {
 				Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(gql.String))),
 				Resolve: func(p gql.ResolveParams) (interface{}, error) {
 					if data, ok := p.Source.(*viewerData); ok {
-						if urls, ok := data.settings["scrapingSources"].([]string); ok {
-							return urls, nil
-						}
+						return database.GetScrapingSourcesOfUsers(data.user.ID), nil
 					}
 					return []string{}, nil
 				},
@@ -317,6 +330,22 @@ func NewSchema() (gql.Schema, error) {
 					}
 					if data, ok := p.Source.(*viewerData); ok {
 						return buildProxyHistory(data.user.ID, limit), nil
+					}
+					return []map[string]interface{}{}, nil
+				},
+			},
+			"recentProxyChecks": &gql.Field{
+				Type: gql.NewNonNull(gql.NewList(gql.NewNonNull(recentProxyCheckType))),
+				Args: gql.FieldConfigArgument{
+					"limit": &gql.ArgumentConfig{Type: gql.Int},
+				},
+				Resolve: func(p gql.ResolveParams) (interface{}, error) {
+					limit := defaultRecentProxyChecksLimit
+					if raw, ok := p.Args["limit"].(int); ok && raw > 0 {
+						limit = clampPositiveLimit(raw, maxRecentProxyChecksLimit)
+					}
+					if data, ok := p.Source.(*viewerData); ok {
+						return buildRecentProxyChecks(data.user.ID, limit), nil
 					}
 					return []map[string]interface{}{}, nil
 				},
@@ -434,7 +463,9 @@ func NewSchema() (gql.Schema, error) {
 						return nil, err
 					}
 					if data, ok := viewer.(*viewerData); ok {
-						return data.settings, nil
+						judges := database.GetUserJudges(data.user.ID)
+						sources := database.GetScrapingSourcesOfUsers(data.user.ID)
+						return buildUserSettings(data.user, judges, sources), nil
 					}
 					return nil, nil
 				},
@@ -459,14 +490,8 @@ func fetchViewer(ctx context.Context) (interface{}, error) {
 		return nil, fmt.Errorf("user %d not found", userID)
 	}
 
-	judges := database.GetUserJudges(userID)
-	sources := database.GetScrapingSourcesOfUsers(userID)
-
-	settings := buildUserSettings(user, judges, sources)
-
 	return &viewerData{
-		user:     user,
-		settings: settings,
+		user: user,
 	}, nil
 }
 
@@ -506,6 +531,26 @@ func buildProxyHistory(userID uint, limit int) []map[string]interface{} {
 		result = append(result, map[string]interface{}{
 			"count":      entry.Count,
 			"recordedAt": entry.RecordedAt,
+		})
+	}
+	return result
+}
+
+func buildRecentProxyChecks(userID uint, limit int) []map[string]interface{} {
+	entries := database.GetRecentProxyChecks(userID, limit)
+	result := make([]map[string]interface{}, 0, len(entries))
+	for _, entry := range entries {
+		var latestCheck interface{}
+		if !entry.LatestCheck.IsZero() {
+			latestCheck = entry.LatestCheck
+		}
+		result = append(result, map[string]interface{}{
+			"id":           int(entry.ID),
+			"ip":           entry.IP,
+			"port":         int(entry.Port),
+			"responseTime": int(entry.ResponseTime),
+			"alive":        entry.Alive,
+			"latestCheck":  latestCheck,
 		})
 	}
 	return result

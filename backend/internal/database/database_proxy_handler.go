@@ -32,6 +32,9 @@ const (
 
 	proxiesPerPage    = 40
 	maxProxiesPerPage = 100
+
+	defaultRecentProxyChecksLimit = 8
+	maxRecentProxyChecksLimit     = 50
 )
 
 var ErrNoProxiesSelected = errors.New("no proxies selected for deletion")
@@ -509,6 +512,69 @@ func ForEachProxyBatch(batchSize int, fn func([]domain.Proxy) error) error {
 func GetProxyInfoPage(userId uint, page int) []dto.ProxyInfo {
 	proxies, _ := GetProxyInfoPageWithFilters(userId, page, proxiesPerPage, "", dto.ProxyListFilters{})
 	return proxies
+}
+
+func GetRecentProxyChecks(userID uint, limit int) []dto.ProxyRecentCheck {
+	if limit <= 0 {
+		limit = defaultRecentProxyChecksLimit
+	} else if limit > maxRecentProxyChecksLimit {
+		limit = maxRecentProxyChecksLimit
+	}
+
+	latestStats := buildLatestProxyStatisticSubQuery()
+
+	type recentProxyCheckRow struct {
+		ID           uint64       `gorm:"column:id"`
+		IPEncrypted  string       `gorm:"column:ip_encrypted"`
+		Port         uint16       `gorm:"column:port"`
+		ResponseTime uint16       `gorm:"column:response_time"`
+		Alive        bool         `gorm:"column:alive"`
+		LatestCheck  sql.NullTime `gorm:"column:latest_check"`
+	}
+
+	rows := make([]recentProxyCheckRow, 0, limit)
+	if err := DB.Model(&domain.Proxy{}).
+		Select(
+			"proxies.id AS id, "+
+				"proxies.ip AS ip_encrypted, "+
+				"proxies.port AS port, "+
+				"COALESCE(ps.response_time, 0) AS response_time, "+
+				"COALESCE(pos.overall_alive, false) AS alive, "+
+				"COALESCE(pos.last_checked_at, ps.created_at) AS latest_check",
+		).
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userID).
+		Joins("LEFT JOIN (?) AS ps ON ps.proxy_id = proxies.id", latestStats).
+		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
+		Order("alive DESC, latest_check DESC").
+		Limit(limit).
+		Scan(&rows).Error; err != nil {
+		return nil
+	}
+
+	result := make([]dto.ProxyRecentCheck, 0, len(rows))
+	for _, row := range rows {
+		ip, _, err := security.DecryptProxySecret(row.IPEncrypted)
+		if err != nil {
+			log.Errorf("decrypt proxy ip: %v", err)
+			ip = ""
+		}
+
+		latestCheck := time.Time{}
+		if row.LatestCheck.Valid {
+			latestCheck = row.LatestCheck.Time
+		}
+
+		result = append(result, dto.ProxyRecentCheck{
+			ID:           row.ID,
+			IP:           ip,
+			Port:         row.Port,
+			ResponseTime: row.ResponseTime,
+			Alive:        row.Alive,
+			LatestCheck:  latestCheck,
+		})
+	}
+
+	return result
 }
 
 func buildProxyHealthSubQuery(userId uint) *gorm.DB {

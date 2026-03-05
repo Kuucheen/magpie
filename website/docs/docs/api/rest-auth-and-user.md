@@ -16,16 +16,22 @@ Request:
 Behavior:
 
 - Validates email format.
-- Requires password length >= 8.
+- Requires password length `>= 8`.
 - First user in DB becomes `admin`; later users become `user`.
+- Registration policy can be restricted by env flags (`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`, `ADMIN_BOOTSTRAP_TOKEN`).
+- When first-admin bootstrap token mode is enabled, send `X-Admin-Bootstrap-Token`.
+- Route is rate-limited (`429` + `Retry-After`).
 
 Success (`201`):
 
 ```json
 {
-  "token": "<jwt>"
+  "token": "<jwt>",
+  "warning": "Default scrape sources could not be queued and were rolled back. Add sources again later."
 }
 ```
+
+`warning` is optional and appears only when default scrape-source bootstrap could not be queued.
 
 ## `POST /api/login`
 
@@ -46,6 +52,34 @@ Success (`200`):
   "role": "admin"
 }
 ```
+
+Notes:
+
+- Invalid credentials return `401` with `{"error":"Invalid email or password"}`.
+- Login is protected by request and failure-based rate limiting (`429` + `Retry-After`).
+
+## `POST /api/refreshToken`
+
+Requires auth.
+
+Rotates the current bearer token and revokes the previous token.
+
+Success (`200`):
+
+```json
+{
+  "token": "<new-jwt>",
+  "role": "admin"
+}
+```
+
+## `POST /api/logout`
+
+Requires auth.
+
+Revokes the current bearer token.
+
+- Success: `204 No Content`
 
 ## `GET /api/checkLogin`
 
@@ -99,7 +133,10 @@ Response shape:
   "auto_remove_failing_proxies": false,
   "auto_remove_failure_threshold": 3,
   "judges": [{"url": "https://example/judge", "regex": "..."}],
-  "scraping_sources": ["https://example/source"]
+  "scraping_sources": ["https://example/source"],
+  "proxy_list_columns": ["ip", "country"],
+  "scrape_source_proxy_columns": ["ip", "protocol"],
+  "scrape_source_list_columns": ["url", "proxy_count"]
 }
 ```
 
@@ -117,8 +154,7 @@ Success (`200`):
 
 Current implementation note:
 
-- `scraping_sources` is returned by this endpoint family but is not persisted by `POST /api/user/settings` in current backend code.
-- Use `POST /api/scrapingSources` and `DELETE /api/scrapingSources` to manage scrape sources.
+- `scraping_sources` may be accepted in this payload but scrape-source persistence is managed by `POST /api/scrapingSources` and `DELETE /api/scrapingSources`.
 
 ## `GET /api/user/role`
 

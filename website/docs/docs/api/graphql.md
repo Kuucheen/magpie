@@ -29,10 +29,11 @@ Current schema exposes:
 `viewer` includes:
 
 - Identity: `id`, `email`, `role`
-- Settings: protocol/checker settings, judges, scraping source URLs
+- Settings: protocol/checker settings, judges, scraping source URLs, table-column preferences
 - Dashboard: counts and breakdowns
 - Proxy metrics: `proxyCount`, `proxyLimit`, `proxyHistory`, `proxySnapshots`
 - Paged resources: `proxies(page: Int!)`, `scrapeSources(page: Int!)`
+- Scrape-source URL helper list: `scrapeSourceUrls`
 
 ## Example dashboard query
 
@@ -64,7 +65,7 @@ query DashboardData($proxyPage: Int!) {
       }
     }
     proxyHistory(limit: 168) { count recordedAt }
-    proxySnapshots {
+    proxySnapshots(limit: 168) {
       alive { count recordedAt }
       scraped { count recordedAt }
     }
@@ -89,20 +90,34 @@ mutation Update($input: UpdateUserSettingsInput!) {
     autoRemoveFailureThreshold
     judges { url regex }
     scrapingSources
+    proxyListColumns
+    scrapeSourceProxyColumns
+    scrapeSourceListColumns
   }
 }
 ```
 
-Supported input fields are optional booleans/integers plus `judges` and `scrapingSources` arrays.
+Supported input fields are optional booleans/integers plus `judges`, `scrapingSources`, and column-list arrays.
 
 Current behavior note:
 
 - GraphQL settings mutation delegates persistence to `database.UpdateUserSettings`.
-- In the current backend code, `scrapingSources` is accepted in input but scrape-source persistence is handled by REST source endpoints.
+- In current backend behavior, scrape-source lifecycle is still managed by REST scrape-source endpoints.
+
+## Query guardrails
+
+GraphQL requests are validated before execution:
+
+- Max query bytes: `GRAPHQL_MAX_QUERY_BYTES` (default `16384`)
+- Max depth: `GRAPHQL_MAX_DEPTH` (default `12`)
+- Max field count: `GRAPHQL_MAX_FIELDS` (default `250`)
+- Introspection disabled by default unless `GRAPHQL_ALLOW_INTROSPECTION=true`
+
+Violations return HTTP `400` or `413` with `{"error": ...}`.
 
 ## Error format
 
-GraphQL errors follow standard GraphQL shape:
+GraphQL resolver errors follow standard GraphQL response shape:
 
 ```json
 {

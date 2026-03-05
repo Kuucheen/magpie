@@ -1,4 +1,4 @@
-# REST: Admin and System
+# REST: Admin, System, and Observability
 
 ## `POST /api/saveSettings` (admin)
 
@@ -42,7 +42,7 @@ Requires admin role. Returns full current global config.
 
 Requires auth. Returns dashboard metrics used by the UI.
 
-Includes totals, weekly totals, reputation/country breakdowns, and judge success aggregates.
+Includes totals, weekly totals, reputation/country breakdowns, judge success aggregates, and optional `top_reputation_proxy`.
 
 ## `GET /api/releases`
 
@@ -69,3 +69,25 @@ Response:
   }
 }
 ```
+
+## Observability endpoints
+
+- `GET /healthz`: process liveness and build metadata.
+- `GET /readyz`: dependency readiness (`database`, `redis`, `startup_queue_bootstrap`) with `ready`, `degraded`, or `not_ready` status.
+- `GET /metrics`: Prometheus metrics endpoint.
+
+These routes are wrapped by observability protection:
+
+- In non-production mode, public access is allowed by default.
+- In production mode, public access is denied by default unless:
+  - caller is loopback, or
+  - `X-Observability-Token` matches `OBSERVABILITY_TOKEN`, or
+  - `ALLOW_PUBLIC_OBSERVABILITY_ENDPOINTS=true`.
+
+Example metrics families exposed by `/metrics`:
+
+- `magpie_http_requests_total`
+- `magpie_http_request_duration_seconds`
+- `magpie_auth_failures_total`
+- `magpie_rate_limit_blocks_total`
+- `magpie_rotating_proxy_errors_total`

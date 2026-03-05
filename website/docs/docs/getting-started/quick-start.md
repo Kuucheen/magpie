@@ -36,4 +36,6 @@ docker compose up -d
 
 ## First account behavior
 
-The first registered user is auto-assigned the `admin` role.
+By default, the first registered user is auto-assigned the `admin` role.
+
+In production-oriented deployments, public registration is often restricted; see [First Login](/getting-started/first-login.md) for controlled bootstrap options.

@@ -28,6 +28,11 @@ Success (`200`):
 }
 ```
 
+Notes:
+
+- Oversized uploads return `413`.
+- If no upload input is provided, returns `400`.
+
 ## `GET /api/getProxyCount`
 
 Requires auth. Returns total proxy count for the user.
@@ -91,7 +96,11 @@ Requires auth. Returns proxy detail including latest statistic and reputation br
 
 ## `GET /api/proxies/{id}/statistics`
 
-Requires auth. Query param: `limit` (max 500).
+Requires auth.
+
+Query params:
+
+- `limit` (optional positive integer, default `100`)
 
 Response:
 

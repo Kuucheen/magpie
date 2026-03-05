@@ -1,16 +1,59 @@
 # Troubleshooting
 
-## Old data not decrypting after restart/update
-
-Likely cause: `PROXY_ENCRYPTION_KEY` changed.
-
-Fix: restart with previous key.
-
 ## `401 Unauthorized` on API calls
+
+Possible causes:
 
 - Missing `Authorization: Bearer <token>`
 - Expired or invalid JWT
-- Token created with different `JWT_SECRET`
+- Token signed with different `JWT_SECRET`
+- Token revoked (logout/password change/account delete)
+
+## `429 Too Many Requests` on register/login
+
+Auth endpoints are rate limited.
+
+Check:
+
+- `AUTH_*` rate-limit env values
+- response `Retry-After` header
+- whether multiple users are sharing a single untrusted proxy IP without proper `TRUSTED_PROXY_CIDRS`
+
+## Registration fails in production
+
+Check registration policy envs:
+
+- `DISABLE_PUBLIC_REGISTRATION`
+- `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`
+- `ADMIN_BOOTSTRAP_TOKEN` and `X-Admin-Bootstrap-Token` header
+
+## `403 Forbidden` on `/healthz`, `/readyz`, or `/metrics`
+
+Observability protection is active.
+
+Use one of:
+
+- loopback request path
+- valid `X-Observability-Token`
+- `ALLOW_PUBLIC_OBSERVABILITY_ENDPOINTS=true`
+
+## `413 Request Entity Too Large`
+
+Request exceeded configured limits.
+
+Check:
+
+- `API_UPLOAD_MAX_BODY_BYTES`
+- `API_JSON_MAX_BODY_BYTES`
+- `GRAPHQL_MAX_QUERY_BYTES`
+
+## GraphQL request rejected before resolver
+
+Possible guard violations:
+
+- query depth exceeds `GRAPHQL_MAX_DEPTH`
+- field count exceeds `GRAPHQL_MAX_FIELDS`
+- introspection is disabled (`GRAPHQL_ALLOW_INTROSPECTION=false`)
 
 ## Rotating proxy creation fails
 
@@ -20,17 +63,27 @@ Possible causes:
 - name conflict
 - missing auth fields when auth required
 - no free listener ports in configured range
+- selected instance unavailable or out of ports
 
-## Scrape source rejected as blocked
+## Scrape source rejected
 
-URL appears in `website_blacklist`.
+Possible causes:
+
+- URL appears in `website_blacklist`
+- URL resolves to unsafe private/loopback/reserved target while `ALLOW_PRIVATE_NETWORK_EGRESS=false`
+
+## Old data not decrypting after restart/update
+
+Likely cause: `PROXY_ENCRYPTION_KEY` changed.
+
+Fix: restart with previous key.
 
 ## Backend cannot connect to Redis/Postgres
 
 Check effective env values:
 
-- `redisUrl`
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
+- Redis: `REDIS_MODE`, `REDIS_URL` / `redisUrl`, plus sentinel vars in sentinel mode
+- DB: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, `DB_SSLMODE`
 
 ## Build or install dependency issues
 

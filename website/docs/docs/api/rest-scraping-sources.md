@@ -24,15 +24,21 @@ Success (`200`):
 {"sourceCount": 18}
 ```
 
-If blocked by website blacklist, response is `400` with details:
+Rejected sources return `400` with details for blocked and/or unsafe targets:
 
 ```json
 {
-  "error": "One or more scrape sources are blocked",
+  "error": "One or more scrape sources are not allowed",
   "blocked_sources": ["https://blocked.example/list.txt"],
+  "unsafe_sources": ["http://127.0.0.1/internal"],
   "websiteBlacklist": ["blocked.example"]
 }
 ```
+
+Notes:
+
+- Oversized uploads return `413`.
+- If sources are saved but queueing fails, backend rolls back and returns `503`.
 
 ## `DELETE /api/scrapingSources`
 

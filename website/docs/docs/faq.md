@@ -2,7 +2,13 @@
 
 ## Is Magpie multi-user?
 
-Yes. User accounts are role-based, and the first registered user becomes admin.
+Yes. User accounts are role-based.
+
+## How is the first admin created?
+
+Default local behavior: first registered user becomes admin.
+
+Production-oriented deployments may disable public registration and require a controlled bootstrap window (`ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`, `ADMIN_BOOTSTRAP_TOKEN`).
 
 ## Which proxy protocols are supported?
 

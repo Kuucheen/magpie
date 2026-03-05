@@ -5,11 +5,12 @@ Magpie uses JWT bearer tokens for API authentication.
 ## Token lifecycle
 
 - Public auth endpoints: `POST /api/register`, `POST /api/login`
-- Both endpoints return a signed JWT on success.
-- JWTs contain `user_id`, `role`, and `exp` claims.
-- Token expiry is 7 days from issuance.
+- Token rotation endpoint: `POST /api/refreshToken` (requires auth)
+- Logout endpoint: `POST /api/logout` (requires auth; revokes current token)
+- JWTs contain `user_id`, `role`, `exp`, `iat`, and `jti` claims.
 - Signing algorithm: `HS256`
-- Secret source: `JWT_SECRET` (fallback default in code if not set)
+- Secret source: `JWT_SECRET` (required)
+- TTL source: `JWT_TTL_MINUTES` (default `10080`, range `15..10080` minutes)
 
 ## Authorization header
 
@@ -27,11 +28,19 @@ If the header is missing, malformed, or invalid, protected endpoints return `401
 - `IsAdmin`: endpoint requires a valid JWT and `role=admin`.
 - Auth checks are applied to REST routes in `backend/internal/app/server/routes.go`.
 
+## Revocation behavior
+
+- Tokens are revocable by token id (`jti`) and by user-wide revoke cutoff (used for password change/account deletion/session revocation).
+- Revocation state is stored in Redis.
+- `AUTH_REVOCATION_FAIL_OPEN` controls outage behavior when Redis is unavailable:
+  - default: `true` (availability-first)
+  - when `false`: revocation-store outages cause strict auth failures.
+
 ## GraphQL authentication
 
 - GraphQL endpoint: `POST /api/graphql`
 - Uses the same bearer token header.
-- If token is missing/invalid, authenticated GraphQL resolvers return an unauthenticated GraphQL error.
+- If token is missing/invalid, endpoint returns `401 Unauthorized`.
 
 ## Quick verification endpoint
 

@@ -14,10 +14,15 @@ Response:
     {
       "id": 5,
       "name": "res-good",
+      "instance_id": "proxy-node-1",
+      "instance_name": "Proxy Node 1",
+      "instance_region": "us-east-1",
       "protocol": "http",
       "listen_protocol": "http",
       "transport_protocol": "tcp",
       "listen_transport_protocol": "tcp",
+      "uptime_filter_type": "min",
+      "uptime_percentage": 95,
       "alive_proxy_count": 340,
       "listen_port": 20042,
       "auth_required": false,
@@ -44,6 +49,8 @@ Request:
   "listen_protocol": "http",
   "transport_protocol": "tcp",
   "listen_transport_protocol": "tcp",
+  "uptime_filter_type": "min",
+  "uptime_percentage": 95,
   "auth_required": false,
   "auth_username": "",
   "auth_password": "",
@@ -57,16 +64,19 @@ Validation and behavior:
 - `instance_id` required and must be one of the currently available instances with free listener ports.
 - `protocol` required and must be enabled in the user's protocol settings.
 - `auth_required=true` requires non-empty `auth_username` and `auth_password`.
-- `reputation_labels` currently supports `good`, `neutral`, `poor`.
+- `reputation_labels` supports `good`, `neutral`, `poor`.
+- Optional uptime filter requires a valid pair:
+  - `uptime_filter_type`: `min` or `max`
+  - `uptime_percentage`: `0..100`
 - Listener port is allocated from `ROTATING_PROXY_PORT_START`..`ROTATING_PROXY_PORT_END`.
 
 Status mapping:
 
 - `201`: created
 - `400`: validation errors
-- `404`: rotator not found
+- `404`: rotator not found (delete/next)
 - `409`: conflict (name exists, or no alive proxies for next)
-- `503`: rotating port range exhausted
+- `503`: no available rotator ports / no available instances with free ports
 
 ## `GET /api/rotatingProxies/instances`
 

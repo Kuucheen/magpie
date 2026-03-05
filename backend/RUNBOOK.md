@@ -172,6 +172,15 @@ Actions:
 - To explicitly allow private egress (local/testing only), set:
   - `ALLOW_PRIVATE_NETWORK_EGRESS=true`
 
+## Rotating Proxy HTTP/3 TLS Certificates
+
+- HTTP/3 rotator listeners require a configured TLS certificate and key.
+- Set both:
+  - `ROTATING_PROXY_HTTP3_TLS_CERT_FILE=/path/to/cert.pem`
+  - `ROTATING_PROXY_HTTP3_TLS_KEY_FILE=/path/to/key.pem`
+- Use a certificate whose SAN matches the hostname clients use for the rotator endpoint.
+- If either variable is missing or invalid, HTTP/3 rotator startup fails fast with a configuration error.
+
 ## Token/Secret Rotation
 
 ### JWT secret (`JWT_SECRET`)

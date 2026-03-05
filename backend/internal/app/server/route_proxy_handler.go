@@ -538,15 +538,19 @@ func exportProxies(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		if !wroteBytes {
-			writeError(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
-			return
-		}
-		log.Error("export proxies stream failed", "error", err)
+		handleExportProxiesStreamError(w, err, wroteBytes)
 		return
 	}
 
 	if err := writer.Flush(); err != nil {
 		log.Warn("export proxies flush failed", "error", err)
 	}
+}
+
+func handleExportProxiesStreamError(w http.ResponseWriter, err error, wroteBytes bool) {
+	log.Error("export proxies stream failed", "error", err)
+	if wroteBytes {
+		return
+	}
+	writeError(w, "Could not export proxies", http.StatusInternalServerError)
 }

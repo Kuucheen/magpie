@@ -1,17 +1,12 @@
 package rotatingproxy
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	"math/big"
-	"net"
+	"fmt"
+	"strings"
 	"sync"
-	"time"
+
+	"magpie/internal/support"
 )
 
 var (
@@ -20,49 +15,35 @@ var (
 	rotatorTLSErr   error
 )
 
+const (
+	envRotatingProxyHTTP3TLSCertFile = "ROTATING_PROXY_HTTP3_TLS_CERT_FILE"
+	envRotatingProxyHTTP3TLSKeyFile  = "ROTATING_PROXY_HTTP3_TLS_KEY_FILE"
+)
+
 func rotatorTLSConfig() (*tls.Config, error) {
 	rotatorTLSOnce.Do(func() {
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			rotatorTLSErr = err
+		certFile := strings.TrimSpace(support.GetEnv(envRotatingProxyHTTP3TLSCertFile, ""))
+		keyFile := strings.TrimSpace(support.GetEnv(envRotatingProxyHTTP3TLSKeyFile, ""))
+		if certFile == "" && keyFile == "" {
+			rotatorTLSErr = fmt.Errorf(
+				"HTTP/3 rotators require TLS certificate files; set %s and %s",
+				envRotatingProxyHTTP3TLSCertFile,
+				envRotatingProxyHTTP3TLSKeyFile,
+			)
+			return
+		}
+		if certFile == "" || keyFile == "" {
+			rotatorTLSErr = fmt.Errorf(
+				"HTTP/3 rotator TLS configuration is incomplete; both %s and %s must be set",
+				envRotatingProxyHTTP3TLSCertFile,
+				envRotatingProxyHTTP3TLSKeyFile,
+			)
 			return
 		}
 
-		serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-		serial, err := rand.Int(rand.Reader, serialLimit)
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
-			rotatorTLSErr = err
-			return
-		}
-
-		template := x509.Certificate{
-			SerialNumber: serial,
-			Subject:      pkix.Name{CommonName: "magpie-rotator"},
-			NotBefore:    time.Now().Add(-time.Hour),
-			NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-			KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-			ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-			DNSNames:     []string{"localhost"},
-			IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
-		}
-
-		derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
-		if err != nil {
-			rotatorTLSErr = err
-			return
-		}
-
-		keyBytes, err := x509.MarshalPKCS8PrivateKey(key)
-		if err != nil {
-			rotatorTLSErr = err
-			return
-		}
-
-		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes})
-		cert, err := tls.X509KeyPair(certPEM, keyPEM)
-		if err != nil {
-			rotatorTLSErr = err
+			rotatorTLSErr = fmt.Errorf("failed to load HTTP/3 rotator TLS cert/key pair: %w", err)
 			return
 		}
 

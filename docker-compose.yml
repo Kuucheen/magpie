@@ -21,6 +21,7 @@ services:
       - DB_USERNAME=${DB_USERNAME:-magpie_user}
       - DB_PASSWORD=${DB_PASSWORD:-ChangeMeToAStrongDbPassword}
       - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - DISABLE_PUBLIC_REGISTRATION=${DISABLE_PUBLIC_REGISTRATION:-false}
     depends_on:
       - postgres
       - redis

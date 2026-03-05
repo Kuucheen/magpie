@@ -200,11 +200,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const aliveSeries = this.extractSnapshotCounts(snapshots?.alive);
     const fallbackAlive = this.resolveAliveFallback(dashboard);
     const aliveValue = aliveSeries.length ? aliveSeries[aliveSeries.length - 1] : fallbackAlive.value;
-    const aliveHistory = aliveSeries.length ? aliveSeries : fallbackAlive.history;
+    const aliveHistory = aliveSeries.length ? aliveSeries.slice(0, -1) : fallbackAlive.history;
 
     this.conversionRate.set({
       value: aliveValue,
-      history: aliveHistory.length ? aliveHistory : [aliveValue],
+      history: aliveHistory,
       displayValue: aliveValue.toLocaleString()
     });
 
@@ -218,11 +218,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const scrapedSeries = this.extractSnapshotCounts(snapshots?.scraped);
     const fallbackScraped = this.resolveScrapedFallback(dashboard);
     const scrapedValue = scrapedSeries.length ? scrapedSeries[scrapedSeries.length - 1] : fallbackScraped.value;
-    const scrapedHistory = scrapedSeries.length ? scrapedSeries : fallbackScraped.history;
+    const scrapedHistory = scrapedSeries.length ? scrapedSeries.slice(0, -1) : fallbackScraped.history;
 
     this.orderQuantity.set({
       value: scrapedValue,
-      history: scrapedHistory.length ? scrapedHistory : [scrapedValue],
+      history: scrapedHistory,
       displayValue: scrapedValue.toLocaleString()
     });
   }

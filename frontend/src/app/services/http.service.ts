@@ -61,7 +61,16 @@ export class HttpService {
   }
 
 
-  getProxyPage(pageNumber: number, options?: { rows?: number; search?: string; filters?: ProxyListFilters }) {
+  getProxyPage(
+    pageNumber: number,
+    options?: {
+      rows?: number;
+      search?: string;
+      filters?: ProxyListFilters;
+      includeHealth?: boolean;
+      includeReputation?: boolean;
+    }
+  ) {
     let params = new HttpParams();
 
     if (options?.rows && options.rows > 0) {
@@ -70,6 +79,14 @@ export class HttpService {
 
     if (options?.search && options.search.trim().length > 0) {
       params = params.set('search', options.search.trim());
+    }
+
+    if (options?.includeHealth !== undefined) {
+      params = params.set('includeHealth', options.includeHealth ? 'true' : 'false');
+    }
+
+    if (options?.includeReputation !== undefined) {
+      params = params.set('includeReputation', options.includeReputation ? 'true' : 'false');
     }
 
     params = this.appendProxyFilterParams(params, options?.filters);

@@ -210,11 +210,15 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const trimmedSearch = this.searchTerm().trim();
     const filterPayload = this.buildFilterPayload(this.appliedFilters());
+    const includeHealth = this.shouldIncludeHealthInQuery();
+    const includeReputation = this.shouldIncludeReputationInQuery();
 
     this.proxyListSubscription = this.http.getProxyPage(page, {
       rows,
       search: trimmedSearch.length > 0 ? trimmedSearch : undefined,
       filters: filterPayload,
+      includeHealth,
+      includeReputation,
     })
       .pipe(
         takeUntil(this.navigationStart$),
@@ -396,6 +400,10 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   saveColumnPreferences(nextColumns: string[]): void {
     const previous = this.displayedColumns();
     const next = normalizeProxyTableColumns(nextColumns);
+    const previousIncludeHealth = this.columnsNeedHealth(previous);
+    const nextIncludeHealth = this.columnsNeedHealth(next);
+    const previousIncludeReputation = this.columnsNeedReputation(previous);
+    const nextIncludeReputation = this.columnsNeedReputation(next);
 
     this.displayedColumns.set(next);
     this.columnPanelOpen.set(false);
@@ -404,6 +412,14 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.settingsService.saveProxyListColumns(next)
       .pipe(finalize(() => this.isSavingColumnPreferences.set(false)))
       .subscribe({
+        next: () => {
+          if (
+            previousIncludeHealth !== nextIncludeHealth ||
+            previousIncludeReputation !== nextIncludeReputation
+          ) {
+            this.getAndSetProxyList();
+          }
+        },
         error: err => {
           this.displayedColumns.set(previous);
           const message = err?.error?.message ?? err?.message ?? 'Unknown error';
@@ -484,6 +500,28 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private buildFilterPayload(filters: ProxyListAppliedFilters): ProxyListFilters | undefined {
     return buildProxyListFilterPayload(filters);
+  }
+
+  private shouldIncludeHealthInQuery(): boolean {
+    return this.columnsNeedHealth(this.displayedColumns());
+  }
+
+  private shouldIncludeReputationInQuery(): boolean {
+    return this.columnsNeedReputation(this.displayedColumns());
+  }
+
+  private columnsNeedHealth(columns: readonly ProxyTableColumnId[]): boolean {
+    return columns.some((column) =>
+      column === 'health_overall' ||
+      column === 'health_http' ||
+      column === 'health_https' ||
+      column === 'health_socks4' ||
+      column === 'health_socks5'
+    );
+  }
+
+  private columnsNeedReputation(columns: readonly ProxyTableColumnId[]): boolean {
+    return columns.includes('reputation');
   }
 
   private resolveSortField(sortField: TableLazyLoadEvent['sortField']): string | null {

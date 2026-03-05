@@ -10,6 +10,7 @@ import {ProxiesPerCountryCardComponent} from './cards/proxies-per-country-card/p
 import {JudgeByPercentageCardComponent} from './cards/judge-by-percentage-card/judge-by-percentage-card.component';
 import {
   CountryBreakdownEntry,
+  DASHBOARD_BACKEND_UNAVAILABLE_ERROR,
   DashboardInfo,
   DashboardViewer,
   GraphqlService,
@@ -34,6 +35,7 @@ interface DashboardStatus {
   loading: boolean;
   loaded: boolean;
   error?: string;
+  backendUnavailable?: boolean;
 }
 
 interface ProxyLineI18n {
@@ -143,35 +145,55 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .subscribe({
         next: ({viewer}) => {
           this.applyDashboardData(viewer);
-          this.dashboardInfo.update((info) => ({ ...info, error: undefined }));
+          this.dashboardInfo.update((info) => ({ ...info, error: undefined, backendUnavailable: false }));
         },
         error: (error: Error) => {
+          const resolved = this.resolveDashboardError(error, 'Failed to refresh proxy history');
           this.dashboardInfo.update((info) => ({
             ...info,
-            error: error?.message ?? 'Failed to refresh proxy history'
+            error: resolved.message,
+            backendUnavailable: resolved.backendUnavailable
           }));
         }
       });
   }
 
+  retryDashboardLoad(): void {
+    this.loadDashboard();
+  }
+
   private loadDashboard(): void {
-    this.dashboardInfo.set({ loading: true, loaded: false });
+    this.dashboardInfo.set({ loading: true, loaded: false, backendUnavailable: false });
     this.graphqlService
       .fetchDashboardData()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: ({ viewer }) => {
           this.applyDashboardData(viewer);
-          this.dashboardInfo.set({ loading: false, loaded: true });
+          this.dashboardInfo.set({ loading: false, loaded: true, backendUnavailable: false });
         },
         error: (error: Error) => {
+          const resolved = this.resolveDashboardError(error, 'Failed to load dashboard data');
           this.dashboardInfo.set({
             loading: false,
             loaded: false,
-            error: error?.message ?? 'Failed to load dashboard data'
+            error: resolved.message,
+            backendUnavailable: resolved.backendUnavailable
           });
         }
       });
+  }
+
+  private resolveDashboardError(error: unknown, fallbackMessage: string): { message: string; backendUnavailable: boolean } {
+    if (error instanceof Error && error.message === DASHBOARD_BACKEND_UNAVAILABLE_ERROR) {
+      return {
+        message: 'Dashboard is temporarily unavailable because the backend service cannot be reached.',
+        backendUnavailable: true
+      };
+    }
+
+    const message = error instanceof Error && error.message ? error.message : fallbackMessage;
+    return { message, backendUnavailable: false };
   }
 
   private applyDashboardData(viewer: DashboardViewer | undefined): void {

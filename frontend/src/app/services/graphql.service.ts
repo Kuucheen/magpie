@@ -1,8 +1,10 @@
 import {Injectable} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
+import {HttpClient, HttpErrorResponse} from '@angular/common/http';
 import {environment} from '../../environments/environment';
 import {Observable, throwError} from 'rxjs';
 import {map, catchError} from 'rxjs/operators';
+
+export const DASHBOARD_BACKEND_UNAVAILABLE_ERROR = 'dashboard_backend_unavailable';
 
 const DASHBOARD_QUERY = `#graphql
   query DashboardData {
@@ -157,6 +159,10 @@ export class GraphqlService {
           return response.data;
         }),
         catchError((error) => {
+          if (error instanceof HttpErrorResponse && error.status === 0) {
+            return throwError(() => new Error(DASHBOARD_BACKEND_UNAVAILABLE_ERROR));
+          }
+
           return throwError(() =>
             error instanceof Error
               ? error

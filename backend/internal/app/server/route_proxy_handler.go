@@ -252,7 +252,20 @@ func getProxyPage(w http.ResponseWriter, r *http.Request) {
 		ReputationLabels: normalizeQueryList(r.URL.Query()["reputation"]),
 	}
 
-	proxies, total := database.GetProxyInfoPageWithFilters(userID, page, pageSize, search, filters)
+	includeHealth := parseBoolQueryParam(r.URL.Query().Get("includeHealth"), true)
+	includeReputation := parseBoolQueryParam(r.URL.Query().Get("includeReputation"), true)
+
+	proxies, total := database.GetProxyInfoPageWithFiltersAndOptions(
+		userID,
+		page,
+		pageSize,
+		search,
+		filters,
+		database.ProxyPageQueryOptions{
+			IncludeHealth:     includeHealth,
+			IncludeReputation: includeReputation,
+		},
+	)
 
 	response := dto.ProxyPage{
 		Proxies: proxies,
@@ -313,6 +326,22 @@ func parsePositiveIntParam(value string) int {
 		return 0
 	}
 	return parsed
+}
+
+func parseBoolQueryParam(value string, defaultValue bool) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return defaultValue
+	}
+
+	switch trimmed {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		return defaultValue
+	}
 }
 
 func getProxyCount(w http.ResponseWriter, r *http.Request) {

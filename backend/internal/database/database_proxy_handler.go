@@ -39,6 +39,11 @@ const (
 
 var ErrNoProxiesSelected = errors.New("no proxies selected for deletion")
 
+type ProxyPageQueryOptions struct {
+	IncludeHealth     bool
+	IncludeReputation bool
+}
+
 func InsertAndGetProxiesWithUser(proxies []domain.Proxy, userIDs ...uint) ([]domain.Proxy, error) {
 	inserted, err := insertAndAssociateProxies(proxies, userIDs)
 	if err != nil || len(inserted) == 0 {
@@ -603,6 +608,20 @@ func buildLatestProxyStatisticSubQuery() *gorm.DB {
 }
 
 func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search string, filters dto.ProxyListFilters) ([]dto.ProxyInfo, int64) {
+	return GetProxyInfoPageWithFiltersAndOptions(userId, page, pageSize, search, filters, ProxyPageQueryOptions{
+		IncludeHealth:     true,
+		IncludeReputation: true,
+	})
+}
+
+func GetProxyInfoPageWithFiltersAndOptions(
+	userId uint,
+	page int,
+	pageSize int,
+	search string,
+	filters dto.ProxyListFilters,
+	options ProxyPageQueryOptions,
+) ([]dto.ProxyInfo, int64) {
 	if page < 1 {
 		page = 1
 	}
@@ -610,8 +629,22 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		pageSize = proxiesPerPage
 	}
 
+	options = normalizeProxyPageQueryOptions(options)
+
 	subQuery := buildLatestProxyStatisticSubQuery()
-	healthSubQuery := buildProxyHealthSubQuery(userId)
+
+	healthSelect := "NULL::numeric AS health_overall, " +
+		"NULL::numeric AS health_http, " +
+		"NULL::numeric AS health_https, " +
+		"NULL::numeric AS health_socks4, " +
+		"NULL::numeric AS health_socks5"
+	if options.IncludeHealth {
+		healthSelect = "stats.health_overall AS health_overall, " +
+			"stats.health_http AS health_http, " +
+			"stats.health_https AS health_https, " +
+			"stats.health_socks4 AS health_socks4, " +
+			"stats.health_socks5 AS health_socks5"
+	}
 
 	query := DB.Model(&domain.Proxy{}).
 		Select(
@@ -623,20 +656,19 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 				"COALESCE(NULLIF(proxies.country, ''), 'N/A') AS country, "+
 				"COALESCE(al.name, 'N/A') AS anonymity_level, "+
 				"COALESCE(pos.overall_alive, false) AS alive, "+
-				"stats.health_overall AS health_overall, "+
-				"stats.health_http AS health_http, "+
-				"stats.health_https AS health_https, "+
-				"stats.health_socks4 AS health_socks4, "+
-				"stats.health_socks5 AS health_socks5, "+
+				healthSelect+", "+
 				"COALESCE(pos.last_checked_at, ps.created_at, '0001-01-01 00:00:00'::timestamp) AS latest_check",
 		).
 		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id AND up.user_id = ?", userId).
 		Joins("LEFT JOIN (?) AS ps ON ps.proxy_id = proxies.id", subQuery).
 		Joins("LEFT JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
-		Joins("LEFT JOIN (?) AS stats ON stats.proxy_id = proxies.id", healthSubQuery).
 		Joins("LEFT JOIN anonymity_levels al ON al.id = ps.level_id").
-		Joins("LEFT JOIN proxy_reputations pr_overall ON pr_overall.proxy_id = proxies.id AND pr_overall.kind = ?", domain.ProxyReputationKindOverall).
 		Order("alive DESC, latest_check DESC")
+
+	if options.IncludeHealth {
+		healthSubQuery := buildProxyHealthSubQuery(userId)
+		query = query.Joins("LEFT JOIN (?) AS stats ON stats.proxy_id = proxies.id", healthSubQuery)
+	}
 
 	filterQuery := buildProxyListFilterQuery(userId, filters)
 	if filterQuery != nil {
@@ -655,7 +687,9 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		}
 
 		proxies := proxyInfoRowsToDTO(rows)
-		attachReputationsToProxyInfos(proxies)
+		if options.IncludeReputation {
+			attachReputationsToProxyInfos(proxies)
+		}
 		if filterQuery == nil {
 			total := GetAllProxyCountOfUser(userId)
 			return proxies, total
@@ -690,7 +724,9 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 		}
 
 		proxies := proxyInfoRowsToDTO(rows)
-		attachReputationsToProxyInfos(proxies)
+		if options.IncludeReputation {
+			attachReputationsToProxyInfos(proxies)
+		}
 		return proxies, total
 	}
 
@@ -719,8 +755,17 @@ func GetProxyInfoPageWithFilters(userId uint, page int, pageSize int, search str
 	}
 
 	proxies := proxyInfoRowsToDTO(rows)
-	attachReputationsToProxyInfos(proxies)
+	if options.IncludeReputation {
+		attachReputationsToProxyInfos(proxies)
+	}
 	return proxies, total
+}
+
+func normalizeProxyPageQueryOptions(options ProxyPageQueryOptions) ProxyPageQueryOptions {
+	return ProxyPageQueryOptions{
+		IncludeHealth:     options.IncludeHealth,
+		IncludeReputation: options.IncludeReputation,
+	}
 }
 
 func isLikelyProxyIPSearch(search string) bool {

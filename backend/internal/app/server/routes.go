@@ -69,7 +69,7 @@ func OpenRoutes(ctx context.Context, port int) error {
 	}
 
 	apiMux := http.NewServeMux()
-	apiMux.Handle("/graphql", applyRequestBodyLimit(gqlHandler, resolveJSONMaxBodyBytes()))
+	apiMux.Handle("/graphql", applyRequestBodyLimit(auth.RequireAuth(withGraphQLGuard(gqlHandler)), resolveJSONMaxBodyBytes()))
 	apiMux.Handle("POST /register", withRegisterRateLimit(http.HandlerFunc(registerUser)))
 	apiMux.Handle("POST /login", withLoginRateLimit(http.HandlerFunc(loginUser)))
 	apiMux.Handle("POST /logout", auth.RequireAuth(http.HandlerFunc(logoutUser)))
@@ -117,7 +117,7 @@ func OpenRoutes(ctx context.Context, port int) error {
 	log.Debug("Routes opened")
 	timeouts := resolveServerTimeouts()
 
-	handler := withRequestID(withAccessLog(withPanicRecovery(enableCORS(router))))
+	handler := withRequestID(withAccessLog(withPanicRecovery(withSecurityHeaders(enableCORS(router)))))
 
 	server := http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
@@ -131,7 +131,8 @@ func OpenRoutes(ctx context.Context, port int) error {
 	log.Infof("Starting magpie backend on port :%d", port)
 	serverErrCh := make(chan error, 1)
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
 			serverErrCh <- fmt.Errorf("api server failed: %w", err)
 			return
 		}

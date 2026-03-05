@@ -79,6 +79,15 @@ Routing guidance:
   - loopback requests are allowed without token
   - non-loopback requests must provide `X-Observability-Token` matching `OBSERVABILITY_TOKEN`
 
+## GraphQL Hardening
+
+- `/api/graphql` now requires authentication (`Authorization: Bearer <JWT>`).
+- Request guards are applied before execution:
+  - max query bytes (`GRAPHQL_MAX_QUERY_BYTES`, default `16384`)
+  - max depth (`GRAPHQL_MAX_DEPTH`, default `12`)
+  - max field count (`GRAPHQL_MAX_FIELDS`, default `250`)
+  - introspection disabled by default (`GRAPHQL_ALLOW_INTROSPECTION=false`)
+
 ## Common Failure Modes
 
 ### PostgreSQL unavailable
@@ -198,6 +207,7 @@ Actions:
 
 - Run backend behind a TLS-terminating reverse proxy (Nginx, Traefik, Caddy, ALB, etc.).
 - Do **not** expose plaintext backend traffic directly to the internet.
+- App-level security headers are enabled by default (`SECURITY_HEADERS_ENABLED=true`).
 - Set `TRUSTED_PROXY_CIDRS` to the CIDRs of your reverse proxies.
 - `X-Forwarded-For` / `X-Real-IP` are only trusted when immediate `RemoteAddr` is in `TRUSTED_PROXY_CIDRS`; otherwise backend uses `RemoteAddr` directly.
 - In multi-instance deployments behind the same load balancer/reverse proxy tier, keep `TRUSTED_PROXY_CIDRS` consistent on all instances.

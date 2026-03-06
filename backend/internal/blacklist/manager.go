@@ -35,7 +35,7 @@ var (
 	cache       atomicMap
 	rangeCache  atomicRangeList
 	refreshOnce singleflight.Group
-	httpClient  = &http.Client{Timeout: 30 * time.Second}
+	httpClient  = support.NewRestrictedOutboundHTTPClient(30 * time.Second)
 	ipRegex     = regexp.MustCompile(`\b\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?\b`)
 )
 

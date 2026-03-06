@@ -42,6 +42,23 @@ func TestValidateOutboundHTTPLiteral_AllowsPublicDomain(t *testing.T) {
 	}
 }
 
+func TestValidateOutboundHTTPURLContext_BlocksHostResolvingToPrivateRange(t *testing.T) {
+	originalResolver := outboundResolver
+	outboundResolver = fakeNetIPResolver{
+		lookup: func(context.Context, string, string) ([]netip.Addr, error) {
+			return []netip.Addr{netip.MustParseAddr("10.0.0.12")}, nil
+		},
+	}
+	t.Cleanup(func() {
+		outboundResolver = originalResolver
+	})
+
+	_, err := ValidateOutboundHTTPURLContext(context.Background(), "https://internal.example/path")
+	if !errors.Is(err, ErrUnsafeOutboundTarget) {
+		t.Fatalf("ValidateOutboundHTTPURLContext err = %v, want ErrUnsafeOutboundTarget", err)
+	}
+}
+
 func TestResolveAllowedOutboundIPs_BlocksHostResolvingToPrivateRanges(t *testing.T) {
 	resolver := fakeNetIPResolver{
 		lookup: func(context.Context, string, string) ([]netip.Addr, error) {

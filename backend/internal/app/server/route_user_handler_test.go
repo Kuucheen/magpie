@@ -2,10 +2,12 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 
@@ -202,6 +204,59 @@ func TestSaveSettings_ReturnsInternalServerErrorWhenSetConfigFails(t *testing.T)
 	got := config.GetConfig()
 	if got.Protocols.HTTP != originalCfg.Protocols.HTTP {
 		t.Fatalf("config was applied despite SetConfig error: protocol_http=%v want %v", got.Protocols.HTTP, originalCfg.Protocols.HTTP)
+	}
+}
+
+func TestSaveSettings_RejectsUnsafeOutboundConfigTargets(t *testing.T) {
+	withTempServerWorkingDir(t)
+
+	originalCfg := config.GetConfig()
+	originalValidate := validateOutboundConfigURL
+	t.Cleanup(func() {
+		if err := config.SetConfig(originalCfg); err != nil {
+			t.Errorf("restore config: %v", err)
+		}
+		validateOutboundConfigURL = originalValidate
+	})
+	validateOutboundConfigURL = func(ctx context.Context, raw string) (*url.URL, error) {
+		switch raw {
+		case "http://internal.example/blacklist.txt", "http://internal.example/ip":
+			return nil, support.ErrUnsafeOutboundTarget
+		default:
+			return support.ValidateOutboundHTTPURLContext(ctx, raw)
+		}
+	}
+
+	newCfg := originalCfg
+	newCfg.BlacklistSources = []string{"http://internal.example/blacklist.txt"}
+	newCfg.Checker.IpLookup = "http://internal.example/ip"
+
+	body, err := json.Marshal(newCfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/saveSettings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	saveSettings(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if payload["unsafe_outbound"] == nil {
+		t.Fatalf("expected unsafe_outbound in response payload, got: %v", payload)
+	}
+
+	got := config.GetConfig()
+	if got.Checker.IpLookup != originalCfg.Checker.IpLookup {
+		t.Fatalf("config was applied despite unsafe ip_lookup: got %q want %q", got.Checker.IpLookup, originalCfg.Checker.IpLookup)
 	}
 }
 

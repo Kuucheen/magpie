@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -93,6 +94,7 @@ func TestProxyCheckRequest_DoesNotForceConnectionClose(t *testing.T) {
 }
 
 func TestDefaultRequest_UsesTimeout(t *testing.T) {
+	t.Setenv("ALLOW_PRIVATE_NETWORK_EGRESS", "true")
 	t.Setenv(envCheckerDefaultRequestTimeoutMS, "20")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(150 * time.Millisecond)
@@ -112,6 +114,7 @@ func TestDefaultRequest_UsesTimeout(t *testing.T) {
 }
 
 func TestDefaultRequestWithContext_RespectsCancellation(t *testing.T) {
+	t.Setenv("ALLOW_PRIVATE_NETWORK_EGRESS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	}))
@@ -123,5 +126,12 @@ func TestDefaultRequestWithContext_RespectsCancellation(t *testing.T) {
 	_, err := DefaultRequestWithContext(ctx, server.URL)
 	if err == nil {
 		t.Fatal("DefaultRequestWithContext unexpectedly succeeded with canceled context")
+	}
+}
+
+func TestDefaultRequest_BlocksUnsafeOutboundTarget(t *testing.T) {
+	_, err := DefaultRequest("http://127.0.0.1")
+	if !errors.Is(err, support.ErrUnsafeOutboundTarget) {
+		t.Fatalf("DefaultRequest err = %v, want ErrUnsafeOutboundTarget", err)
 	}
 }

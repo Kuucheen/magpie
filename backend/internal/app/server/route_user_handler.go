@@ -54,6 +54,7 @@ var (
 	changePasswordInStore            = database.ChangePassword
 	rollbackPasswordIfCurrentInStore = database.ChangePasswordIfCurrent
 	revokeUserSessions               = auth.RevokeAllUserJWTs
+	validateOutboundConfigURL        = support.ValidateOutboundHTTPURLContext
 )
 
 type userRegistrationPolicy struct {
@@ -267,13 +268,26 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 	if blockedLookup := config.FindBlockedURLs([]string{newConfig.Checker.IpLookup}, blockedSet); len(blockedLookup) > 0 {
 		blocked["ip_lookup"] = dedupe(blockedLookup)
 	}
+	unsafeOutbound := make(map[string][]string)
+	if invalidSources := findUnsafeOutboundURLs(r.Context(), newConfig.BlacklistSources); len(invalidSources) > 0 {
+		unsafeOutbound["blacklist_sources"] = invalidSources
+	}
+	if invalidLookup := findUnsafeOutboundURLs(r.Context(), []string{newConfig.Checker.IpLookup}); len(invalidLookup) > 0 {
+		unsafeOutbound["ip_lookup"] = invalidLookup
+	}
 
-	if len(blocked) > 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{
-			"error":             "One or more URLs are blocked by website blacklist",
-			"blocked_websites":  blocked,
-			"website_blacklist": newConfig.WebsiteBlacklist,
-		})
+	if len(blocked) > 0 || len(unsafeOutbound) > 0 {
+		payload := map[string]any{
+			"error": "One or more configured URLs are not allowed",
+		}
+		if len(blocked) > 0 {
+			payload["blocked_websites"] = blocked
+			payload["website_blacklist"] = newConfig.WebsiteBlacklist
+		}
+		if len(unsafeOutbound) > 0 {
+			payload["unsafe_outbound"] = unsafeOutbound
+		}
+		writeJSON(w, http.StatusBadRequest, payload)
 		return
 	}
 
@@ -692,4 +706,18 @@ func dedupe(values []string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+func findUnsafeOutboundURLs(ctx context.Context, values []string) []string {
+	unsafe := make([]string, 0, len(values))
+	for _, raw := range values {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			continue
+		}
+		if _, err := validateOutboundConfigURL(ctx, trimmed); err != nil {
+			unsafe = append(unsafe, trimmed)
+		}
+	}
+	return dedupe(unsafe)
 }

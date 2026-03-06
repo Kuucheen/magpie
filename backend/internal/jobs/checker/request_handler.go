@@ -178,7 +178,7 @@ func DefaultRequestWithContext(ctx context.Context, siteName string) (string, er
 		return "", err
 	}
 
-	client := &http.Client{Timeout: checkerDefaultRequestTimeout()}
+	client := support.NewRestrictedOutboundHTTPClient(checkerDefaultRequestTimeout())
 	response, err := client.Do(req)
 	if err != nil {
 		return "", err

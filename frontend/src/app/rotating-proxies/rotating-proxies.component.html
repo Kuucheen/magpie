@@ -290,6 +290,7 @@
                 type="submit"
                 label="Create Rotator"
                 icon="pi pi-plus"
+                styleClass="create-rotator-button"
                 [disabled]="createForm.invalid || submitting() || noProtocolsAvailable() || !hasAvailableInstances()"
                 [loading]="submitting()">
         </button>
@@ -317,7 +318,7 @@
             icon="pi pi-refresh"
             [disabled]="loading()"
             (onClick)="loadInitialData()"
-            styleClass="refresh-button"
+            styleClass="p-button-outlined refresh-button"
           >
           </p-button>
         </div>
@@ -326,7 +327,7 @@
       <div class="table-shell">
         <p-table
           [value]="rotatingProxies()"
-          [tableStyle]="{'min-width': '760px'}"
+          [tableStyle]="{'width': '100%'}"
           responsiveLayout="scroll"
           class="rotators-table"
           [loading]="loading()"

@@ -16,39 +16,35 @@ $column-muted: #9ca3af;
 
 .rotating-proxies-page {
   display: flex;
-  justify-content: center;
-  width: 100%;
-  padding: 1rem 0 2rem;
-}
-
-.rotating-panel {
+  flex-direction: column;
+  gap: 1rem;
   width: 100%;
   max-width: 1180px;
+  padding: 1rem 0 2rem;
+  margin: 0 auto;
+}
+
+.surface-panel {
+  width: 100%;
+  border: 1px solid rgba(38, 38, 38, 0.9);
+  border-radius: 1rem;
+  padding: 1.5rem;
   background: radial-gradient(circle at top right, rgba(var(--theme-primary-500-rgb), 0.06), transparent 55%), $panel;
   backdrop-filter: blur(6px);
-}
-
-.panel-header {
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  padding-bottom: 1rem;
-}
-
-.panel-grid {
-  margin-top: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
 .section-card {
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &:hover {
     border-color: rgba(var(--theme-primary-500-rgb), 0.26);
-    background-color: rgba(10, 14, 24, 0.5);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
   }
 }
 
 .create-card:hover {
   border-color: rgba(148, 163, 184, 0.3);
-  background-color: rgba(23, 23, 23, 0.5);
 }
 
 .section-title {
@@ -299,7 +295,7 @@ $column-muted: #9ca3af;
   justify-content: flex-end;
 }
 
-:host ::ng-deep .rotating-panel .p-skeleton {
+:host ::ng-deep .surface-panel .p-skeleton {
   background-color: #2a2a2a;
 }
 

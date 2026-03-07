@@ -1,56 +1,45 @@
 <div class="rotating-proxies-page text-gray-200">
-  <section class="rotating-panel bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-lg">
-    <header class="panel-header flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <section class="surface-panel section-card create-card">
+    <div class="section-header flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 class="text-xl font-semibold text-white mb-1">Rotating Proxies</h2>
-        <p class="text-sm text-gray-400 max-w-3xl">
-          Spin up protocol-specific rotators, gate them with authentication, and pull fresh proxies on demand.
-        </p>
+        <h3 class="section-title">Create Rotator</h3>
+        <p class="section-hint">Generate a rotating endpoint with optional filters and credentials.</p>
       </div>
-    </header>
+      <span class="pill subtle-pill">Ports auto-assigned</span>
+    </div>
 
-    <div class="panel-grid">
-      <section class="section-card create-card bg-neutral-950/40 border border-neutral-800 rounded-xl p-5">
-        <div class="section-header flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h3 class="section-title">Create Rotator</h3>
-            <p class="section-hint">Generate a rotating endpoint with optional filters and credentials.</p>
-          </div>
-          <span class="pill subtle-pill">Ports auto-assigned</span>
+    <form [formGroup]="createForm" (ngSubmit)="createRotator()" class="create-form">
+      @if (noProtocolsAvailable()) {
+        <div class="form-alert">
+          Enable at least one protocol in your account settings to create a rotator.
         </div>
+      }
+      @if (!hasAvailableInstances()) {
+        <div class="form-alert">
+          No instance currently has free rotator ports. Free ports on an instance before creating a new rotator.
+        </div>
+      }
 
-        <form [formGroup]="createForm" (ngSubmit)="createRotator()" class="create-form">
-          @if (noProtocolsAvailable()) {
-            <div class="form-alert">
-              Enable at least one protocol in your account settings to create a rotator.
+      <div class="create-layout">
+        <div class="flow-column">
+          <section class="form-section">
+            <p class="section-step">Step 1</p>
+            <h4 class="subsection-title">Basics</h4>
+            <p class="subsection-hint">Choose a clear name so this endpoint is easy to find later.</p>
+            <div class="field-group">
+              <label class="field-label" for="rotatorName">Name</label>
+              <input id="rotatorName"
+                     type="text"
+                     pInputText
+                     class="p-inputtext-sm w-full"
+                     placeholder="My rotating proxy"
+                     maxlength="120"
+                     formControlName="name">
+              @if (createForm.get('name')?.invalid && (createForm.get('name')?.dirty || createForm.get('name')?.touched)) {
+                <p class="field-error">Name is required and must be under 120 characters.</p>
+              }
             </div>
-          }
-          @if (!hasAvailableInstances()) {
-            <div class="form-alert">
-              No instance currently has free rotator ports. Free ports on an instance before creating a new rotator.
-            </div>
-          }
-
-          <div class="create-layout">
-            <div class="flow-column">
-              <section class="form-section">
-                <p class="section-step">Step 1</p>
-                <h4 class="subsection-title">Basics</h4>
-                <p class="subsection-hint">Choose a clear name so this endpoint is easy to find later.</p>
-                <div class="field-group">
-                  <label class="field-label" for="rotatorName">Name</label>
-                  <input id="rotatorName"
-                         type="text"
-                         pInputText
-                         class="p-inputtext-sm w-full"
-                         placeholder="My rotating proxy"
-                         maxlength="120"
-                         formControlName="name">
-                  @if (createForm.get('name')?.invalid && (createForm.get('name')?.dirty || createForm.get('name')?.touched)) {
-                    <p class="field-error">Name is required and must be under 120 characters.</p>
-                  }
-                </div>
-              </section>
+          </section>
 
               <section class="form-section">
                 <p class="section-step">Step 2</p>
@@ -292,24 +281,23 @@
                   </div>
                 </div>
               </section>
-            </aside>
-          </div>
+        </aside>
+      </div>
 
-          <div class="form-footer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <p class="field-hint mb-0">Ports are assigned automatically after creation.</p>
-            <button pButton
-                    type="submit"
-                    label="Create Rotator"
-                    icon="pi pi-plus"
-                    [disabled]="createForm.invalid || submitting() || noProtocolsAvailable() || !hasAvailableInstances()"
-                    [loading]="submitting()">
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+      <div class="form-footer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p class="field-hint mb-0">Ports are assigned automatically after creation.</p>
+        <button pButton
+                type="submit"
+                label="Create Rotator"
+                icon="pi pi-plus"
+                [disabled]="createForm.invalid || submitting() || noProtocolsAvailable() || !hasAvailableInstances()"
+                [loading]="submitting()">
+        </button>
+      </div>
+    </form>
+  </section>
 
-    <section class="section-card list-card bg-neutral-950/40 border border-neutral-800 rounded-xl p-5 mt-4">
+  <section class="surface-panel section-card list-card">
       <div class="section-header flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 class="section-title">Existing Rotators</h3>
@@ -484,8 +472,6 @@
           </ng-template>
         </p-table>
       </div>
-    </section>
-
   </section>
 </div>
 

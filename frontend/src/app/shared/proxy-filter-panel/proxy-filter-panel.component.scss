@@ -233,8 +233,27 @@
     font-size: 0.82rem;
   }
 
+  .p-select-label,
+  .p-multiselect-label {
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+    line-height: 1.2;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .p-inputtext,
   .p-inputnumber .p-inputtext {
     min-height: 2.25rem;
+    height: 2.25rem;
+    line-height: calc(2.25rem - 2px);
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .p-inputnumber .p-inputtext {
+    padding-right: 0.6rem;
   }
 
   .p-inputnumber {

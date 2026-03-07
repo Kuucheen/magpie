@@ -9,6 +9,9 @@
   <a href="https://magpie.tools">
       <img src="https://img.shields.io/badge/Website-magpie.tools-0f766e?style=flat-square&logoColor=white" alt="website">
   </a>
+  <a href="https://magpie.tools/docs/">
+      <img src="https://img.shields.io/badge/Docs-magpie.tools%2Fdocs-1f2937?style=flat-square&logo=gitbook&logoColor=white" alt="docs">
+  </a>
   <a href="https://discord.gg/7FWAGXzhkC">
       <img src="https://img.shields.io/badge/Discord-%235865F2.svg?&logo=discord&logoColor=white" alt="discord">
   </a>
@@ -31,9 +34,11 @@ Magpie is a self-hosted proxy manager that turns messy proxy lists into somethin
 
 all via a web dashboard.
 
+<img src="resources/screenshots/dashboard.png" alt="Dashboard">
+
+
 <details>
-    <summary>Screenshots</summary>
-    <img src="resources/screenshots/dashboard.png" alt="Dashboard">
+    <summary>More Screenshots</summary>
     <img src="resources/screenshots/proxyList.png" alt="Proxy List">
     <img src="resources/screenshots/proxyDetail.png" alt="Proxy Details">
     <img src="resources/screenshots/rotatingProxies.png" alt="Rotating Proxies">
@@ -100,6 +105,7 @@ all via a web dashboard.
 5. **Dive in**
     - UI: http://localhost:5050
     - API: http://localhost:5656/api
+    - Docs: https://magpie.tools/docs/
 
       The first user who registers becomes admin automatically:
 
@@ -149,9 +155,10 @@ all via a web dashboard.
 For geo lookups, create a [MaxMind GeoLite2 account](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and generate a License Key. Enter it in the dashboard (Admin → Other) to enable automatic database downloads and updates.
 
 ### Updating
-Use the helper scripts to pull the latest code and rebuild just the frontend/backend containers.
+Use the helper scripts that match how you installed Magpie.
 
 - **If you used the one-command installer**:
+  - Refreshes `docker-compose.yml`, updates image references, pulls the latest images, and restarts the stack.
   - **macOS/Linux**: 
       ```bash
       curl -fsSL https://raw.githubusercontent.com/Kuucheen/magpie/refs/heads/master/scripts/update.sh | bash
@@ -163,6 +170,7 @@ Use the helper scripts to pull the latest code and rebuild just the frontend/bac
       ```
 
 - **If you cloned the project**:
+  - Pulls the latest repo changes and rebuilds the `frontend` and `backend` containers.
   - **macOS/Linux**:
     ```bash
     ./scripts/update-frontend-backend.sh
@@ -177,19 +185,14 @@ Use the helper scripts to pull the latest code and rebuild just the frontend/bac
 - Services: `docker compose up -d postgres redis`
 - Backend: `cd backend && go run ./cmd/magpie`
 - Frontend: `cd frontend && npm install && npm run start`
-
-## Performance Validation
-- Harness: `scripts/perf/`
-- Quick gate run: `cd scripts/perf && ./run-gate.sh`
-- Include long soak: `cd scripts/perf && PERF_SOAK_DURATION=24h ./run-gate.sh`
-
-Magpie targets Go 1.26.x, Angular 20, PostgreSQL, and Redis. Keep those versions handy for parity.
+- Docs site: `cd website/docs && npm install && npm run start`
 
 ## Attributions & External Sources
 - [AbuseIPDB](https://www.abuseipdb.com/) — logo used with permission when linking to their site.
 
 ## Community
 - Website: https://magpie.tools
+- Docs: https://magpie.tools/docs/
 - Discord: https://discord.gg/7FWAGXzhkC
 - Issues & feature requests: open them on GitHub.
 

@@ -545,6 +545,7 @@
   }
 
   .detail-item {
+    min-width: 0;
     padding: 0.75rem 1rem;
     border-radius: 0.75rem;
     background: rgba(39, 39, 42, 0.78);
@@ -562,6 +563,15 @@
       font-size: 0.95rem;
       color: var(--theme-text-color, #e2e8f0);
       word-break: break-word;
+    }
+
+    .value--truncate {
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      word-break: normal;
     }
   }
 

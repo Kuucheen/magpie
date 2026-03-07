@@ -151,7 +151,12 @@
               </div>
               <div class="detail-item">
                 <div class="label">Latest Judge</div>
-                <div class="value">{{ latestStatistic?.judge || 'Unknown' }}</div>
+                <div
+                  class="value value--truncate"
+                  [title]="latestStatistic?.judge || 'Unknown'"
+                >
+                  {{ latestStatistic?.judge || 'Unknown' }}
+                </div>
               </div>
               <div class="detail-item">
                 <div class="label">Response Time</div>

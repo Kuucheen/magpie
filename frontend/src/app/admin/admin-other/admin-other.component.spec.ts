@@ -48,6 +48,7 @@ const defaultSettings: GlobalSettings = {
     update_timer: timer(),
     last_updated_at: null
   },
+  blacklist_timer: timer(),
   blacklist_sources: [],
   website_blacklist: []
 };

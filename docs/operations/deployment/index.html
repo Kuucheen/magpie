@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="generator" content="Docusaurus v3.9.2">
 <title data-rh="true">Deployment | Magpie Docs</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:image" content="https://magpie.tools/docs/img/docusaurus-social-card.jpg"><meta data-rh="true" name="twitter:image" content="https://magpie.tools/docs/img/docusaurus-social-card.jpg"><meta data-rh="true" property="og:url" content="https://magpie.tools/docs/operations/deployment"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Deployment | Magpie Docs"><meta data-rh="true" name="description" content="Default Docker deployment"><meta data-rh="true" property="og:description" content="Default Docker deployment"><link data-rh="true" rel="icon" href="/docs/img/magpie-light-green.ico"><link data-rh="true" rel="canonical" href="https://magpie.tools/docs/operations/deployment"><link data-rh="true" rel="alternate" href="https://magpie.tools/docs/operations/deployment" hreflang="en"><link data-rh="true" rel="alternate" href="https://magpie.tools/docs/operations/deployment" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Deployment","item":"https://magpie.tools/docs/operations/deployment"}]}</script><link rel="stylesheet" href="/docs/assets/css/styles.4b065cb5.css">
-<script src="/docs/assets/js/runtime~main.f998cb96.js" defer="defer"></script>
+<script src="/docs/assets/js/runtime~main.df404bea.js" defer="defer"></script>
 <script src="/docs/assets/js/main.a1d6be23.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -24,8 +24,8 @@
 </ul>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="backend-imageruntime-notes">Backend image/runtime notes<a href="#backend-imageruntime-notes" class="hash-link" aria-label="Direct link to Backend image/runtime notes" title="Direct link to Backend image/runtime notes" translate="no">​</a></h2>
 <ul>
-<li class="">Backend uses Go binary in distroless runtime image.</li>
-<li class="">Frontend serves static build via nginx.</li>
+<li class="">Backend is built from the Go <code>1.26</code> codebase and runs as a distroless binary image.</li>
+<li class="">Frontend builds the Angular <code>21.1</code> app and serves the static build via nginx.</li>
 </ul>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="production-recommendations">Production recommendations<a href="#production-recommendations" class="hash-link" aria-label="Direct link to Production recommendations" title="Direct link to Production recommendations" translate="no">​</a></h2>
 <ol>

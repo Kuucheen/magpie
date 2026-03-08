@@ -22,6 +22,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-ChangeMeToAStrongDbPassword}
       - DB_SSLMODE=${DB_SSLMODE:-disable}
       - DISABLE_PUBLIC_REGISTRATION=${DISABLE_PUBLIC_REGISTRATION:-false}
+      - ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=${ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP:-true}
     depends_on:
       - postgres
       - redis

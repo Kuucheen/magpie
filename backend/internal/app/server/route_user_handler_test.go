@@ -25,7 +25,7 @@ func TestCreateUserWithFirstAdminRole_AssignsAdminToFirstUser(t *testing.T) {
 	setupUserRegistrationTestDB(t)
 
 	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
-	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{}, "")
+	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{})
 	if err != nil {
 		t.Fatalf("createUserWithFirstAdminRole failed: %v", err)
 	}
@@ -39,14 +39,14 @@ func TestCreateUserWithFirstAdminRole_RespectsPublicRegistrationFlagAfterBootstr
 	setupUserRegistrationTestDB(t)
 
 	admin := &domain.User{Email: "admin@example.com", Password: "password-hash"}
-	if err := createUserWithFirstAdminRole(admin, userRegistrationPolicy{}, ""); err != nil {
+	if err := createUserWithFirstAdminRole(admin, userRegistrationPolicy{}); err != nil {
 		t.Fatalf("bootstrap admin failed: %v", err)
 	}
 
 	blockedUser := &domain.User{Email: "second@example.com", Password: "password-hash"}
 	err := createUserWithFirstAdminRole(blockedUser, userRegistrationPolicy{
 		DisablePublicRegistration: true,
-	}, "")
+	})
 	if !errors.Is(err, errPublicRegistrationDisabled) {
 		t.Fatalf("expected errPublicRegistrationDisabled, got %v", err)
 	}
@@ -54,7 +54,7 @@ func TestCreateUserWithFirstAdminRole_RespectsPublicRegistrationFlagAfterBootstr
 	allowedUser := &domain.User{Email: "third@example.com", Password: "password-hash"}
 	err = createUserWithFirstAdminRole(allowedUser, userRegistrationPolicy{
 		DisablePublicRegistration: false,
-	}, "")
+	})
 	if err != nil {
 		t.Fatalf("expected follow-up user to be created, got %v", err)
 	}
@@ -69,47 +69,21 @@ func TestCreateUserWithFirstAdminRole_BlocksFirstAdminBootstrapWhenPolicyDisable
 	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
 	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{
 		DisablePublicFirstAdminBootstrap: true,
-	}, "")
+	})
 	if !errors.Is(err, errPublicFirstAdminBootstrap) {
 		t.Fatalf("expected errPublicFirstAdminBootstrap, got %v", err)
 	}
 }
 
-func TestCreateUserWithFirstAdminRole_RequiresBootstrapTokenWhenPolicyEnablesIt(t *testing.T) {
+func TestCreateUserWithFirstAdminRole_AllowsBootstrapWhenEnabled(t *testing.T) {
 	setupUserRegistrationTestDB(t)
 
 	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
 	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{
-		RequireAdminBootstrapToken: true,
-		AdminBootstrapToken:        "shared-bootstrap-token",
-	}, "wrong-token")
-	if !errors.Is(err, errInvalidAdminBootstrapToken) {
-		t.Fatalf("expected errInvalidAdminBootstrapToken, got %v", err)
-	}
-}
-
-func TestCreateUserWithFirstAdminRole_RejectsBootstrapWhenTokenNotConfigured(t *testing.T) {
-	setupUserRegistrationTestDB(t)
-
-	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
-	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{
-		RequireAdminBootstrapToken: true,
-	}, "any")
-	if !errors.Is(err, errAdminBootstrapTokenNotSet) {
-		t.Fatalf("expected errAdminBootstrapTokenNotSet, got %v", err)
-	}
-}
-
-func TestCreateUserWithFirstAdminRole_AcceptsMatchingBootstrapToken(t *testing.T) {
-	setupUserRegistrationTestDB(t)
-
-	user := &domain.User{Email: "first@example.com", Password: "password-hash"}
-	err := createUserWithFirstAdminRole(user, userRegistrationPolicy{
-		RequireAdminBootstrapToken: true,
-		AdminBootstrapToken:        "shared-bootstrap-token",
-	}, "shared-bootstrap-token")
+		DisablePublicFirstAdminBootstrap: false,
+	})
 	if err != nil {
-		t.Fatalf("expected admin bootstrap token to be accepted, got %v", err)
+		t.Fatalf("expected first admin bootstrap to be accepted, got %v", err)
 	}
 	if user.Role != "admin" {
 		t.Fatalf("expected first user role admin, got %q", user.Role)
@@ -274,9 +248,6 @@ func TestResolveUserRegistrationPolicy_ProductionDefaults(t *testing.T) {
 	if !policy.DisablePublicFirstAdminBootstrap {
 		t.Fatal("expected DisablePublicFirstAdminBootstrap=true in production by default")
 	}
-	if policy.RequireAdminBootstrapToken {
-		t.Fatal("expected RequireAdminBootstrapToken=false when bootstrap is disabled")
-	}
 }
 
 func TestResolveUserRegistrationPolicy_ProductionOverrides(t *testing.T) {
@@ -288,7 +259,6 @@ func TestResolveUserRegistrationPolicy_ProductionOverrides(t *testing.T) {
 
 	t.Setenv(envDisablePublicRegistration, "false")
 	t.Setenv(envEnablePublicFirstAdminBootstrap, "true")
-	t.Setenv(envAdminBootstrapToken, "rotation-window-token")
 
 	policy := resolveUserRegistrationPolicy()
 	if policy.DisablePublicRegistration {
@@ -296,12 +266,6 @@ func TestResolveUserRegistrationPolicy_ProductionOverrides(t *testing.T) {
 	}
 	if policy.DisablePublicFirstAdminBootstrap {
 		t.Fatal("expected DisablePublicFirstAdminBootstrap=false when override is set")
-	}
-	if !policy.RequireAdminBootstrapToken {
-		t.Fatal("expected RequireAdminBootstrapToken=true when production bootstrap is enabled")
-	}
-	if policy.AdminBootstrapToken != "rotation-window-token" {
-		t.Fatalf("expected AdminBootstrapToken from env, got %q", policy.AdminBootstrapToken)
 	}
 }
 
@@ -318,9 +282,6 @@ func TestResolveUserRegistrationPolicy_LocalDefaultsRemainOpen(t *testing.T) {
 	}
 	if !policy.DisablePublicFirstAdminBootstrap {
 		t.Fatal("expected DisablePublicFirstAdminBootstrap=true by default")
-	}
-	if policy.RequireAdminBootstrapToken {
-		t.Fatal("expected RequireAdminBootstrapToken=false when bootstrap is disabled")
 	}
 }
 
@@ -341,24 +302,17 @@ func TestResolveUserRegistrationPolicy_LocalOverrideAllowsLegacyOpenDefaults(t *
 	}
 }
 
-func TestResolveUserRegistrationPolicy_BootstrapAlwaysRequiresTokenWhenEnabled(t *testing.T) {
+func TestResolveUserRegistrationPolicy_BootstrapCanBeEnabledWithoutToken(t *testing.T) {
 	prevProduction := config.InProductionMode
 	config.SetProductionMode(false)
 	t.Cleanup(func() {
 		config.SetProductionMode(prevProduction)
 	})
 	t.Setenv(envEnablePublicFirstAdminBootstrap, "true")
-	t.Setenv(envAdminBootstrapToken, "local-bootstrap-token")
 
 	policy := resolveUserRegistrationPolicy()
 	if policy.DisablePublicFirstAdminBootstrap {
 		t.Fatal("expected DisablePublicFirstAdminBootstrap=false when explicitly enabled")
-	}
-	if !policy.RequireAdminBootstrapToken {
-		t.Fatal("expected RequireAdminBootstrapToken=true whenever bootstrap is enabled")
-	}
-	if policy.AdminBootstrapToken != "local-bootstrap-token" {
-		t.Fatalf("expected AdminBootstrapToken from env, got %q", policy.AdminBootstrapToken)
 	}
 }
 

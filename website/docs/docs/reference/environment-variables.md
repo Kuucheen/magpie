@@ -44,7 +44,6 @@ Values `prod` or `production` are treated as production.
 
 - `DISABLE_PUBLIC_REGISTRATION`: disable public `/api/register`.
 - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`: allow first-admin creation through public registration.
-- `ADMIN_BOOTSTRAP_TOKEN`: required token value for first-admin bootstrap when public bootstrap is enabled.
 - `ALLOW_INSECURE_REGISTRATION_DEFAULTS`: local-only helper for relaxed registration defaults.
 - `AUTH_REVOCATION_FAIL_OPEN` (default `true`): when Redis revocation store is unavailable, allow already-signed/non-expired JWTs.
 

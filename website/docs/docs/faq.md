@@ -8,7 +8,7 @@ Yes. User accounts are role-based.
 
 Default local behavior: first registered user becomes admin.
 
-Production-oriented deployments may disable public registration and require a controlled bootstrap window (`ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`, `ADMIN_BOOTSTRAP_TOKEN`).
+Production-oriented deployments may disable public registration and require a controlled bootstrap window (`ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`).
 
 ## Which proxy protocols are supported?
 

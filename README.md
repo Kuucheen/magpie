@@ -108,50 +108,7 @@ all via a web dashboard.
     - API: http://localhost:5656/api
     - Docs: https://magpie.tools/docs/
 
-      The first user who registers becomes admin automatically:
-
-      ```bash
-      curl -X POST http://localhost:5656/api/register \
-        -H "Content-Type: application/json" \
-        -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
-      ```
-
-      Local default stays simple: first user can register and becomes admin.
-
-      Production mode (`backend -production`) hardening defaults:
-      - `DISABLE_PUBLIC_REGISTRATION=true`
-      - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=false` (public first-admin bootstrap disabled by default)
-      - `DB_AUTO_MIGRATE=false`
-      - `STRICT_SECRET_VALIDATION=true`
-
-      To bootstrap first admin in production via `/api/register`, explicitly set:
-      - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true` (temporary, controlled window)
-      - `ADMIN_BOOTSTRAP_TOKEN=<strong-random-token>`
-
-      Then call register with the bootstrap header:
-
-      ```bash
-      curl -X POST http://localhost:5656/api/register \
-        -H "Content-Type: application/json" \
-        -H "X-Admin-Bootstrap-Token: <same-token>" \
-        -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
-      ```
-
-      Optional token lifetime hardening:
-      - `JWT_TTL_MINUTES=60` (allowed range: `15-10080`, default `10080`)
-
-      Multi-instance note: in load-balanced deployments, keep these hardening env values
-      (`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`,
-      `ADMIN_BOOTSTRAP_TOKEN`, `DB_AUTO_MIGRATE`, `STRICT_SECRET_VALIDATION`,
-      `TRUSTED_PROXY_CIDRS`, `JWT_TTL_MINUTES`)
-      consistent across all backend instances.
-
-      Optional reverse-proxy trust boundary for forwarded client IP headers:
-      - `TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.168.0.0/16`
-
-      Health probes:
-      - Liveness: `GET /healthz`
-      - Readiness: `GET /readyz`
+      The first user who registers becomes admin automatically.
 
 For geo lookups, create a [MaxMind GeoLite2 account](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and generate a License Key. Enter it in the dashboard (Admin → Other) to enable automatic database downloads and updates.
 

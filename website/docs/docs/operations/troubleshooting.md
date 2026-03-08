@@ -25,7 +25,6 @@ Check registration policy envs:
 
 - `DISABLE_PUBLIC_REGISTRATION`
 - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`
-- `ADMIN_BOOTSTRAP_TOKEN` and `X-Admin-Bootstrap-Token` header
 
 ## `403 Forbidden` on `/healthz`, `/readyz`, or `/metrics`
 

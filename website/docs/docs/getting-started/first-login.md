@@ -13,9 +13,8 @@ In production-oriented deployments, public registration is often disabled by def
 For controlled first-admin bootstrap windows:
 
 1. Set `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true`.
-2. Set a strong `ADMIN_BOOTSTRAP_TOKEN`.
-3. Call `POST /api/register` with header `X-Admin-Bootstrap-Token: <token>`.
-4. After bootstrap, disable public registration (`DISABLE_PUBLIC_REGISTRATION=true`).
+2. Call `POST /api/register`.
+3. After bootstrap, disable public registration (`DISABLE_PUBLIC_REGISTRATION=true`).
 
 ## Verify backend auth
 

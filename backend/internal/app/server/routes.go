@@ -24,7 +24,7 @@ func writeError(w http.ResponseWriter, msg string, status int) {
 func enableCORS(next http.Handler) http.Handler {
 	cors := resolveCORSConfig()
 	allowedMethods := "GET, POST, OPTIONS, PUT, DELETE"
-	allowedHeaders := "Content-Type, Authorization, X-Request-ID, X-Admin-Bootstrap-Token, X-Observability-Token"
+	allowedHeaders := "Content-Type, Authorization, X-Request-ID, X-Observability-Token"
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")

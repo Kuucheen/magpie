@@ -30,7 +30,6 @@ Authorization: Bearer <token>
 
 Additional headers used by specific endpoints:
 
-- `X-Admin-Bootstrap-Token`: first-admin bootstrap via `POST /api/register` when public bootstrap token mode is enabled.
 - `X-Observability-Token`: optional token for `/healthz`, `/readyz`, `/metrics` when public observability is disabled.
 
 ## Data formats

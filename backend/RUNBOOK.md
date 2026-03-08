@@ -36,22 +36,20 @@ That means public `/api/register` first-admin bootstrap is blocked by default in
 
 For a controlled initial bootstrap window, set:
 - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true`
-- `ADMIN_BOOTSTRAP_TOKEN=<strong-random-token>`
 
-Then call registration with the bootstrap header:
+Then call registration normally:
 
 ```bash
 curl -X POST http://<backend-host>:5656/api/register \
   -H "Content-Type: application/json" \
-  -H "X-Admin-Bootstrap-Token: <same-token>" \
   -d '{"email":"admin@example.com","password":"ChangeMe123!"}'
 ```
 
 After first admin is created, immediately disable bootstrap (`ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=false`) and keep `DISABLE_PUBLIC_REGISTRATION=true` unless intentional public signups are required.
 
 For load-balanced multi-instance deployments, apply the same values for
-`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`, and
-`ADMIN_BOOTSTRAP_TOKEN` on every backend instance.
+`DISABLE_PUBLIC_REGISTRATION` and
+`ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP` on every backend instance.
 
 ## Probe Interpretation
 

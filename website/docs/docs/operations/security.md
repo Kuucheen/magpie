@@ -13,7 +13,6 @@
 - Restrict account creation in production:
   - `DISABLE_PUBLIC_REGISTRATION=true`
   - enable `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true` only during controlled bootstrap windows
-  - require strong `ADMIN_BOOTSTRAP_TOKEN` and send it via `X-Admin-Bootstrap-Token`
 - Enforce auth-rate limiting defaults unless you have measured reasons to relax them.
 
 ## JWT revocation behavior

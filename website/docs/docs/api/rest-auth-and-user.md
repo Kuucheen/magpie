@@ -18,8 +18,7 @@ Behavior:
 - Validates email format.
 - Requires password length `>= 8`.
 - First user in DB becomes `admin`; later users become `user`.
-- Registration policy can be restricted by env flags (`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`, `ADMIN_BOOTSTRAP_TOKEN`).
-- When first-admin bootstrap token mode is enabled, send `X-Admin-Bootstrap-Token`.
+- Registration policy can be restricted by env flags (`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`).
 - Route is rate-limited (`429` + `Retry-After`).
 
 Success (`201`):

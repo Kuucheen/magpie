@@ -141,7 +141,14 @@ function New-RandomAlnum([int]$length, [string]$alphabet) {
   if ($length -le 0) { return "" }
 
   $bytes = New-Object byte[] $length
-  [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $rng.GetBytes($bytes)
+  } finally {
+    if ($null -ne $rng) {
+      $rng.Dispose()
+    }
+  }
 
   $builder = New-Object System.Text.StringBuilder
   $alphaLength = $alphabet.Length

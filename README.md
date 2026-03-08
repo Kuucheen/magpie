@@ -182,6 +182,11 @@ Use the helper scripts that match how you installed Magpie.
     Double-click the file or run it from the repo root.
 
 ## Local Development
+- Prerequisites:
+  - Go `1.26.x`
+  - Node.js `20.19+` or `22.12+`
+  - npm
+  - Docker
 - Services: `docker compose up -d postgres redis`
 - Backend: `cd backend && go run ./cmd/magpie`
 - Frontend: `cd frontend && npm install && npm run start`

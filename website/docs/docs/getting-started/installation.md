@@ -9,6 +9,11 @@ The default stack includes:
 - `postgres` on host port `5434`
 - `redis` on host port `8946`
 
+Current build/runtime status:
+
+- backend image is built from the Go `1.26` codebase
+- frontend image builds the Angular `21.1` app and serves the static output via nginx
+
 Rotating proxy listener ports are also mapped by default:
 
 - TCP: `20000-20100`

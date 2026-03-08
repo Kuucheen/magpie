@@ -2,10 +2,16 @@
 
 ## Prerequisites
 
-- Go `1.24.x`
-- Node.js `20+`
+- Go `1.26.x`
+- Node.js `20.19+` or `22.12+`
 - npm
 - Docker (for Postgres + Redis during local dev)
+
+Current local app stack in this repository:
+
+- backend: Go `1.26`
+- frontend: Angular `21.1`, PrimeNG `21`, Tailwind CSS `4`
+- docs site: Docusaurus on Node.js `20+`
 
 ## Start infrastructure
 

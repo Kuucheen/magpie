@@ -4,8 +4,8 @@ Contributions are welcome.
 
 ## Project areas
 
-- backend (`backend/`): Go services, jobs, data layer
-- frontend (`frontend/`): Angular dashboard
+- backend (`backend/`): Go `1.26` services, jobs, data layer
+- frontend (`frontend/`): Angular `21.1` dashboard
 - homepage (`website/homepage/`): marketing website
 - docs (`website/docs/`): technical documentation
 

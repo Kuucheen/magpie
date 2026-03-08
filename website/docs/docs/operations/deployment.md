@@ -17,8 +17,8 @@ Services:
 
 ## Backend image/runtime notes
 
-- Backend uses Go binary in distroless runtime image.
-- Frontend serves static build via nginx.
+- Backend is built from the Go `1.26` codebase and runs as a distroless binary image.
+- Frontend builds the Angular `21.1` app and serves the static build via nginx.
 
 ## Production recommendations
 

@@ -20,8 +20,8 @@ This docs site is intended to be the complete technical documentation for Magpie
 
 ## System at a glance
 
-- `backend`: Go API + worker routines + rotating proxy listeners
-- `frontend`: Angular dashboard UI
+- `backend`: Go `1.26` API + worker routines + rotating proxy listeners
+- `frontend`: Angular `21.1` dashboard UI
 - `postgres`: persistent relational storage
 - `redis`: queueing, coordination, and distributed routines
 - `website/homepage`: marketing website

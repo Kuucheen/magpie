@@ -6,14 +6,15 @@
 <div align="center">
   <img src="https://img.shields.io/github/license/Kuucheen/magpie.svg" alt="license">
   <img src="https://img.shields.io/github/issues/Kuucheen/magpie.svg" alt="issues">
+  <a href="https://discord.gg/7FWAGXzhkC">
+      <img src="https://img.shields.io/badge/Discord-%235865F2.svg?&logo=discord&logoColor=white" alt="discord">
+  </a>
+  <br>
   <a href="https://magpie.tools">
       <img src="https://img.shields.io/badge/Website-magpie.tools-0f766e?style=flat-square&logoColor=white" alt="website">
   </a>
   <a href="https://magpie.tools/docs/">
       <img src="https://img.shields.io/badge/Docs-magpie.tools%2Fdocs-1f2937?style=flat-square&logo=gitbook&logoColor=white" alt="docs">
-  </a>
-  <a href="https://discord.gg/7FWAGXzhkC">
-      <img src="https://img.shields.io/badge/Discord-%235865F2.svg?&logo=discord&logoColor=white" alt="discord">
   </a>
   <br>
   <img src="https://img.shields.io/docker/pulls/kuuchen/magpie-frontend?style=flat-square&logo=docker&label=frontend%20pulls" alt="docker frontend pulls">

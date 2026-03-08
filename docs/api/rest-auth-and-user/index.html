@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="generator" content="Docusaurus v3.9.2">
 <title data-rh="true">REST: Auth and User | Magpie Docs</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:image" content="https://magpie.tools/docs/img/docusaurus-social-card.jpg"><meta data-rh="true" name="twitter:image" content="https://magpie.tools/docs/img/docusaurus-social-card.jpg"><meta data-rh="true" property="og:url" content="https://magpie.tools/docs/api/rest-auth-and-user"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="REST: Auth and User | Magpie Docs"><meta data-rh="true" name="description" content="POST /api/register"><meta data-rh="true" property="og:description" content="POST /api/register"><link data-rh="true" rel="icon" href="/docs/img/magpie-light-green.ico"><link data-rh="true" rel="canonical" href="https://magpie.tools/docs/api/rest-auth-and-user"><link data-rh="true" rel="alternate" href="https://magpie.tools/docs/api/rest-auth-and-user" hreflang="en"><link data-rh="true" rel="alternate" href="https://magpie.tools/docs/api/rest-auth-and-user" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"REST: Auth and User","item":"https://magpie.tools/docs/api/rest-auth-and-user"}]}</script><link rel="stylesheet" href="/docs/assets/css/styles.4b065cb5.css">
-<script src="/docs/assets/js/runtime~main.df404bea.js" defer="defer"></script>
+<script src="/docs/assets/js/runtime~main.2d8b89da.js" defer="defer"></script>
 <script src="/docs/assets/js/main.a1d6be23.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -21,8 +21,7 @@
 <li class="">Validates email format.</li>
 <li class="">Requires password length <code>&gt;= 8</code>.</li>
 <li class="">First user in DB becomes <code>admin</code>; later users become <code>user</code>.</li>
-<li class="">Registration policy can be restricted by env flags (<code>DISABLE_PUBLIC_REGISTRATION</code>, <code>ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP</code>, <code>ADMIN_BOOTSTRAP_TOKEN</code>).</li>
-<li class="">When first-admin bootstrap token mode is enabled, send <code>X-Admin-Bootstrap-Token</code>.</li>
+<li class="">Registration policy can be restricted by env flags (<code>DISABLE_PUBLIC_REGISTRATION</code>, <code>ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP</code>).</li>
 <li class="">Route is rate-limited (<code>429</code> + <code>Retry-After</code>).</li>
 </ul>
 <p>Success (<code>201</code>):</p>

@@ -113,7 +113,7 @@ download() {
 
 cd "${INSTALL_DIR}"
 
-required_secrets=("PROXY_ENCRYPTION_KEY" "JWT_SECRET")
+required_secrets=("PROXY_ENCRYPTION_KEY")
 
 if [ -f .env ]; then
   for secret_name in "${required_secrets[@]}"; do

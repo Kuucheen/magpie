@@ -108,7 +108,7 @@ if ((Invoke-NativeCommand -FilePath "docker" -Arguments @("info") -Quiet) -ne 0)
 
 Set-Location -LiteralPath $installDir
 
-$requiredSecrets = @("PROXY_ENCRYPTION_KEY", "JWT_SECRET")
+$requiredSecrets = @("PROXY_ENCRYPTION_KEY")
 
 if (Test-Path -LiteralPath ".env") {
   $envContent = Get-Content -LiteralPath ".env" -Raw

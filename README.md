@@ -80,8 +80,6 @@ all via a web dashboard.
 
 3. **Required secrets** – Magpie requires:
    - `PROXY_ENCRYPTION_KEY` to encrypt stored proxy secrets (keep it stable between restarts/updates)
-   - `JWT_SECRET` to sign authentication tokens
-   - optional `STRICT_SECRET_VALIDATION` (defaults to `false` locally, `true` with backend `-production`)
 
 > [!WARNING]
 > `PROXY_ENCRYPTION_KEY` locks all stored secrets (proxy auth, passwords, and ip addresses).  
@@ -97,9 +95,9 @@ all via a web dashboard.
    git clone https://github.com/Kuucheen/magpie.git
    cd magpie
    cp .env.example .env
-   # edit .env and set PROXY_ENCRYPTION_KEY and JWT_SECRET
+   # edit .env and set PROXY_ENCRYPTION_KEY
+   # optional: override JWT_SECRET
    # optional: override DB_USERNAME/DB_PASSWORD/DB_NAME
-   # optional: tune proxy statistics retention (PROXY_STATISTICS_RETENTION_*)
    docker compose up -d
    ```
    > `docker-compose.yml` is local/dev oriented. For production deployments, use hardened manifests and secure DB/Redis/TLS settings.

@@ -186,6 +186,8 @@ Actions:
 - Expect all existing tokens to become invalid; users must re-authenticate.
 - With `STRICT_SECRET_VALIDATION=true`, weak/placeholder values are rejected at startup.
 - If `STRICT_SECRET_VALIDATION` is unset, strict mode defaults on when `-production` is enabled or runtime env indicates production (`APP_ENV`/`ENVIRONMENT`/`GO_ENV`/`MAGPIE_ENV` = `prod`/`production`).
+- Default local Docker Compose fallback: `magpie-local-compose-jwt-secret-2026` when `JWT_SECRET` is unset.
+- Override that fallback for shared or internet-exposed deployments.
 
 ### JWT access token lifetime (`JWT_TTL_MINUTES`)
 - Optional bounded override for access token lifetime.

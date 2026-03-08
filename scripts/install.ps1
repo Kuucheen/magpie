@@ -177,23 +177,10 @@ if ($key.Contains("`n") -or $key.Contains("`r")) { throw "PROXY_ENCRYPTION_KEY m
 if ($env:JWT_SECRET) {
   $jwtSecret = $env:JWT_SECRET
 } else {
-  Write-Host "Enter JWT_SECRET (will be saved to .env):"
-  $j1 = Read-Host -AsSecureString
-  Write-Host "Confirm JWT_SECRET:"
-  $j2 = Read-Host -AsSecureString
-
-  $p1 = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($j1))
-  $p2 = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($j2))
-
-  if ([string]::IsNullOrEmpty($p1)) { throw "JWT_SECRET cannot be empty." }
-  if ($p1 -ne $p2) { throw "JWT secrets did not match." }
-  if ($p1.Contains("`n") -or $p1.Contains("`r")) { throw "JWT_SECRET must be a single line." }
-
-  $jwtSecret = $p1
+  $jwtSecret = ""
 }
 
 $jwtSecret = $jwtSecret.Trim()
-if ([string]::IsNullOrEmpty($jwtSecret)) { throw "JWT_SECRET cannot be empty." }
 if ($jwtSecret.Contains("`n") -or $jwtSecret.Contains("`r")) { throw "JWT_SECRET must be a single line." }
 
 if ($env:DB_USERNAME) {
@@ -229,7 +216,9 @@ $escapedDBPassword = Escape-DotenvValue $dbPassword
 
 $envLines = @()
 $envLines += "PROXY_ENCRYPTION_KEY=""$escapedKey"""
-$envLines += "JWT_SECRET=""$escapedJWTSecret"""
+if (-not [string]::IsNullOrEmpty($jwtSecret)) {
+  $envLines += "JWT_SECRET=""$escapedJWTSecret"""
+}
 $envLines += "DB_NAME=""$escapedDBName"""
 $envLines += "DB_USERNAME=""$escapedDBUsername"""
 $envLines += "DB_PASSWORD=""$escapedDBPassword"""

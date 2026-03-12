@@ -57,4 +57,4 @@ echo "Rebuilding frontend and backend containers..."
 
 "${compose_cmd[@]}" up -d --build frontend backend
 
-echo "Done. Frontend is available at http://localhost:8080 and backend API at http://localhost:8082/api"
+echo "Done. Frontend is available at http://localhost:5050 and backend API at http://localhost:5656/api"

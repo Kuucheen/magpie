@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, model, signal } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -11,9 +12,9 @@ import { User } from '../../models/UserModel';
 import { HttpService } from '../../services/http.service';
 import { UserService } from '../../services/authorization/user.service';
 import { AuthInterceptor } from '../../services/auth-interceptor.interceptor';
-import {NotificationService} from '../../services/notification-service.service';
-import {ThemeService} from '../../services/theme.service';
-import {LoadingComponent} from '../../ui-elements/loading/loading.component';
+import { NotificationService } from '../../services/notification-service.service';
+import { ThemeService } from '../../services/theme.service';
+import { LoadingComponent } from '../../ui-elements/loading/loading.component';
 
 @Component({
   selector: 'app-login',
@@ -98,13 +99,9 @@ export class LoginComponent implements OnDestroy {
         const target = returnUrl && returnUrl.trim().length > 0 ? returnUrl : '/';
         this.router.navigateByUrl(target);
       },
-      error: (err) => {
+      error: (err: HttpErrorResponse) => {
         UserService.setLoggedIn(false);
-        if (err.status === 401) {
-          this.notification.showError('Username or Password is incorrect');
-        } else {
-          this.notification.showError('Something went wrong while login! Error code: ' + err.status)
-        }
+        this.notification.showError(`Login failed: ${this.getLoginErrorMessage(err)}`);
       },
     });
   }
@@ -145,5 +142,39 @@ export class LoginComponent implements OnDestroy {
       clearTimeout(this.autoLoginTimeoutId);
       this.autoLoginTimeoutId = undefined;
     }
+  }
+
+  private getLoginErrorMessage(error: HttpErrorResponse): string {
+    const apiError = error.error;
+
+    if (typeof apiError === 'string' && apiError.trim().length > 0) {
+      return apiError;
+    }
+
+    if (apiError && typeof apiError === 'object') {
+      const structuredError = apiError as { error?: unknown; message?: unknown };
+
+      if (typeof structuredError.error === 'string' && structuredError.error.trim().length > 0) {
+        return structuredError.error;
+      }
+
+      if (typeof structuredError.message === 'string' && structuredError.message.trim().length > 0) {
+        return structuredError.message;
+      }
+    }
+
+    if (error.status === 0) {
+      return 'Unable to reach the server';
+    }
+
+    if (error.message.trim().length > 0) {
+      return error.message;
+    }
+
+    if (error.status > 0) {
+      return `Request failed with status ${error.status}`;
+    }
+
+    return 'Unknown error';
   }
 }

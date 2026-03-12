@@ -49,7 +49,10 @@
                 <div class="section-header flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 class="section-title">Checker Cadence</h3>
-                    <p class="section-hint">Define how often the system should re-run validation across all proxies.</p>
+                    <p class="section-hint">
+                      Define how often proxies should be scheduled for another validation pass. When Dynamic Threads is
+                      enabled, this target cadence also informs automatic thread sizing.
+                    </p>
                   </div>
                 </div>
                 <div class="timer-grid" formGroupName="checker_timer">
@@ -130,7 +133,10 @@
                 <div class="section-header flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 class="section-title">Automation Enhancements</h3>
-                    <p class="section-hint">Enable helper features that keep the checker responsive under varying load.</p>
+                    <p class="section-hint">
+                      Enable helper features that keep the checker responsive under varying load. Dynamic Threads adjusts
+                      concurrency to try to meet the cadence above; with it off, the fixed Threads value is used instead.
+                    </p>
                   </div>
                 </div>
                 <div class="toggle-grid">

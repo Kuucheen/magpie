@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
@@ -10,8 +11,8 @@ import { HttpService } from '../../services/http.service';
 import { User } from '../../models/UserModel';
 import { UserService } from '../../services/authorization/user.service';
 import { AuthInterceptor } from '../../services/auth-interceptor.interceptor';
-import {NotificationService} from '../../services/notification-service.service';
-import {ThemeService} from '../../services/theme.service';
+import { NotificationService } from '../../services/notification-service.service';
+import { ThemeService } from '../../services/theme.service';
 
 @Component({
   selector: 'app-register',
@@ -63,8 +64,9 @@ export class RegisterComponent {
           this.notification.showSuccess('Registration successful');
           this.router.navigate(['/']);
         },
-        error: (error) =>
-          this.notification.showError('Registration failed: ' + error.error.error)
+        error: (error: HttpErrorResponse) => {
+          this.notification.showError(`Registration failed: ${this.getRegistrationErrorMessage(error)}`);
+        }
       });
     }
   }
@@ -72,5 +74,39 @@ export class RegisterComponent {
   passwordIsTheSame() {
     const { password, confirmPassword } = this.registerForm.value;
     return password === confirmPassword;
+  }
+
+  private getRegistrationErrorMessage(error: HttpErrorResponse): string {
+    const apiError = error.error;
+
+    if (typeof apiError === 'string' && apiError.trim().length > 0) {
+      return apiError;
+    }
+
+    if (apiError && typeof apiError === 'object') {
+      const structuredError = apiError as { error?: unknown; message?: unknown };
+
+      if (typeof structuredError.error === 'string' && structuredError.error.trim().length > 0) {
+        return structuredError.error;
+      }
+
+      if (typeof structuredError.message === 'string' && structuredError.message.trim().length > 0) {
+        return structuredError.message;
+      }
+    }
+
+    if (error.status === 0) {
+      return 'Unable to reach the server';
+    }
+
+    if (error.message.trim().length > 0) {
+      return error.message;
+    }
+
+    if (error.status > 0) {
+      return `Request failed with status ${error.status}`;
+    }
+
+    return 'Unknown error';
   }
 }

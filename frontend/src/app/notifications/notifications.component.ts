@@ -1,13 +1,69 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { Button } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
+import { marked } from 'marked';
 import { BuildInfo, ReleaseNote, UpdateNotificationService } from '../services/update-notification.service';
 import { LoadingComponent } from '../ui-elements/loading/loading.component';
+
+const RELEASE_SECTION_HEADINGS = new Set([
+  "what's changed",
+  'whats changed',
+  'added',
+  'improved',
+  'fixed',
+  'changed',
+  'removed',
+  'security',
+  'breaking changes',
+  'notes'
+]);
+
+function looksLikeMarkdown(body: string): boolean {
+  return /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|```|> )/.test(body) || /\[[^\]]+\]\([^)]+\)/.test(body);
+}
+
+function normalizeReleaseBodyToMarkdown(body: string): string {
+  const normalized = body.replace(/\r\n/g, '\n').trim();
+  if (!normalized || looksLikeMarkdown(normalized)) {
+    return normalized;
+  }
+
+  const lines = normalized.split('\n').map((line) => line.trimRight());
+  const output: string[] = [];
+  let inListSection = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      output.push('');
+      inListSection = false;
+      continue;
+    }
+
+    const lower = line.toLowerCase();
+    if (RELEASE_SECTION_HEADINGS.has(lower)) {
+      output.push(`${lower === "what's changed" || lower === 'whats changed' ? '##' : '###'} ${line}`);
+      inListSection = lower !== "what's changed" && lower !== 'whats changed';
+      continue;
+    }
+
+    if (inListSection) {
+      output.push(`- ${line}`);
+      continue;
+    }
+
+    output.push(line);
+  }
+
+  return output.join('\n');
+}
 
 @Component({
   selector: 'app-notifications',
   standalone: true,
-  imports: [CommonModule, DatePipe, LoadingComponent, Button],
+  imports: [CommonModule, DatePipe, LoadingComponent, Button, DialogModule],
   templateUrl: './notifications.component.html',
   styleUrl: './notifications.component.scss'
 })
@@ -18,6 +74,8 @@ export class NotificationsComponent implements OnInit {
   lastSeenTag = signal<string | null>(null);
   latestTag = signal<string | null>(null);
   backendBuild = signal<BuildInfo | null>(null);
+  selectedRelease = signal<ReleaseNote | null>(null);
+  releaseDialogVisible = signal(false);
   readonly hasNewReleases = computed(() => this.newReleases().length > 0);
   readonly newReleaseCount = computed(() => this.newReleases().length);
   readonly totalReleaseCount = computed(() => this.allReleases().length);
@@ -34,6 +92,15 @@ export class NotificationsComponent implements OnInit {
 
     const parsed = new Date(builtAt);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
+  });
+  readonly selectedReleaseMarkdown = computed(() => {
+    const release = this.selectedRelease();
+    const body = normalizeReleaseBodyToMarkdown(release?.body?.trim() || 'No changelog text provided.');
+    return marked.parse(body, {
+      async: false,
+      breaks: true,
+      gfm: true
+    }) as string;
   });
 
   constructor(private updates: UpdateNotificationService) {}
@@ -55,6 +122,18 @@ export class NotificationsComponent implements OnInit {
 
   retry(): void {
     this.loadReleases();
+  }
+
+  openReleaseDialog(release: ReleaseNote): void {
+    this.selectedRelease.set(release);
+    this.releaseDialogVisible.set(true);
+  }
+
+  onReleaseDialogVisibleChange(visible: boolean): void {
+    this.releaseDialogVisible.set(visible);
+    if (!visible) {
+      this.selectedRelease.set(null);
+    }
   }
 
   private loadReleases(): void {

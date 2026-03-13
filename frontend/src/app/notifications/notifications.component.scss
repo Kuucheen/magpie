@@ -386,6 +386,24 @@ $warning-text: #fecaca;
   overflow: auto;
 }
 
+.release-body--trigger,
+.archive-preview--trigger {
+  appearance: none;
+  font: inherit;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: rgba(var(--theme-primary-500-rgb), 0.22);
+    background: rgba(var(--theme-primary-500-rgb), 0.05);
+    box-shadow: 0 0 0 1px rgba(var(--theme-primary-500-rgb), 0.08);
+    outline: none;
+  }
+}
+
 .archive-list {
   list-style: none;
   margin: 1rem 0 0;
@@ -408,6 +426,171 @@ $warning-text: #fecaca;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.release-dialog__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.release-dialog__eyebrow {
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(var(--theme-primary-300-rgb), 0.9);
+}
+
+.release-dialog__title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.release-dialog__meta {
+  font-size: 0.8rem;
+  color: rgba(168, 171, 177, 0.72);
+}
+
+.release-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.4rem 0 0;
+}
+
+.release-dialog__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.release-dialog__markdown {
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+::ng-deep .release-dialog__markdown > :first-child {
+  margin-top: 0;
+}
+
+::ng-deep .release-dialog__markdown > :last-child {
+  margin-bottom: 0;
+}
+
+::ng-deep .release-dialog__markdown h1,
+::ng-deep .release-dialog__markdown h2,
+::ng-deep .release-dialog__markdown h3,
+::ng-deep .release-dialog__markdown h4 {
+  margin: 1.35rem 0 0.6rem;
+  color: rgba(248, 250, 252, 0.97);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+::ng-deep .release-dialog__markdown h1 {
+  font-size: 1.35rem;
+}
+
+::ng-deep .release-dialog__markdown h2 {
+  font-size: 1.15rem;
+}
+
+::ng-deep .release-dialog__markdown h3,
+::ng-deep .release-dialog__markdown h4 {
+  font-size: 1rem;
+}
+
+::ng-deep .release-dialog__markdown p,
+::ng-deep .release-dialog__markdown ul,
+::ng-deep .release-dialog__markdown ol,
+::ng-deep .release-dialog__markdown blockquote,
+::ng-deep .release-dialog__markdown pre,
+::ng-deep .release-dialog__markdown table {
+  margin: 0 0 0.95rem;
+}
+
+::ng-deep .release-dialog__markdown ul {
+  list-style: disc;
+  padding-left: 1.35rem;
+}
+
+::ng-deep .release-dialog__markdown ol {
+  list-style: decimal;
+  padding-left: 1.35rem;
+}
+
+::ng-deep .release-dialog__markdown li + li {
+  margin-top: 0.25rem;
+}
+
+::ng-deep .release-dialog__markdown a {
+  color: rgba(var(--theme-primary-300-rgb), 0.96);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+::ng-deep .release-dialog__markdown a:hover,
+::ng-deep .release-dialog__markdown a:focus-visible {
+  color: var(--theme-link-hover);
+}
+
+::ng-deep .release-dialog__markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.88em;
+  padding: 0.15rem 0.38rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+::ng-deep .release-dialog__markdown pre {
+  overflow: auto;
+  padding: 0.95rem 1rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(168, 171, 177, 0.11);
+}
+
+::ng-deep .release-dialog__markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+
+::ng-deep .release-dialog__markdown blockquote {
+  padding: 0.15rem 0 0.15rem 1rem;
+  border-left: 3px solid rgba(var(--theme-primary-500-rgb), 0.32);
+  color: rgba(216, 221, 228, 0.86);
+}
+
+::ng-deep .release-dialog__markdown hr {
+  border: 0;
+  border-top: 1px solid rgba(168, 171, 177, 0.12);
+  margin: 1.15rem 0;
+}
+
+::ng-deep .release-dialog__markdown table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+::ng-deep .release-dialog__markdown th,
+::ng-deep .release-dialog__markdown td {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(168, 171, 177, 0.12);
+  text-align: left;
+  vertical-align: top;
+}
+
+::ng-deep .release-dialog__markdown th {
+  color: rgba(248, 250, 252, 0.95);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 :host ::ng-deep .mark-seen-button.p-button,
@@ -438,6 +621,33 @@ $warning-text: #fecaca;
 
 :host ::ng-deep .retry-button.p-button {
   margin-left: auto;
+}
+
+::ng-deep .release-dialog .p-dialog {
+  border-radius: 1rem;
+  border: 1px solid #262626;
+  background: #141414;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.38);
+  overflow: hidden;
+}
+
+::ng-deep .release-dialog .p-dialog-header {
+  background: #141414;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1.2rem 1.35rem 1rem;
+}
+
+::ng-deep .release-dialog .p-dialog-content {
+  background: #141414;
+  padding: 0 1.35rem 1.35rem;
+}
+
+::ng-deep .release-dialog .p-dialog-header-icon {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+::ng-deep .release-dialog .p-dialog-header-icon:hover {
+  color: rgba(248, 250, 252, 0.96);
 }
 
 @media (max-width: 900px) {
@@ -476,6 +686,11 @@ $warning-text: #fecaca;
   .release-link,
   .release-link--compact {
     white-space: normal;
+  }
+
+  .release-dialog__actions {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   :host ::ng-deep .retry-button.p-button {

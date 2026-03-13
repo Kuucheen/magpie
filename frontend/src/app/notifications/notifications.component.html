@@ -134,9 +134,14 @@
                 </a>
               </div>
 
-              <div class="release-body">
+              <button
+                type="button"
+                class="release-body release-body--trigger"
+                (click)="openReleaseDialog(release)"
+                [attr.aria-label]="'Open release notes for ' + (release.title || release.tagName)"
+                [title]="'Open full release notes for ' + (release.title || release.tagName)">
                 {{ release.body || 'No changelog text provided.' }}
-              </div>
+              </button>
             </article>
           }
         </div>
@@ -175,7 +180,14 @@
                 </div>
                 <h3 class="archive-title">{{ release.title || 'Untitled release' }}</h3>
                 <p class="release-date">Published {{ release.publishedAt | date:'medium' }}</p>
-                <p class="archive-preview">{{ release.body || 'No changelog text provided.' }}</p>
+                <button
+                  type="button"
+                  class="archive-preview archive-preview--trigger"
+                  (click)="openReleaseDialog(release)"
+                  [attr.aria-label]="'Open release notes for ' + (release.title || release.tagName)"
+                  [title]="'Open full release notes for ' + (release.title || release.tagName)">
+                  {{ release.body || 'No changelog text provided.' }}
+                </button>
               </div>
 
               <a
@@ -192,3 +204,44 @@
     </section>
   }
 </div>
+
+<p-dialog
+  [visible]="releaseDialogVisible()"
+  (visibleChange)="onReleaseDialogVisibleChange($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="true"
+  [breakpoints]="{ '1100px': '90vw', '720px': '96vw' }"
+  [style]="{ width: '52rem' }"
+  [appendTo]="'body'"
+  styleClass="release-dialog">
+  <ng-template pTemplate="header">
+    <div class="release-dialog__header">
+      <div class="release-dialog__eyebrow">{{ selectedRelease()?.tagName }}</div>
+      <div class="release-dialog__title">{{ selectedRelease()?.title || 'Untitled release' }}</div>
+      @if (selectedRelease()?.publishedAt) {
+        <div class="release-dialog__meta">Published {{ selectedRelease()?.publishedAt | date:'medium' }}</div>
+      }
+    </div>
+  </ng-template>
+
+  <div class="release-dialog__body">
+    <div class="release-dialog__actions">
+      @if (selectedRelease()?.prerelease) {
+        <span class="release-flag">Prerelease</span>
+      }
+      @if (selectedRelease()?.htmlUrl) {
+        <a
+          class="release-link"
+          [href]="selectedRelease()?.htmlUrl"
+          target="_blank"
+          rel="noopener noreferrer">
+          View on GitHub
+        </a>
+      }
+    </div>
+
+    <article class="release-dialog__markdown" [innerHTML]="selectedReleaseMarkdown()"></article>
+  </div>
+</p-dialog>

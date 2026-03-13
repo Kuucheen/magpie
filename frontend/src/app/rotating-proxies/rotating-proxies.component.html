@@ -284,13 +284,13 @@
         </aside>
       </div>
 
-      <div class="form-footer flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div class="form-footer flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <p class="field-hint mb-0">Ports are assigned automatically after creation.</p>
         <button pButton
                 type="submit"
                 label="Create Rotator"
                 icon="pi pi-plus"
-                styleClass="create-rotator-button"
+                pStyleClass="create-rotator-button"
                 [disabled]="createForm.invalid || submitting() || noProtocolsAvailable() || !hasAvailableInstances()"
                 [loading]="submitting()">
         </button>

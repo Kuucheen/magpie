@@ -8,8 +8,7 @@
   .judges-panel {
     width: 100%;
     max-width: 960px;
-    background: radial-gradient(circle at top right, rgba(var(--theme-primary-500-rgb), 0.06), transparent 55%),
-      rgba(24, 24, 27, 0.9);
+    background: rgba(24, 24, 27, 0.9);
     backdrop-filter: blur(6px);
   }
 

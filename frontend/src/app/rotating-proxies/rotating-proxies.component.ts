@@ -21,6 +21,7 @@ import {CreateRotatingProxy, RotatingProxy, RotatingProxyInstance} from '../mode
 import {UserSettings} from '../models/UserSettings';
 import {TooltipComponent} from '../tooltip/tooltip.component';
 import {SkeletonModule} from 'primeng/skeleton';
+import {StyleClass} from 'primeng/styleclass';
 
 type RotatorInstanceOption = {
   label: string;
@@ -45,6 +46,7 @@ type RotatorInstanceOption = {
     TooltipComponent,
     TooltipModule,
     SkeletonModule,
+    StyleClass,
   ],
   templateUrl: './rotating-proxies.component.html',
   styleUrl: './rotating-proxies.component.scss'

@@ -8,8 +8,7 @@
   .settings-panel {
     width: 100%;
     max-width: 960px;
-    background: radial-gradient(circle at top right, rgba(var(--theme-primary-500-rgb), 0.06), transparent 55%),
-      rgba(24, 24, 27, 0.94);
+    background: rgba(24, 24, 27, 0.94);
     backdrop-filter: blur(6px);
   }
 

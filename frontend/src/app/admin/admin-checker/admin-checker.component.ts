@@ -11,6 +11,8 @@ import {Select} from 'primeng/select';
 import {InputText} from 'primeng/inputtext';
 import {NotificationService} from '../../services/notification-service.service';
 import {Subject} from 'rxjs';
+import {ConfirmDialogModule} from 'primeng/confirmdialog';
+import {ConfirmationService} from 'primeng/api';
 
 @Component({
   selector: 'app-admin-checker',
@@ -25,10 +27,12 @@ import {Subject} from 'rxjs';
     Select,
     Tabs,
     InputText,
+    ConfirmDialogModule,
     TabList,
     Tab,
     TabPanels,
   ],
+    providers: [ConfirmationService],
     templateUrl: './admin-checker.component.html',
     styleUrl: './admin-checker.component.scss'
 })
@@ -38,12 +42,14 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
   hoursList = Array.from({ length: 24 }, (_, i) => ({ label: `${i} Hours`, value: i }));
   minutesList = Array.from({ length: 60 }, (_, i) => ({ label: `${i} Minutes`, value: i }));
   secondsList = Array.from({ length: 60 }, (_, i) => ({ label: `${i} Seconds`, value: i }));
+  isRequeueing = false;
   private destroy$ = new Subject<void>();
 
   constructor(
     private fb: FormBuilder,
     private settingsService: SettingsService,
-    private notification: NotificationService
+    private notification: NotificationService,
+    private confirmationService: ConfirmationService
   ) {
     this.settingsForm = this.createDefaultForm();
   }
@@ -270,6 +276,40 @@ export class AdminCheckerComponent implements OnInit, OnDestroy {
         console.error("Error saving settings:", err);
         const reason = err?.error?.message ?? err?.error?.error ?? "Failed to save settings!";
         this.notification.showError(reason);
+      }
+    });
+  }
+
+  confirmRequeueAllProxies(): void {
+    if (this.isRequeueing) {
+      return;
+    }
+
+    this.confirmationService.confirm({
+      message: 'Requeue every currently queued proxy using the latest checker cadence?',
+      header: 'Confirm Requeue',
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonStyleClass: 'p-button-danger',
+      rejectButtonStyleClass: 'p-button-outlined',
+      acceptLabel: 'Requeue',
+      accept: () => this.requeueAllProxies()
+    });
+  }
+
+  private requeueAllProxies(): void {
+    this.isRequeueing = true;
+
+    this.settingsService.requeueAllProxies().subscribe({
+      next: resp => {
+        const count = Number(resp?.proxy_count ?? 0);
+        const suffix = Number.isFinite(count) ? ` (${count} proxies)` : '';
+        this.notification.showSuccess(`${resp?.message ?? 'Queued proxies were requeued successfully'}${suffix}`);
+        this.isRequeueing = false;
+      },
+      error: err => {
+        const reason = err?.error?.message ?? err?.error?.error ?? 'Failed to requeue all proxies.';
+        this.notification.showError(reason);
+        this.isRequeueing = false;
       }
     });
   }

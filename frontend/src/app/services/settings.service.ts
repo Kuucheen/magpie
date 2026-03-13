@@ -118,6 +118,10 @@ export class SettingsService {
     return this.settings?.blacklist_sources;
   }
 
+  requeueAllProxies(): Observable<{message: string; proxy_count: number}> {
+    return this.http.requeueAllProxies();
+  }
+
   saveUserSettings(formData: any): Observable<any> {
     const payload = this.transformUserSettings(formData);
     this.userSettings = payload;

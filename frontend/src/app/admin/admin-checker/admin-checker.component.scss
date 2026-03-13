@@ -227,6 +227,13 @@
     padding-top: 1.25rem;
   }
 
+  .panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
   :host ::ng-deep {
     .p-tabs {
       --tabs-bg: rgba(14, 15, 18, 0.66);
@@ -314,6 +321,31 @@
         box-shadow: none;
       }
     }
+
+    .requeue-proxies-button.p-button {
+      padding: 0.95rem 1.35rem;
+      border-radius: 9999px;
+      border: 1px solid rgba(248, 113, 113, 0.4);
+      background: rgba(68, 18, 18, 0.42);
+      color: #fee2e2;
+      font-weight: 600;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+
+      &:hover,
+      &.p-focus {
+        transform: translateY(-1px);
+        border-color: rgba(248, 113, 113, 0.62);
+        background: rgba(108, 28, 28, 0.55);
+        box-shadow: 0 16px 30px rgba(28, 10, 10, 0.35);
+      }
+
+      &:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+    }
   }
 }
 
@@ -334,5 +366,13 @@
       width: 100%;
       justify-content: center;
     }
+
+    .panel-actions {
+      width: 100%;
+    }
+  }
+
+  :host ::ng-deep .admin-checker-page .panel-actions .p-button {
+    width: 100%;
   }
 }

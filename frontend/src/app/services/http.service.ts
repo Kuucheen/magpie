@@ -159,6 +159,10 @@ export class HttpService {
     return this.http.post(this.apiUrl + "/saveSettings", payload)
   }
 
+  requeueAllProxies() {
+    return this.http.post<{message: string; proxy_count: number}>(`${this.apiUrl}/global/proxies/requeue`, {});
+  }
+
   getGlobalSettings() {
     return this.http.get<GlobalSettings>(this.apiUrl + '/global/settings');
   }

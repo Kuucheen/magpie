@@ -307,13 +307,29 @@
 
     <footer class="panel-footer flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mt-8">
       <p class="text-xs text-gray-500 max-w-xl">Changes will apply immediately. Save to persist them for future sessions.</p>
-      <p-button
-        type="button"
-        label="Save Settings"
-        (onClick)="onSubmit()"
-        [disabled]="!settingsForm.dirty"
-        styleClass="save-settings-button">
-      </p-button>
+      <div class="panel-actions">
+        <p-button
+          type="button"
+          label="Requeue All Proxies"
+          icon="pi pi-refresh"
+          (onClick)="confirmRequeueAllProxies()"
+          [loading]="isRequeueing"
+          styleClass="requeue-proxies-button">
+        </p-button>
+        <p-button
+          type="button"
+          label="Save Settings"
+          (onClick)="onSubmit()"
+          [disabled]="!settingsForm.dirty"
+          styleClass="save-settings-button">
+        </p-button>
+      </div>
     </footer>
   </form>
+
+  <p-confirmDialog
+    [style]="{width: '450px'}"
+    [baseZIndex]="10000"
+    rejectButtonStyleClass="p-button-outlined">
+  </p-confirmDialog>
 </div>

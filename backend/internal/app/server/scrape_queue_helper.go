@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"magpie/internal/api/dto"
 	"magpie/internal/database"
 	"magpie/internal/domain"
 	sitequeue "magpie/internal/jobs/queue/sites"
@@ -12,6 +13,9 @@ import (
 
 var enqueueScrapeSites = func(sites []domain.ScrapeSite) error {
 	return sitequeue.PublicScrapeSiteQueue.AddToQueue(sites)
+}
+var getScrapeSourceDetailForUser = func(userID uint, sourceID uint64) (*dto.ScrapeSiteDetail, error) {
+	return database.GetScrapeSiteDetail(userID, sourceID)
 }
 
 var deleteScrapeSiteRelations = database.DeleteScrapeSiteRelation

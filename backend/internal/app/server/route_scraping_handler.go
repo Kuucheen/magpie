@@ -15,6 +15,7 @@ import (
 	"magpie/internal/auth"
 	"magpie/internal/config"
 	"magpie/internal/database"
+	"magpie/internal/domain"
 	sitequeue "magpie/internal/jobs/queue/sites"
 	"magpie/internal/jobs/scraper"
 	"magpie/internal/support"
@@ -137,6 +138,54 @@ func getScrapeSourceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(detail)
+}
+
+func requeueScrapeSource(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, userErr := auth.GetUserIDFromRequest(r)
+	if userErr != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	sourceID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		log.Error("error converting scrape source id", "error", err.Error())
+		writeError(w, "Invalid scrape source id", http.StatusBadRequest)
+		return
+	}
+
+	detail, dbErr := getScrapeSourceDetailForUser(userID, sourceID)
+	if dbErr != nil {
+		log.Error("error retrieving scrape source for requeue", "error", dbErr.Error(), "scrape_source_id", sourceID, "user_id", userID)
+		writeError(w, "Failed to retrieve scrape source", http.StatusInternalServerError)
+		return
+	}
+
+	if detail == nil {
+		writeError(w, "Scrape source not found", http.StatusNotFound)
+		return
+	}
+
+	site := domain.ScrapeSite{
+		ID:  detail.Id,
+		URL: detail.Url,
+	}
+
+	if err := enqueueScrapeSites([]domain.ScrapeSite{site}); err != nil {
+		log.Error("failed to queue scrape source", "error", err, "scrape_source_id", sourceID, "user_id", userID)
+		writeError(w, "Failed to queue scrape source", http.StatusServiceUnavailable)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message":   "Scrape source queued successfully",
+		"source_id": sourceID,
+	})
 }
 
 func deleteScrapingSources(w http.ResponseWriter, r *http.Request) {

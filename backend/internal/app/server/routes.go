@@ -80,6 +80,7 @@ func OpenRoutes(ctx context.Context, port int) error {
 	apiMux.Handle("POST /saveSettings", auth.IsAdmin(http.HandlerFunc(saveSettings)))
 	apiMux.Handle("POST /global/proxies/requeue", auth.IsAdmin(http.HandlerFunc(requeueAllProxies)))
 	apiMux.Handle("POST /global/scrapeSources/requeue", auth.IsAdmin(http.HandlerFunc(requeueAllScrapeSources)))
+	apiMux.Handle("POST /global/scrapeSources/{id}/requeue", auth.IsAdmin(http.HandlerFunc(requeueScrapeSource)))
 	apiMux.Handle("GET /releases", http.HandlerFunc(getReleases))
 	apiMux.Handle("GET /getDashboardInfo", auth.RequireAuth(http.HandlerFunc(getDashboardInfo)))
 

@@ -32,6 +32,13 @@ const (
 )
 
 var errMissingProxyUploadContent = errors.New("missing proxy upload content")
+var getQueuedProxyForUser = database.GetQueuedProxyForUser
+var removeQueuedProxies = func(proxies []domain.Proxy) error {
+	return proxyqueue.PublicProxyQueue.RemoveFromQueue(proxies)
+}
+var enqueueProxiesNow = func(proxies []domain.Proxy) error {
+	return proxyqueue.PublicProxyQueue.AddToQueue(proxies)
+}
 
 func addProxies(w http.ResponseWriter, r *http.Request) {
 	userID, userErr := auth.GetUserIDFromRequest(r)
@@ -381,6 +388,55 @@ func getProxyDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(detail)
+}
+
+func requeueProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, userErr := auth.GetUserIDFromRequest(r)
+	if userErr != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	proxyID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		log.Error("error converting proxy id", "error", err.Error())
+		writeError(w, "Invalid proxy id", http.StatusBadRequest)
+		return
+	}
+
+	proxy, dbErr := getQueuedProxyForUser(userID, proxyID)
+	if dbErr != nil {
+		log.Error("error retrieving proxy for requeue", "error", dbErr.Error(), "proxy_id", proxyID, "user_id", userID)
+		writeError(w, "Failed to retrieve proxy", http.StatusInternalServerError)
+		return
+	}
+
+	if proxy == nil {
+		writeError(w, "Proxy not found", http.StatusNotFound)
+		return
+	}
+
+	if err := removeQueuedProxies([]domain.Proxy{*proxy}); err != nil {
+		log.Error("failed to remove proxy from queue before requeue", "error", err, "proxy_id", proxyID, "user_id", userID)
+		writeError(w, "Failed to queue proxy", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := enqueueProxiesNow([]domain.Proxy{*proxy}); err != nil {
+		log.Error("failed to queue proxy", "error", err, "proxy_id", proxyID, "user_id", userID)
+		writeError(w, "Failed to queue proxy", http.StatusServiceUnavailable)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message":  "Proxy queued successfully",
+		"proxy_id": proxyID,
+	})
 }
 
 func getProxyStatistics(w http.ResponseWriter, r *http.Request) {

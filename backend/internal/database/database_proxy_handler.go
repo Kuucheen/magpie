@@ -1428,6 +1428,27 @@ func GetProxyDetail(userId uint, proxyId uint64) (*dto.ProxyDetail, error) {
 	return detail, nil
 }
 
+func GetQueuedProxyForUser(userId uint, proxyId uint64) (*domain.Proxy, error) {
+	if proxyId == 0 {
+		return nil, nil
+	}
+
+	var proxy domain.Proxy
+	err := DB.
+		Preload("Users", preloadCheckerUsers).
+		Joins("JOIN user_proxies up ON up.proxy_id = proxies.id").
+		Where("up.user_id = ? AND proxies.id = ?", userId, proxyId).
+		First(&proxy).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &proxy, nil
+}
+
 func GetProxyStatistics(userId uint, proxyId uint64, limit int) ([]dto.ProxyStatistic, error) {
 	if proxyId == 0 {
 		return []dto.ProxyStatistic{}, nil

@@ -86,11 +86,18 @@
         </th>
         @for (column of tableColumns(); track trackByColumn($index, column)) {
           @if (column.sortField) {
-            <th [pSortableColumn]="column.sortField" class="text-center" [ngClass]="{'url-cell': column.id === 'url'}">
+            <th
+              [pSortableColumn]="column.sortField"
+              class="text-center"
+              [ngClass]="['column-' + column.id, column.id === 'url' ? 'url-cell' : '']"
+            >
               {{ column.label }} <p-sortIcon [field]="column.sortField"></p-sortIcon>
             </th>
           } @else {
-            <th class="text-center" [ngClass]="{'url-cell': column.id === 'url'}">
+            <th
+              class="text-center"
+              [ngClass]="['column-' + column.id, column.id === 'url' ? 'url-cell' : '']"
+            >
               {{ column.label }}
             </th>
           }
@@ -146,7 +153,7 @@
         @for (column of tableColumns(); track trackByColumn($index, column)) {
           @switch (column.id) {
             @case ('url') {
-              <td class="url-cell">
+              <td class="url-cell column-url">
                 <a
                   [href]="source.url"
                   target="_blank"
@@ -160,12 +167,12 @@
               </td>
             }
             @case ('proxy_count') {
-              <td class="text-center">
+              <td class="text-center column-proxy_count">
                 {{ source.proxy_count | number }}
               </td>
             }
             @case ('health') {
-              <td class="text-center health-td">
+              <td class="text-center health-td column-health">
                 <app-health-bar-cell
                   [aliveCount]="source.alive_count"
                   [deadCount]="source.dead_count"
@@ -175,7 +182,7 @@
               </td>
             }
             @case ('robots_check') {
-              <td class="text-center">
+              <td class="text-center column-robots_check">
                 <p-button
                   label="Check robots.txt"
                   icon="pi pi-shield"
@@ -187,7 +194,7 @@
               </td>
             }
             @case ('scrape_now') {
-              <td class="text-center" (click)="$event.stopPropagation()">
+              <td class="text-center column-scrape_now" (click)="$event.stopPropagation()">
                 <p-button
                   label="Scrape"
                   icon="pi pi-bolt"
@@ -199,7 +206,7 @@
               </td>
             }
             @case ('actions') {
-              <td class="text-center" (click)="$event.stopPropagation()">
+              <td class="text-center column-actions" (click)="$event.stopPropagation()">
                 <p-button
                   label="Details"
                   icon="pi pi-external-link"

@@ -17,6 +17,7 @@ $border-color: rgba(255, 255, 255, 0.1);
 
 :host ::ng-deep .p-datatable table {
   table-layout: fixed;
+  width: 100%;
 }
 
 :host ::ng-deep .scrape-source-table {
@@ -86,6 +87,53 @@ $border-color: rgba(255, 255, 255, 0.1);
 :host ::ng-deep .scrape-source-table .p-datatable-tbody > tr,
 :host ::ng-deep .scrape-source-table .p-datatable-tbody > tr > td {
   cursor: default !important;
+}
+
+:host ::ng-deep .scrape-source-table .p-datatable-thead > tr > th,
+:host ::ng-deep .scrape-source-table .p-datatable-tbody > tr > td {
+  padding-inline: 0.85rem;
+}
+
+:host ::ng-deep .scrape-source-table .column-url {
+  width: auto;
+}
+
+:host ::ng-deep .scrape-source-table .column-proxy_count {
+  width: 8.75rem;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .scrape-source-table .column-health {
+  width: 10rem;
+}
+
+:host ::ng-deep .scrape-source-table .column-robots_check {
+  width: 12rem;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .scrape-source-table .column-scrape_now {
+  width: 7rem;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .scrape-source-table .column-actions {
+  width: 6.5rem;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .scrape-source-table .column-proxy_count,
+:host ::ng-deep .scrape-source-table .column-scrape_now,
+:host ::ng-deep .scrape-source-table .column-actions {
+  padding-inline: 0.5rem;
+}
+
+:host ::ng-deep .scrape-source-table .column-scrape_now .p-button,
+:host ::ng-deep .scrape-source-table .column-robots_check .p-button,
+:host ::ng-deep .scrape-source-table .column-actions .p-button {
+  width: auto;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .url-cell {

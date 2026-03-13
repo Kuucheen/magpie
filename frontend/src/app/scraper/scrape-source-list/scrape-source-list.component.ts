@@ -72,6 +72,8 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   scrapingSources: Record<number, boolean> = {};
   respectRobotsEnabled = false;
   columnPanelOpen = false;
+  sortField: string | null = null;
+  sortOrder: number | null = null;
   isAdmin = UserService.isAdmin();
   isSavingColumnPreferences = signal(false);
   displayedColumns: ScrapeSourceListColumnId[] = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
@@ -159,7 +161,11 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     this.http.getScrapingSourcePage(this.page + 1).subscribe({
       next: res => {
         const sources = Array.isArray(res) ? res : [];
-        this.scrapeSources = sources.map(source => this.buildViewSource(source));
+        this.scrapeSources = this.applySort(
+          sources.map(source => this.buildViewSource(source)),
+          this.sortField,
+          this.sortOrder
+        );
         this.syncSelectionWithData();
         this.loading = false;
         this.hasLoaded = true;
@@ -191,11 +197,21 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   onLazyLoad(event: TableLazyLoadEvent) {
     const newPage = Math.floor((event.first ?? 0) / (event.rows ?? this.pageSize));
     const newPageSize = event.rows ?? this.pageSize;
+    const nextSortOrder = event.sortOrder && event.sortOrder !== 0 ? event.sortOrder : null;
+    const nextSortField = nextSortOrder ? this.resolveSortField(event.sortField) : null;
 
+    const sortChanged = nextSortField !== this.sortField || nextSortOrder !== this.sortOrder;
     const shouldFetch = newPage !== this.page || newPageSize !== this.pageSize;
 
     this.page = newPage;
     this.pageSize = newPageSize;
+    this.sortField = nextSortField;
+    this.sortOrder = nextSortOrder;
+
+    if (sortChanged) {
+      this.scrapeSources = this.applySort([...this.scrapeSources], this.sortField, this.sortOrder);
+      this.syncSelectionWithData();
+    }
 
     if (shouldFetch) {
       this.getAndSetScrapeSourcesList();
@@ -404,6 +420,80 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       urlHead: head,
       urlTail: tail,
     };
+  }
+
+  private applySort(
+    sources: ScrapeSourceView[],
+    field: string | null,
+    order: number | null,
+  ): ScrapeSourceView[] {
+    if (!field || !order || sources.length < 2) {
+      return sources;
+    }
+
+    const direction = order > 0 ? 1 : -1;
+    return [...sources].sort((left, right) => this.compareSources(left, right, field, direction));
+  }
+
+  private compareSources(
+    left: ScrapeSourceView,
+    right: ScrapeSourceView,
+    field: string,
+    direction: number,
+  ): number {
+    const leftValue = this.getSortableValue(left, field);
+    const rightValue = this.getSortableValue(right, field);
+
+    if (typeof leftValue === 'number' && typeof rightValue === 'number') {
+      if (leftValue === rightValue) {
+        return left.url.localeCompare(right.url);
+      }
+      return (leftValue - rightValue) * direction;
+    }
+
+    const comparison = String(leftValue).localeCompare(String(rightValue), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    if (comparison === 0) {
+      return left.url.localeCompare(right.url) * direction;
+    }
+    return comparison * direction;
+  }
+
+  private getSortableValue(source: ScrapeSourceView, field: string): number | string {
+    switch (field) {
+      case 'proxy_count':
+        return source.proxy_count ?? 0;
+      case 'health':
+        return this.calculateHealthScore(source);
+      case 'url':
+      default:
+        return source.url ?? '';
+    }
+  }
+
+  private calculateHealthScore(source: ScrapeSourceView): number {
+    const total = source.proxy_count ?? 0;
+    if (total <= 0) {
+      return -1;
+    }
+
+    const alive = source.alive_count ?? 0;
+    return alive / total;
+  }
+
+  private resolveSortField(field: string | string[] | undefined | null): string | null {
+    if (typeof field === 'string' && field.trim().length > 0) {
+      return field;
+    }
+
+    if (Array.isArray(field)) {
+      const first = field.find(value => value.trim().length > 0);
+      return first ?? null;
+    }
+
+    return null;
   }
 
   private splitUrlForDisplay(url: string | null | undefined): { head: string; tail: string } {

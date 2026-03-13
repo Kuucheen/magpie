@@ -13,6 +13,7 @@ export type ProxyTableColumnId =
   | 'country'
   | 'reputation'
   | 'latest_check'
+  | 'check_now'
   | 'actions';
 
 export interface ProxyTableColumnDefinition {
@@ -129,6 +130,12 @@ export const PROXY_TABLE_COLUMN_DEFINITIONS: readonly ProxyTableColumnDefinition
     sortField: 'latest_check',
     example: '2026-02-20 10:30',
     skeletonWidth: '6rem',
+  },
+  {
+    id: 'check_now',
+    label: 'Check Now',
+    example: 'Queue',
+    skeletonWidth: '4.75rem',
   },
   {
     id: 'actions',

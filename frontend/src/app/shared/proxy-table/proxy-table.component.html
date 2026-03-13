@@ -77,6 +77,8 @@
                   <p-skeleton width="3.5rem" height="0.75rem"></p-skeleton>
                   <p-skeleton width="1.5rem" height="0.75rem"></p-skeleton>
                 </div>
+              } @else if (column.id === 'check_now') {
+                <p-skeleton width="4.75rem" height="1.5rem"></p-skeleton>
               } @else if (column.id === 'actions') {
                 <p-skeleton width="4.5rem" height="1.5rem"></p-skeleton>
               } @else {
@@ -247,6 +249,19 @@
           @case ('latest_check') {
             <td class="w-[170px]">
               {{ proxy.__meta?.latestCheckLabel ?? '—' }}
+            </td>
+          }
+          @case ('check_now') {
+            <td>
+              <button
+                type="button"
+                class="proxy-check-button"
+                [disabled]="isCheckingProxy(proxy.id)"
+                (click)="onCheckNow($event, proxy)"
+              >
+                <i class="pi" [ngClass]="isCheckingProxy(proxy.id) ? 'pi-spin pi-spinner' : 'pi-bolt'" aria-hidden="true"></i>
+                <span>Check</span>
+              </button>
             </td>
           }
           @case ('actions') {

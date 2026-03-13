@@ -39,6 +39,7 @@ import {
 } from '../../shared/proxy-table/proxy-table-columns';
 import {SettingsService} from '../../services/settings.service';
 import {ColumnPickerPanelComponent} from '../../shared/column-picker-panel/column-picker-panel.component';
+import {UserService} from '../../services/authorization/user.service';
 import {
   ProxyFilterOption,
   ProxyListAppliedFilters,
@@ -102,13 +103,16 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   anonymityOptions = signal<ProxyFilterOption[]>([]);
   appliedFilters = signal<ProxyListAppliedFilters>(createDefaultProxyListAppliedFilters());
   displayedColumns = signal<ProxyTableColumnId[]>([...DEFAULT_PROXY_TABLE_COLUMNS]);
+  columnPickerColumns = signal(PROXY_TABLE_COLUMN_DEFINITIONS);
   columnPanelOpen = signal(false);
   isSavingColumnPreferences = signal(false);
+  checkingProxyIds = signal<Record<number, boolean>>({});
   filterForm: FormGroup;
   readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
   readonly proxyReputationOptions = PROXY_REPUTATION_OPTIONS;
   readonly defaultProxyTableColumns = DEFAULT_PROXY_TABLE_COLUMNS;
   readonly proxyTableColumnDefinitions = PROXY_TABLE_COLUMN_DEFINITIONS;
+  isAdmin = signal(UserService.isAdmin());
   private readonly defaultFilterValues: ProxyListFilterFormValues = createDefaultProxyFilterValues();
   private searchDebounceHandle?: ReturnType<typeof setTimeout>;
   private readonly pageSizeStorageKey = 'magpie-proxy-list-page-size';
@@ -126,6 +130,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   private proxyListSubscription?: Subscription;
   private navigationSubscription?: Subscription;
   private userSettingsSubscription?: Subscription;
+  private roleSubscription?: Subscription;
   private suppressOutsideCloseUntil = 0;
 
   constructor(
@@ -133,7 +138,8 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     private router: Router,
     private fb: FormBuilder,
     private notification: NotificationService,
-    private settingsService: SettingsService
+    private settingsService: SettingsService,
+    private userService: UserService
   ) {
     this.navigationStart$ = this.router.events.pipe(
       filter((event): event is NavigationStart => event instanceof NavigationStart)
@@ -162,10 +168,23 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.columnPickerColumns.set(this.resolveColumnPickerColumns());
     this.syncColumnsFromSettings(this.settingsService.getUserSettings());
     this.userSettingsSubscription = this.settingsService.userSettings$
       .pipe(filter((settings): settings is UserSettings => !!settings))
       .subscribe(settings => this.syncColumnsFromSettings(settings));
+    this.roleSubscription = this.userService.role$.subscribe(role => {
+      if (role === undefined) {
+        return;
+      }
+
+      this.isAdmin.set(role === 'admin');
+      this.columnPickerColumns.set(this.resolveColumnPickerColumns());
+      this.syncColumnsFromSettings(this.settingsService.getUserSettings());
+      if (!this.isAdmin()) {
+        this.checkingProxyIds.set({});
+      }
+    });
 
     const storedPageSize = this.getStoredPageSize();
     if (storedPageSize !== null) {
@@ -255,6 +274,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.proxyListSubscription?.unsubscribe();
     this.navigationSubscription?.unsubscribe();
     this.userSettingsSubscription?.unsubscribe();
+    this.roleSubscription?.unsubscribe();
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
@@ -399,7 +419,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
   saveColumnPreferences(nextColumns: string[]): void {
     const previous = this.displayedColumns();
-    const next = normalizeProxyTableColumns(nextColumns);
+    const next = this.filterAvailableColumns(normalizeProxyTableColumns(nextColumns));
     const previousIncludeHealth = this.columnsNeedHealth(previous);
     const nextIncludeHealth = this.columnsNeedHealth(next);
     const previousIncludeReputation = this.columnsNeedReputation(previous);
@@ -686,6 +706,33 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['/proxies', proxy.id]).catch(() => {});
   }
 
+  checkProxyNow(proxy: ProxyInfo): void {
+    if (!this.isAdmin() || !proxy?.id) {
+      return;
+    }
+
+    this.checkingProxyIds.update(current => ({
+      ...current,
+      [proxy.id]: true,
+    }));
+
+    this.http.requeueProxy(proxy.id).subscribe({
+      next: res => {
+        this.notification.showSuccess(res?.message ?? 'Proxy queued successfully');
+      },
+      error: err => {
+        const message = err?.error?.error ?? err?.message ?? 'Unknown error';
+        this.notification.showError('Could not queue proxy: ' + message);
+      }
+    }).add(() => {
+      this.checkingProxyIds.update(current => {
+        const next = { ...current };
+        delete next[proxy.id];
+        return next;
+      });
+    });
+  }
+
   onSelectionChange(selected: ProxyInfo[]): void {
     this.selection.clear();
     selected.forEach(proxy => this.selection.select(proxy));
@@ -960,7 +1007,22 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {
     const normalized = normalizeProxyTableColumns(settings?.proxy_list_columns ?? DEFAULT_PROXY_TABLE_COLUMNS);
-    this.displayedColumns.set(normalized);
+    this.displayedColumns.set(this.filterAvailableColumns(normalized));
+  }
+
+  private filterAvailableColumns(columns: ProxyTableColumnId[]): ProxyTableColumnId[] {
+    const available = columns.filter(column => this.isAdmin() || column !== 'check_now');
+    if (available.length > 0) {
+      return available;
+    }
+    return DEFAULT_PROXY_TABLE_COLUMNS.filter(column => this.isAdmin() || column !== 'check_now');
+  }
+
+  private resolveColumnPickerColumns() {
+    if (this.isAdmin()) {
+      return PROXY_TABLE_COLUMN_DEFINITIONS;
+    }
+    return PROXY_TABLE_COLUMN_DEFINITIONS.filter(column => column.id !== 'check_now');
   }
 
   private isTargetWithin(target: Node, ...elements: Array<ElementRef<HTMLElement> | undefined>): boolean {

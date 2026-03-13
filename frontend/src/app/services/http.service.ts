@@ -163,6 +163,10 @@ export class HttpService {
     return this.http.post<{message: string; proxy_count: number}>(`${this.apiUrl}/global/proxies/requeue`, {});
   }
 
+  requeueProxy(proxyId: number) {
+    return this.http.post<{message: string; proxy_id: number}>(`${this.apiUrl}/global/proxies/${proxyId}/requeue`, {});
+  }
+
   requeueAllScrapeSources() {
     return this.http.post<{message: string; source_count: number}>(`${this.apiUrl}/global/scrapeSources/requeue`, {});
   }

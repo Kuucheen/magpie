@@ -93,6 +93,7 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
   @Input() sortable = false;
   @Input() sortField: string | null = null;
   @Input() sortOrder: number | null = null;
+  @Input() checkingProxyIds: Record<number, boolean> = {};
 
   @Input() emptyReputationLabel = '—';
   @Input() missingReputationScoreLabel: string | null = null;
@@ -105,6 +106,7 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
   @Output() toggleSelection = new EventEmitter<ProxyInfo>();
   @Output() masterToggle = new EventEmitter<void>();
   @Output() sort = new EventEmitter<{ field: string; order: number }>();
+  @Output() checkNow = new EventEmitter<ProxyInfo>();
   @Output() viewProxy = new EventEmitter<ProxyInfo>();
 
   copiedValueKey: string | null = null;
@@ -177,6 +179,19 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
       return;
     }
     this.sort.emit(event);
+  }
+
+  isCheckingProxy(proxyId: number): boolean {
+    return this.checkingProxyIds[proxyId];
+  }
+
+  onCheckNow(event: Event | { originalEvent?: Event }, proxy: ProxyInfo): void {
+    if ((event as { originalEvent?: Event }).originalEvent) {
+      (event as { originalEvent?: Event }).originalEvent?.stopPropagation?.();
+    } else {
+      (event as Event)?.stopPropagation?.();
+    }
+    this.checkNow.emit(proxy);
   }
 
   trackByColumn(_index: number, column: ProxyTableColumnDefinition): ProxyTableColumnId {

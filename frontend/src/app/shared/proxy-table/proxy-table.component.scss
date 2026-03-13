@@ -68,6 +68,31 @@
   }
 }
 
+.proxy-check-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgba(var(--proxy-accent-rgb), 0.35);
+  border-radius: 0.5rem;
+  background: rgba(var(--proxy-accent-rgb), 0.08);
+  color: rgba(187, 247, 208, 0.95);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+
+  &:hover:not(:disabled) {
+    border-color: rgba(var(--proxy-accent-rgb), 0.55);
+    background: rgba(var(--proxy-accent-rgb), 0.14);
+  }
+
+  &:disabled {
+    opacity: 0.8;
+    cursor: wait;
+  }
+}
+
 .copy-cell {
   white-space: nowrap;
 }

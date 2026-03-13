@@ -91,7 +91,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
   readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
   readonly proxyReputationOptions = PROXY_REPUTATION_OPTIONS;
   readonly defaultProxyTableColumns = DEFAULT_PROXY_TABLE_COLUMNS;
-  readonly proxyTableColumnDefinitions = PROXY_TABLE_COLUMN_DEFINITIONS;
+  readonly proxyTableColumnDefinitions = PROXY_TABLE_COLUMN_DEFINITIONS.filter(column => column.id !== 'check_now');
   private readonly defaultFilterValues: ProxyListFilterFormValues = createDefaultProxyFilterValues();
   readonly proxySkeletonRows = Array.from({ length: 6 });
   private suppressOutsideCloseUntil = 0;
@@ -558,7 +558,7 @@ export class ScrapeSourceDetailComponent implements OnInit, OnDestroy {
 
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {
     const normalized = normalizeProxyTableColumns(settings?.scrape_source_proxy_columns ?? DEFAULT_PROXY_TABLE_COLUMNS);
-    this.displayedColumns.set(normalized);
+    this.displayedColumns.set(normalized.filter(column => column !== 'check_now'));
   }
 
   private isTargetWithin(target: Node, ...elements: Array<ElementRef<HTMLElement> | undefined>): boolean {

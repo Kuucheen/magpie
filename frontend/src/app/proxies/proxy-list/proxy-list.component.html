@@ -79,7 +79,7 @@
       <app-column-picker-panel
         #columnPanelRef
         class="column-panel"
-        [columns]="proxyTableColumnDefinitions"
+        [columns]="columnPickerColumns()"
         [selectedColumnIds]="displayedColumns()"
         [defaultColumnIds]="defaultProxyTableColumns"
         [saving]="isSavingColumnPreferences()"
@@ -107,12 +107,14 @@
     [sortable]="true"
     [sortField]="sortField()"
     [sortOrder]="sortOrder()"
+    [checkingProxyIds]="checkingProxyIds()"
     [columns]="displayedColumns()"
     (lazyLoad)="onLazyLoad($event)"
     (selectionChange)="onSelectionChange($event)"
     (masterToggle)="masterToggle()"
     (toggleSelection)="toggleSelection($event)"
     (sort)="onSort($event)"
+    (checkNow)="checkProxyNow($event)"
     (viewProxy)="onViewProxy($event)"
   ></app-proxy-table>
 </div>

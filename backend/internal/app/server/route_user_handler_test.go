@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"testing"
+	"time"
 
 	"magpie/internal/api/dto"
 	"magpie/internal/config"
@@ -231,6 +232,110 @@ func TestSaveSettings_RejectsUnsafeOutboundConfigTargets(t *testing.T) {
 	got := config.GetConfig()
 	if got.Checker.IpLookup != originalCfg.Checker.IpLookup {
 		t.Fatalf("config was applied despite unsafe ip_lookup: got %q want %q", got.Checker.IpLookup, originalCfg.Checker.IpLookup)
+	}
+}
+
+func TestSaveSettings_TriggersGeoLiteUpdateWhenAPIKeyChanges(t *testing.T) {
+	withTempServerWorkingDir(t)
+
+	originalCfg := config.GetConfig()
+	originalRunner := runGeoLiteUpdateOnSave
+	t.Cleanup(func() {
+		runGeoLiteUpdateOnSave = originalRunner
+		if err := config.SetConfig(originalCfg); err != nil {
+			t.Errorf("restore config: %v", err)
+		}
+	})
+
+	initialCfg := originalCfg
+	initialCfg.GeoLite.APIKey = ""
+	if err := config.SetConfig(initialCfg); err != nil {
+		t.Fatalf("set initial config: %v", err)
+	}
+
+	triggered := make(chan string, 1)
+	runGeoLiteUpdateOnSave = func(_ context.Context, reason string, force bool) {
+		if force {
+			triggered <- reason
+		}
+	}
+
+	newCfg := initialCfg
+	newCfg.Protocols.HTTP = !initialCfg.Protocols.HTTP
+	newCfg.GeoLite.APIKey = "new-key"
+
+	body, err := json.Marshal(newCfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/saveSettings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	saveSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	select {
+	case reason := <-triggered:
+		if reason != "config-save" {
+			t.Fatalf("reason = %q, want %q", reason, "config-save")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected GeoLite update trigger when API key changes")
+	}
+}
+
+func TestSaveSettings_DoesNotTriggerGeoLiteUpdateWhenAPIKeyUnchanged(t *testing.T) {
+	withTempServerWorkingDir(t)
+
+	originalCfg := config.GetConfig()
+	originalRunner := runGeoLiteUpdateOnSave
+	t.Cleanup(func() {
+		runGeoLiteUpdateOnSave = originalRunner
+		if err := config.SetConfig(originalCfg); err != nil {
+			t.Errorf("restore config: %v", err)
+		}
+	})
+
+	initialCfg := originalCfg
+	initialCfg.GeoLite.APIKey = "same-key"
+	if err := config.SetConfig(initialCfg); err != nil {
+		t.Fatalf("set initial config: %v", err)
+	}
+
+	triggered := make(chan string, 1)
+	runGeoLiteUpdateOnSave = func(_ context.Context, reason string, force bool) {
+		if force {
+			triggered <- reason
+		}
+	}
+
+	newCfg := initialCfg
+	newCfg.Protocols.HTTP = !initialCfg.Protocols.HTTP
+
+	body, err := json.Marshal(newCfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/saveSettings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	saveSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	select {
+	case reason := <-triggered:
+		t.Fatalf("unexpected GeoLite update trigger with reason %q", reason)
+	case <-time.After(150 * time.Millisecond):
 	}
 }
 

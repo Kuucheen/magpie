@@ -19,6 +19,11 @@ const (
 	geoLiteUpdateFallbackEvery = 24 * time.Hour
 )
 
+var (
+	updateGeoLiteDatabases = geolite.UpdateDatabases
+	runProxyGeoRefreshNow  = RunProxyGeoRefresh
+)
+
 func StartGeoLiteUpdateRoutine(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -114,7 +119,7 @@ func triggerGeoLiteUpdate(ctx context.Context, reason string, force bool) {
 		return
 	}
 
-	updated, err := geolite.UpdateDatabases(ctx)
+	updated, err := updateGeoLiteDatabases(ctx)
 	switch {
 	case errors.Is(err, geolite.ErrNoAPIKey):
 		log.Debug("GeoLite update skipped: API key missing", "reason", reason)
@@ -122,6 +127,7 @@ func triggerGeoLiteUpdate(ctx context.Context, reason string, force bool) {
 		log.Error("GeoLite update failed", "reason", reason, "error", err)
 	case updated:
 		log.Info("GeoLite databases updated", "reason", reason)
+		runProxyGeoRefreshNow(ctx, "geolite-"+reason)
 	default:
 		log.Debug("GeoLite update skipped", "reason", reason)
 	}

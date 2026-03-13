@@ -50,6 +50,7 @@ var (
 	rollbackPasswordIfCurrentInStore = database.ChangePasswordIfCurrent
 	revokeUserSessions               = auth.RevokeAllUserJWTs
 	validateOutboundConfigURL        = support.ValidateOutboundHTTPURLContext
+	runGeoLiteUpdateOnSave           = jobruntime.RunGeoLiteUpdate
 )
 
 type userRegistrationPolicy struct {
@@ -318,8 +319,8 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if strings.TrimSpace(newConfig.GeoLite.APIKey) != "" {
-		go jobruntime.RunGeoLiteUpdate(context.Background(), "config-save", true)
+	if shouldTriggerGeoLiteUpdateOnSave(previousCfg, newConfig) {
+		go runGeoLiteUpdateOnSave(context.Background(), "config-save", true)
 	}
 
 	if hasNewBlacklistSources(previousCfg.BlacklistSources, newConfig.BlacklistSources) {
@@ -330,6 +331,12 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 		response["warning"] = cleanupWarning
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func shouldTriggerGeoLiteUpdateOnSave(previousCfg, newConfig config.Config) bool {
+	previousKey := strings.TrimSpace(previousCfg.GeoLite.APIKey)
+	newKey := strings.TrimSpace(newConfig.GeoLite.APIKey)
+	return newKey != "" && newKey != previousKey
 }
 
 func getUserSettings(w http.ResponseWriter, r *http.Request) {

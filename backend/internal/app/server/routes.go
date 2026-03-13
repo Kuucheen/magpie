@@ -78,6 +78,7 @@ func OpenRoutes(ctx context.Context, port int) error {
 	apiMux.Handle("POST /changePassword", auth.RequireAuth(http.HandlerFunc(changePassword)))
 	apiMux.Handle("POST /deleteAccount", auth.RequireAuth(http.HandlerFunc(deleteAccount)))
 	apiMux.Handle("POST /saveSettings", auth.IsAdmin(http.HandlerFunc(saveSettings)))
+	apiMux.Handle("POST /global/proxies/requeue", auth.IsAdmin(http.HandlerFunc(requeueAllProxies)))
 	apiMux.Handle("GET /releases", http.HandlerFunc(getReleases))
 	apiMux.Handle("GET /getDashboardInfo", auth.RequireAuth(http.HandlerFunc(getDashboardInfo)))
 

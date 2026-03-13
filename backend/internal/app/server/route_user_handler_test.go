@@ -339,6 +339,66 @@ func TestSaveSettings_DoesNotTriggerGeoLiteUpdateWhenAPIKeyUnchanged(t *testing.
 	}
 }
 
+func TestRequeueAllProxies_ReturnsQueuedProxyCount(t *testing.T) {
+	originalRequeue := requeueAllQueuedProxies
+	t.Cleanup(func() {
+		requeueAllQueuedProxies = originalRequeue
+	})
+
+	requeueAllQueuedProxies = func() (int64, error) {
+		return 42, nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/global/proxies/requeue", nil)
+	rec := httptest.NewRecorder()
+
+	requeueAllProxies(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	if payload["message"] != "All queued proxies were requeued successfully" {
+		t.Fatalf("message = %v, want success response", payload["message"])
+	}
+	if payload["proxy_count"] != float64(42) {
+		t.Fatalf("proxy_count = %v, want 42", payload["proxy_count"])
+	}
+}
+
+func TestRequeueAllProxies_ReturnsInternalServerErrorOnFailure(t *testing.T) {
+	originalRequeue := requeueAllQueuedProxies
+	t.Cleanup(func() {
+		requeueAllQueuedProxies = originalRequeue
+	})
+
+	requeueAllQueuedProxies = func() (int64, error) {
+		return 0, errors.New("redis unavailable")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/global/proxies/requeue", nil)
+	rec := httptest.NewRecorder()
+
+	requeueAllProxies(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal error response: %v", err)
+	}
+	if payload["error"] != "Failed to requeue all proxies" {
+		t.Fatalf("error = %q, want failure message", payload["error"])
+	}
+}
+
 func TestResolveUserRegistrationPolicy_ProductionDefaults(t *testing.T) {
 	prevProduction := config.InProductionMode
 	config.SetProductionMode(true)

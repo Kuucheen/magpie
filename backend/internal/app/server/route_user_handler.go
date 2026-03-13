@@ -51,6 +51,9 @@ var (
 	revokeUserSessions               = auth.RevokeAllUserJWTs
 	validateOutboundConfigURL        = support.ValidateOutboundHTTPURLContext
 	runGeoLiteUpdateOnSave           = jobruntime.RunGeoLiteUpdate
+	requeueAllQueuedProxies          = func() (int64, error) {
+		return proxyqueue.PublicProxyQueue.RequeueAll()
+	}
 )
 
 type userRegistrationPolicy struct {
@@ -331,6 +334,25 @@ func saveSettings(w http.ResponseWriter, r *http.Request) {
 		response["warning"] = cleanupWarning
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func requeueAllProxies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	count, err := requeueAllQueuedProxies()
+	if err != nil {
+		log.Error("failed to requeue all proxies", "error", err)
+		writeError(w, "Failed to requeue all proxies", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message":     "All queued proxies were requeued successfully",
+		"proxy_count": count,
+	})
 }
 
 func shouldTriggerGeoLiteUpdateOnSave(previousCfg, newConfig config.Config) bool {

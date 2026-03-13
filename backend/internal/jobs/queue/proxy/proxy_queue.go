@@ -679,6 +679,71 @@ func (rpq *RedisProxyQueue) GetActiveInstances() (int, error) {
 	return runtime.CountActiveInstances(rpq.baseContext(), client)
 }
 
+func (rpq *RedisProxyQueue) RequeueAll() (int64, error) {
+	if rpq == nil {
+		return 0, errors.New("redis proxy queue is nil")
+	}
+
+	client, err := rpq.clientOrErr()
+	if err != nil {
+		return 0, err
+	}
+	ctx := rpq.baseContext()
+	interval := rpq.getEffectiveCheckInterval()
+	if interval <= 0 {
+		interval = time.Second
+	}
+
+	const batchSize int64 = 500
+
+	var total int64
+	now := time.Now()
+
+	for _, key := range rpq.popKeys() {
+		count, err := client.ZCard(ctx, key).Result()
+		if err != nil {
+			return total, fmt.Errorf("requeue all: count queue %s: %w", key, err)
+		}
+		if count == 0 {
+			continue
+		}
+
+		total += count
+		members, err := client.ZRange(ctx, key, 0, count-1).Result()
+		if err != nil {
+			return total, fmt.Errorf("requeue all: list queue %s: %w", key, err)
+		}
+
+		for start := 0; start < len(members); start += int(batchSize) {
+			end := start + int(batchSize)
+			if end > len(members) {
+				end = len(members)
+			}
+
+			pipe := client.Pipeline()
+			for index, member := range members[start:end] {
+				position := int64(start + index)
+				offset := (interval * time.Duration(position)) / time.Duration(count)
+				nextCheck := now.Add(offset)
+				pipe.ZAddXX(ctx, key, redis.Z{
+					Score:  float64(nextCheck.UnixMilli()),
+					Member: member,
+				})
+			}
+
+			if _, err := pipe.Exec(ctx); err != nil {
+				return total, fmt.Errorf("requeue all: update queue %s: %w", key, err)
+			}
+		}
+	}
+
+	if err := rpq.refreshQueueHeads(); err != nil {
+		return total, fmt.Errorf("requeue all: refresh queue heads: %w", err)
+	}
+
+	return total, nil
+}
+
 func (rpq *RedisProxyQueue) Close() error {
 	return support.CloseRedisClient()
 }

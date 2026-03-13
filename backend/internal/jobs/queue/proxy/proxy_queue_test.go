@@ -10,6 +10,9 @@ import (
 
 	"magpie/internal/domain"
 	"magpie/internal/support"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 )
 
 func TestQueueKeyForMember_DeterministicShard(t *testing.T) {
@@ -178,5 +181,72 @@ func TestApplyIntervalUpdateAsLeaderWithRunner_PropagatesRescheduleError(t *test
 	)
 	if !errors.Is(err, expected) {
 		t.Fatalf("expected reschedule error %v, got %v", expected, err)
+	}
+}
+
+func TestRequeueAll_ReschedulesQueuedMembersAcrossInterval(t *testing.T) {
+	redisServer, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run failed: %v", err)
+	}
+	defer redisServer.Close()
+
+	client := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	defer client.Close()
+
+	queue := NewRedisProxyQueue(client)
+	ctx := context.Background()
+
+	members := []string{"member-a", "member-b", "member-c"}
+	now := time.Now()
+	for index, member := range members {
+		score := float64(now.Add(-time.Duration(index+1) * time.Hour).UnixMilli())
+		if err := client.ZAdd(ctx, legacyQueueKey, redis.Z{
+			Score:  score,
+			Member: member,
+		}).Err(); err != nil {
+			t.Fatalf("seed queue member %s: %v", member, err)
+		}
+	}
+
+	if err := client.Set(ctx, queueRescheduleStateKey, "60000", 0).Err(); err != nil {
+		t.Fatalf("seed interval state: %v", err)
+	}
+
+	before := time.Now().UnixMilli()
+	count, err := queue.RequeueAll()
+	if err != nil {
+		t.Fatalf("RequeueAll failed: %v", err)
+	}
+	after := time.Now().UnixMilli()
+
+	if count != int64(len(members)) {
+		t.Fatalf("requeued count = %d, want %d", count, len(members))
+	}
+
+	scoredMembers, err := client.ZRangeWithScores(ctx, legacyQueueKey, 0, -1).Result()
+	if err != nil {
+		t.Fatalf("read rescheduled queue: %v", err)
+	}
+	if len(scoredMembers) != len(members) {
+		t.Fatalf("rescheduled member count = %d, want %d", len(scoredMembers), len(members))
+	}
+
+	if scoredMembers[0].Score < float64(before) || scoredMembers[0].Score > float64(after) {
+		t.Fatalf("first member score = %f, expected within [%d, %d]", scoredMembers[0].Score, before, after)
+	}
+	if scoredMembers[len(scoredMembers)-1].Score > float64(after+60000) {
+		t.Fatalf("last member score = %f, expected to stay within the configured interval", scoredMembers[len(scoredMembers)-1].Score)
+	}
+
+	headEntries, err := client.ZRangeWithScores(ctx, proxyQueueHeadKey, 0, -1).Result()
+	if err != nil {
+		t.Fatalf("read queue heads: %v", err)
+	}
+	if len(headEntries) == 0 {
+		t.Fatal("expected queue heads to be refreshed")
+	}
+	if headEntries[0].Member != legacyQueueKey {
+		t.Fatalf("queue head member = %v, want %q", headEntries[0].Member, legacyQueueKey)
 	}
 }

@@ -12,6 +12,8 @@ import {DividerModule} from 'primeng/divider';
 import {TooltipModule} from 'primeng/tooltip';
 import {CheckboxModule} from 'primeng/checkbox';
 import {InputTextModule} from 'primeng/inputtext';
+import {ConfirmDialogModule} from 'primeng/confirmdialog';
+import {ConfirmationService} from 'primeng/api';
 import {NotificationService} from '../../services/notification-service.service';
 import {GlobalSettings} from '../../models/GlobalSettings';
 
@@ -27,8 +29,10 @@ import {GlobalSettings} from '../../models/GlobalSettings';
     DividerModule,
     TooltipModule,
     CheckboxModule,
-    InputTextModule
+    InputTextModule,
+    ConfirmDialogModule
   ],
+  providers: [ConfirmationService],
   templateUrl: './admin-scraper.component.html',
   styleUrl: './admin-scraper.component.scss'
 })
@@ -38,12 +42,14 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
   minutesList = Array.from({ length: 60 }, (_, i) => ({ label: `${i} Minutes`, value: i }));
   secondsList = Array.from({ length: 60 }, (_, i) => ({ label: `${i} Seconds`, value: i }));
   settingsForm: FormGroup;
+  isRequeueingSources = false;
   private destroy$ = new Subject<void>();
 
   constructor(
     private fb: FormBuilder,
     private settingsService: SettingsService,
-    private notification: NotificationService
+    private notification: NotificationService,
+    private confirmationService: ConfirmationService
   ) {
     this.settingsForm = this.createDefaultForm();
   }
@@ -214,6 +220,40 @@ export class AdminScraperComponent implements OnInit, OnDestroy {
         console.error("Error saving settings:", err);
         const reason = err?.error?.message ?? err?.error?.error ?? 'Unknown error';
         this.notification.showError("Failed to save settings: " + reason);
+      }
+    });
+  }
+
+  confirmRequeueAllScrapeSources(): void {
+    if (this.isRequeueingSources) {
+      return;
+    }
+
+    this.confirmationService.confirm({
+      message: 'Requeue every currently queued scrape source using the latest scraper cadence?',
+      header: 'Confirm Requeue',
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonStyleClass: 'p-button-danger',
+      rejectButtonStyleClass: 'p-button-outlined',
+      acceptLabel: 'Requeue',
+      accept: () => this.requeueAllScrapeSources()
+    });
+  }
+
+  private requeueAllScrapeSources(): void {
+    this.isRequeueingSources = true;
+
+    this.settingsService.requeueAllScrapeSources().subscribe({
+      next: resp => {
+        const count = Number(resp?.source_count ?? 0);
+        const suffix = Number.isFinite(count) ? ` (${count} sources)` : '';
+        this.notification.showSuccess(`${resp?.message ?? 'Queued scrape sources were requeued successfully'}${suffix}`);
+        this.isRequeueingSources = false;
+      },
+      error: err => {
+        const reason = err?.error?.message ?? err?.error?.error ?? 'Failed to requeue all scrape sources.';
+        this.notification.showError(reason);
+        this.isRequeueingSources = false;
       }
     });
   }

@@ -122,6 +122,10 @@ export class SettingsService {
     return this.http.requeueAllProxies();
   }
 
+  requeueAllScrapeSources(): Observable<{message: string; source_count: number}> {
+    return this.http.requeueAllScrapeSources();
+  }
+
   saveUserSettings(formData: any): Observable<any> {
     const payload = this.transformUserSettings(formData);
     this.userSettings = payload;

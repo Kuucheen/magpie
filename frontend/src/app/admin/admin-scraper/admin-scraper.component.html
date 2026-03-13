@@ -267,14 +267,30 @@
       </p-tabs>
     </div>
 
-    <footer class="panel-footer mt-6 flex justify-end">
-      <p-button
-        label="Save Settings"
-        icon="pi pi-save"
-        (onClick)="onSubmit()"
-        [disabled]="!settingsForm.dirty"
-        styleClass="save-button">
-      </p-button>
+    <footer class="panel-footer mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-xs text-gray-500 max-w-xl">Changes will apply immediately. Save to persist them for future sessions.</p>
+      <div class="panel-actions">
+        <p-button
+          label="Requeue All Sources"
+          icon="pi pi-refresh"
+          (onClick)="confirmRequeueAllScrapeSources()"
+          [loading]="isRequeueingSources"
+          styleClass="requeue-sources-button">
+        </p-button>
+        <p-button
+          label="Save Settings"
+          icon="pi pi-save"
+          (onClick)="onSubmit()"
+          [disabled]="!settingsForm.dirty"
+          styleClass="save-button">
+        </p-button>
+      </div>
     </footer>
   </form>
+
+  <p-confirmDialog
+    [style]="{width: '450px'}"
+    [baseZIndex]="10000"
+    rejectButtonStyleClass="p-button-outlined">
+  </p-confirmDialog>
 </div>

@@ -33,7 +33,7 @@
                     [feedback]="false"
                     [toggleMask]="true"
                     promptLabel="Enter a password"
-                    styleClass="text-input accent-focus">
+                    class="text-input accent-focus">
         </p-password>
 
 
@@ -50,7 +50,7 @@
                     [feedback]="true"
                     [toggleMask]="true"
                     promptLabel="Enter a password"
-                    styleClass="text-input accent-focus">
+                    class="text-input accent-focus">
         </p-password>
 
         @if (passwordForm.get('newPassword')?.hasError('required') && passwordForm.get('newPassword')?.touched) {
@@ -68,7 +68,7 @@
                     formControlName="newPasswordCheck"
                     [feedback]="false"
                     [toggleMask]="true"
-                    styleClass="text-input accent-focus">
+                    class="text-input accent-focus">
         </p-password>
 
         @if (passwordForm.hasError('passwordsMismatch') && passwordForm.get('newPasswordCheck')?.touched) {
@@ -127,7 +127,7 @@
                     formControlName="password"
                     [feedback]="false"
                     [toggleMask]="true"
-                    styleClass="text-input danger-focus">
+                    class="text-input danger-focus">
         </p-password>
 
         @if (deleteAccountForm.get('password')?.hasError('required') && deleteAccountForm.get('password')?.touched) {

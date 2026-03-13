@@ -1,12 +1,13 @@
 import { CommonModule, DatePipe } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
+import { Button } from 'primeng/button';
 import { BuildInfo, ReleaseNote, UpdateNotificationService } from '../services/update-notification.service';
 import { LoadingComponent } from '../ui-elements/loading/loading.component';
 
 @Component({
   selector: 'app-notifications',
   standalone: true,
-  imports: [CommonModule, DatePipe, LoadingComponent],
+  imports: [CommonModule, DatePipe, LoadingComponent, Button],
   templateUrl: './notifications.component.html',
   styleUrl: './notifications.component.scss'
 })
@@ -17,6 +18,23 @@ export class NotificationsComponent implements OnInit {
   lastSeenTag = signal<string | null>(null);
   latestTag = signal<string | null>(null);
   backendBuild = signal<BuildInfo | null>(null);
+  readonly hasNewReleases = computed(() => this.newReleases().length > 0);
+  readonly newReleaseCount = computed(() => this.newReleases().length);
+  readonly totalReleaseCount = computed(() => this.allReleases().length);
+  readonly buildVersionLabel = computed(() => this.backendBuild()?.buildVersion || 'dev');
+  readonly archiveCountLabel = computed(() => {
+    const count = this.totalReleaseCount();
+    return `${count} release${count === 1 ? '' : 's'} in archive`;
+  });
+  readonly buildTimestamp = computed<Date | null>(() => {
+    const builtAt = this.backendBuild()?.builtAt;
+    if (!builtAt || builtAt === 'unknown') {
+      return null;
+    }
+
+    const parsed = new Date(builtAt);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  });
 
   constructor(private updates: UpdateNotificationService) {}
 

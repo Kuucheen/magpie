@@ -1,144 +1,190 @@
-<div class="max-w-5xl mx-auto px-6 py-8 space-y-6">
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Updates</p>
-      <h1 class="text-2xl font-semibold text-slate-50">Release notes</h1>
-      <p class="text-slate-400 mt-1">See what changed since your last visit and browse the full history.</p>
-    </div>
-    <div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-200 min-w-[240px] shadow-lg">
-      <div class="flex items-center justify-between gap-2">
-        <span class="text-slate-400">Backend build</span>
-        <span class="font-mono text-primary-300">{{ backendBuild()?.buildVersion || 'dev' }}</span>
+<div class="notifications-page">
+  <section class="surface-panel hero-panel">
+    <div class="section-header hero-header">
+      <div class="hero-copy">
+        <p class="hero-eyebrow">Updates</p>
+        <h1 class="hero-title">Release notes</h1>
+        <p class="section-hint hero-hint">
+          Catch up on recent changes and browse the full release history in one place.
+        </p>
       </div>
-      <button
-        type="button"
-        class="mt-3 inline-flex items-center justify-center rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:opacity-40"
-        [disabled]="!newReleases().length"
-        (click)="markAllSeen()">
-        Mark all as seen
-      </button>
+
+      <div class="hero-actions">
+        <div class="build-card" aria-live="polite">
+          <span class="meta-label">Backend version</span>
+          <strong class="build-value">{{ buildVersionLabel() }}</strong>
+          @if (buildTimestamp()) {
+            <span class="meta-note">Built {{ buildTimestamp() | date:'medium' }}</span>
+          } @else {
+            <span class="meta-note">Build time unavailable</span>
+          }
+        </div>
+
+        <p-button
+          type="button"
+          label="Mark all as read"
+          icon="pi pi-check"
+          styleClass="mark-seen-button"
+          [disabled]="!hasNewReleases()"
+          (onClick)="markAllSeen()">
+        </p-button>
+      </div>
     </div>
-  </div>
+
+    <div class="summary-grid">
+      <article class="summary-card theme-card">
+        <span class="meta-label">New since you last checked</span>
+        <strong class="summary-value">{{ newReleaseCount() }}</strong>
+        <span class="meta-note">
+          @if (hasNewReleases()) {
+            Ready to review
+          } @else {
+            You're caught up
+          }
+        </span>
+      </article>
+
+      <article class="summary-card theme-card">
+        <span class="meta-label">Last version you viewed</span>
+        <strong class="summary-text">{{ lastSeenTag() || 'No previous version' }}</strong>
+        <span class="meta-note">Stored locally for this browser.</span>
+      </article>
+
+      <article class="summary-card theme-card">
+        <span class="meta-label">Latest version available</span>
+        <strong class="summary-text">{{ latestTag() || 'No releases yet' }}</strong>
+        <span class="meta-note">{{ archiveCountLabel() }}</span>
+      </article>
+    </div>
+  </section>
 
   @if (status().loading) {
-    <div class="flex justify-center py-10">
-      <app-loading></app-loading>
-    </div>
-  } @else if (status().error) {
-    <div class="rounded-xl border border-red-500/40 bg-red-900/20 px-4 py-3 text-red-100">
-      <div class="flex items-center justify-between gap-3">
-        <div>
-          <p class="font-semibold">Could not load updates</p>
-          <p class="text-sm text-red-200/80">{{ status().error }}</p>
+    <section class="surface-panel state-panel">
+      <div class="state-shell">
+        <app-loading></app-loading>
+        <div class="state-copy">
+          <p class="state-title">Loading release notes</p>
+          <p class="state-hint">Getting the latest updates now.</p>
         </div>
-        <button
-          type="button"
-          class="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20"
-          (click)="retry()">
-          Retry
-        </button>
       </div>
-    </div>
-  } @else {
-    <section class="rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
-        <div>
-          <p class="text-sm font-semibold text-slate-100">New since your last visit</p>
-          <p class="text-slate-400 text-sm">
-            Last seen: {{ lastSeenTag() || 'never' }} · Latest: {{ latestTag() || 'n/a' }}
-          </p>
+    </section>
+  } @else if (status().error) {
+    <section class="surface-panel state-panel">
+      <div class="state-alert state-alert--error" role="alert">
+        <div class="state-icon">
+          <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
         </div>
-        <button
+        <div class="state-copy">
+          <p class="state-title">We couldn't load release notes</p>
+          <p class="state-hint">{{ status().error }}</p>
+        </div>
+        <p-button
           type="button"
-          class="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-800"
-          [disabled]="!newReleases().length"
-          (click)="markAllSeen()">
-          Mark as seen
-        </button>
+          label="Retry"
+          icon="pi pi-refresh"
+          styleClass="retry-button"
+          (onClick)="retry()">
+        </p-button>
+      </div>
+    </section>
+  } @else {
+    <section class="surface-panel feed-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">New since you last checked</h2>
+          <p class="section-hint">Start here to see what's changed since your previous visit.</p>
+        </div>
+        <span class="pill" [class.pill-muted]="!hasNewReleases()">
+          {{ newReleaseCount() }} new
+        </span>
       </div>
 
-      @if (!newReleases().length) {
-        <div class="px-5 py-6 text-slate-400">
-          You're up to date. We'll highlight the next release here.
+      @if (!hasNewReleases()) {
+        <div class="empty-state mt-3">
+          <div class="state-icon state-icon--success">
+            <i class="pi pi-check-circle" aria-hidden="true"></i>
+          </div>
+          <div class="state-copy">
+            <p class="state-title">You're caught up</p>
+            <p class="state-hint">When a new release is published, it will appear here automatically.</p>
+          </div>
         </div>
       } @else {
-        <div class="divide-y divide-slate-800">
+        <div class="release-stack">
           @for (release of newReleases(); track release.id) {
-            <article class="px-5 py-5">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="space-y-1">
-                  <div class="flex items-center gap-3">
-                    <span class="text-sm font-semibold text-primary-300">{{ release.tagName }}</span>
+            <article class="release-card theme-card">
+              <div class="release-header">
+                <div class="release-copy">
+                  <div class="release-meta">
+                    <span class="release-tag">{{ release.tagName }}</span>
                     @if (release.prerelease) {
-                      <span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-200">Prerelease</span>
+                      <span class="release-flag">Prerelease</span>
                     }
                   </div>
-                  <h3 class="text-lg font-semibold text-slate-50">
-                    {{ release.title || 'Untitled release' }}
-                  </h3>
-                  <p class="text-sm text-slate-400">
-                    Published {{ release.publishedAt | date:'medium' }}
-                  </p>
+                  <h3 class="release-title">{{ release.title || 'Untitled release' }}</h3>
+                  <p class="release-date">Published {{ release.publishedAt | date:'medium' }}</p>
                 </div>
+
                 <a
-                  class="text-sm font-semibold text-sky-300 hover:text-sky-200"
+                  class="release-link"
                   [href]="release.htmlUrl"
                   target="_blank"
                   rel="noopener noreferrer">
                   View on GitHub
                 </a>
               </div>
-              <pre class="mt-3 max-h-64 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/70 p-3 text-sm leading-relaxed text-slate-100 whitespace-pre-wrap">
-{{ release.body || 'No changelog text provided.' }}
-              </pre>
+
+              <div class="release-body">
+                {{ release.body || 'No changelog text provided.' }}
+              </div>
             </article>
           }
         </div>
       }
     </section>
 
-    <section class="rounded-2xl border border-slate-800 bg-slate-900/40 shadow-xl">
-      <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+    <section class="surface-panel archive-panel">
+      <div class="section-header">
         <div>
-          <p class="text-sm font-semibold text-slate-100">Previous updates</p>
-          <p class="text-slate-400 text-sm">Full release history from GitHub.</p>
+          <h2 class="section-title">Release history</h2>
+          <p class="section-hint">Browse every published release, including the updates listed above.</p>
         </div>
+        <span class="pill pill-muted">{{ totalReleaseCount() }} total</span>
       </div>
 
       @if (!allReleases().length) {
-        <div class="px-5 py-6 text-slate-400">
-          No releases published yet.
+        <div class="empty-state empty-state--compact">
+          <div class="state-icon">
+            <i class="pi pi-history" aria-hidden="true"></i>
+          </div>
+          <div class="state-copy">
+            <p class="state-title">No release notes yet</p>
+            <p class="state-hint">Published releases will appear here once they are available.</p>
+          </div>
         </div>
       } @else {
-        <ul class="divide-y divide-slate-800">
+        <ul class="archive-list">
           @for (release of allReleases(); track release.id) {
-            <li class="px-5 py-4">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div class="flex items-center gap-2">
-                    <span class="text-sm font-semibold text-primary-200">{{ release.tagName }}</span>
-                    @if (release.prerelease) {
-                      <span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-200">Prerelease</span>
-                    }
-                  </div>
-                  <h4 class="text-base font-semibold text-slate-100">
-                    {{ release.title || 'Untitled release' }}
-                  </h4>
-                  <p class="text-xs text-slate-400">
-                    Published {{ release.publishedAt | date:'medium' }}
-                  </p>
-                  <p class="mt-2 max-h-24 overflow-hidden whitespace-pre-line text-sm text-slate-200">
-                    {{ release.body || 'No changelog text provided.' }}
-                  </p>
+            <li class="archive-row">
+              <div class="archive-copy">
+                <div class="release-meta">
+                  <span class="release-tag release-tag--muted">{{ release.tagName }}</span>
+                  @if (release.prerelease) {
+                    <span class="release-flag">Prerelease</span>
+                  }
                 </div>
-                <a
-                  class="text-sm font-semibold text-sky-300 hover:text-sky-200"
-                  [href]="release.htmlUrl"
-                  target="_blank"
-                  rel="noopener noreferrer">
-                  View
-                </a>
+                <h3 class="archive-title">{{ release.title || 'Untitled release' }}</h3>
+                <p class="release-date">Published {{ release.publishedAt | date:'medium' }}</p>
+                <p class="archive-preview">{{ release.body || 'No changelog text provided.' }}</p>
               </div>
+
+              <a
+                class="release-link release-link--compact"
+                [href]="release.htmlUrl"
+                target="_blank"
+                rel="noopener noreferrer">
+                View
+              </a>
             </li>
           }
         </ul>

@@ -167,6 +167,10 @@ export class HttpService {
     return this.http.post<{message: string; source_count: number}>(`${this.apiUrl}/global/scrapeSources/requeue`, {});
   }
 
+  requeueScrapeSource(sourceId: number) {
+    return this.http.post<{message: string; source_id: number}>(`${this.apiUrl}/global/scrapeSources/${sourceId}/requeue`, {});
+  }
+
   getGlobalSettings() {
     return this.http.get<GlobalSettings>(this.apiUrl + '/global/settings');
   }

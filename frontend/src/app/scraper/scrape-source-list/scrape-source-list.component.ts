@@ -17,6 +17,7 @@ import {ConfirmationService} from 'primeng/api';
 import {NotificationService} from '../../services/notification-service.service';
 import {SettingsService} from '../../services/settings.service';
 import {UserSettings} from '../../models/UserSettings';
+import {UserService} from '../../services/authorization/user.service';
 import {
   DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS,
   getScrapeSourceListColumnDefinition,
@@ -68,13 +69,16 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   hasLoaded = false;
   loading = false;
   checkingRobots: Record<number, boolean> = {};
+  scrapingSources: Record<number, boolean> = {};
   respectRobotsEnabled = false;
   columnPanelOpen = false;
+  isAdmin = UserService.isAdmin();
   isSavingColumnPreferences = signal(false);
   displayedColumns: ScrapeSourceListColumnId[] = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
   readonly skeletonRows = Array.from({ length: 6 });
   readonly defaultScrapeSourceColumns = DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS;
   readonly scrapeSourceColumnDefinitions = SCRAPE_SOURCE_LIST_COLUMN_DEFINITIONS;
+  columnPickerColumns: readonly ScrapeSourceListColumnDefinition[] = this.resolveColumnPickerColumns();
 
   private subscriptions = new Subscription();
   private suppressOutsideCloseUntil = 0;
@@ -85,14 +89,29 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     private router: Router,
     private notification: NotificationService,
     private settingsService: SettingsService,
+    private userService: UserService,
   ) { }
 
   ngOnInit(): void {
+    this.columnPickerColumns = this.resolveColumnPickerColumns();
     this.syncColumnsFromSettings(this.settingsService.getUserSettings());
     const settingsSub = this.settingsService.userSettings$
       .pipe(filter((settings): settings is UserSettings => !!settings))
       .subscribe(settings => this.syncColumnsFromSettings(settings));
+    const roleSub = this.userService.role$.subscribe(role => {
+      if (role === undefined) {
+        return;
+      }
+
+      this.isAdmin = role === 'admin';
+      this.columnPickerColumns = this.resolveColumnPickerColumns();
+      this.syncColumnsFromSettings(this.settingsService.getUserSettings());
+      if (!this.isAdmin) {
+        this.scrapingSources = {};
+      }
+    });
     this.subscriptions.add(settingsSub);
+    this.subscriptions.add(roleSub);
 
     this.loadRespectRobotsSetting();
     this.getAndSetScrapeSourceCount();
@@ -270,7 +289,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   saveColumnPreferences(nextColumns: string[]): void {
     const previous = [...this.displayedColumns];
-    const next = normalizeScrapeSourceListColumns(nextColumns);
+    const next = this.filterAvailableColumns(normalizeScrapeSourceListColumns(nextColumns));
 
     this.displayedColumns = next;
     this.columnPanelOpen = false;
@@ -290,6 +309,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   tableColumns(): ScrapeSourceListColumnDefinition[] {
     return this.displayedColumns
       .map(column => getScrapeSourceListColumnDefinition(column))
+      .filter(column => this.isAdmin || column.id !== 'scrape_now')
       .filter(column => this.respectRobotsEnabled || column.id !== 'robots_check');
   }
 
@@ -352,6 +372,29 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   isCheckingRobots(sourceId: number): boolean {
     return this.checkingRobots[sourceId];
+  }
+
+  isScrapingSource(sourceId: number): boolean {
+    return this.scrapingSources[sourceId];
+  }
+
+  scrapeSourceNow(source: ScrapeSourceView, event?: Event): void {
+    event?.stopPropagation();
+    if (!this.isAdmin || !source?.id) {
+      return;
+    }
+
+    this.scrapingSources[source.id] = true;
+    this.http.requeueScrapeSource(source.id).subscribe({
+      next: res => {
+        this.notification.showSuccess(res?.message ?? 'Scrape source queued successfully');
+      },
+      error: err => {
+        this.notification.showError('Could not queue scrape source: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
+      }
+    }).add(() => {
+      delete this.scrapingSources[source.id];
+    });
   }
 
   private buildViewSource(source: ScrapeSourceInfo): ScrapeSourceView {
@@ -424,7 +467,22 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {
     const normalized = normalizeScrapeSourceListColumns(settings?.scrape_source_list_columns ?? DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS);
-    this.displayedColumns = normalized;
+    this.displayedColumns = this.filterAvailableColumns(normalized);
+  }
+
+  private filterAvailableColumns(columns: ScrapeSourceListColumnId[]): ScrapeSourceListColumnId[] {
+    const available = columns.filter(column => this.isAdmin || column !== 'scrape_now');
+    if (available.length > 0) {
+      return available;
+    }
+    return DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS.filter(column => this.isAdmin || column !== 'scrape_now');
+  }
+
+  private resolveColumnPickerColumns(): readonly ScrapeSourceListColumnDefinition[] {
+    if (this.isAdmin) {
+      return this.scrapeSourceColumnDefinitions;
+    }
+    return this.scrapeSourceColumnDefinitions.filter(column => column.id !== 'scrape_now');
   }
 
   private isTargetWithin(target: Node, ...elements: Array<ElementRef<HTMLElement> | undefined>): boolean {

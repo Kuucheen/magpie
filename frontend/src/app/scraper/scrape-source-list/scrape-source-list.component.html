@@ -45,7 +45,7 @@
       <app-column-picker-panel
         #columnPanelRef
         class="column-panel"
-        [columns]="scrapeSourceColumnDefinitions"
+        [columns]="columnPickerColumns"
         [selectedColumnIds]="displayedColumns"
         [defaultColumnIds]="defaultScrapeSourceColumns"
         [saving]="isSavingColumnPreferences()"
@@ -183,6 +183,18 @@
                   [loading]="isCheckingRobots(source.id)"
                   styleClass="p-button-outlined p-button-secondary"
                   (onClick)="checkRobots(source, $event)"
+                ></p-button>
+              </td>
+            }
+            @case ('scrape_now') {
+              <td class="text-center" (click)="$event.stopPropagation()">
+                <p-button
+                  label="Scrape"
+                  icon="pi pi-bolt"
+                  size="small"
+                  styleClass="p-button-outlined"
+                  [loading]="isScrapingSource(source.id)"
+                  (onClick)="scrapeSourceNow(source, $event)"
                 ></p-button>
               </td>
             }

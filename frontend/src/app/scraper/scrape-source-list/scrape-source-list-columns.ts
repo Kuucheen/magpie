@@ -3,6 +3,7 @@ export type ScrapeSourceListColumnId =
   | 'proxy_count'
   | 'health'
   | 'robots_check'
+  | 'scrape_now'
   | 'actions';
 
 export interface ScrapeSourceListColumnDefinition {
@@ -40,6 +41,12 @@ export const SCRAPE_SOURCE_LIST_COLUMN_DEFINITIONS: readonly ScrapeSourceListCol
     label: 'Robots Check',
     example: 'Check robots.txt',
     skeletonWidth: '7.5rem',
+  },
+  {
+    id: 'scrape_now',
+    label: 'Scrape Now',
+    example: 'Queue',
+    skeletonWidth: '5rem',
   },
   {
     id: 'actions',

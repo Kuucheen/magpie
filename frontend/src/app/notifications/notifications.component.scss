@@ -25,13 +25,11 @@ $warning-text: #fecaca;
 
 .surface-panel {
   width: 100%;
-  border: 1px solid rgba(196, 198, 203, 0.12);
+  border: 1px solid #262626;
   border-radius: 1rem;
   padding: 1.35rem;
-  background: $panel-surface;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 16px 32px rgba(0, 0, 0, 0.22);
+  background: #141414;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .section-header {
@@ -40,7 +38,7 @@ $warning-text: #fecaca;
   justify-content: space-between;
   gap: 0.9rem;
   padding-bottom: 0.9rem;
-  border-bottom: 1px solid rgba(168, 171, 177, 0.11);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .section-title {

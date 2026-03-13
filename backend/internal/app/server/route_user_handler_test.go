@@ -399,6 +399,66 @@ func TestRequeueAllProxies_ReturnsInternalServerErrorOnFailure(t *testing.T) {
 	}
 }
 
+func TestRequeueAllScrapeSources_ReturnsQueuedSourceCount(t *testing.T) {
+	originalRequeue := requeueAllQueuedScrapeSites
+	t.Cleanup(func() {
+		requeueAllQueuedScrapeSites = originalRequeue
+	})
+
+	requeueAllQueuedScrapeSites = func() (int64, error) {
+		return 17, nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/global/scrapeSources/requeue", nil)
+	rec := httptest.NewRecorder()
+
+	requeueAllScrapeSources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	if payload["message"] != "All queued scrape sources were requeued successfully" {
+		t.Fatalf("message = %v, want success response", payload["message"])
+	}
+	if payload["source_count"] != float64(17) {
+		t.Fatalf("source_count = %v, want 17", payload["source_count"])
+	}
+}
+
+func TestRequeueAllScrapeSources_ReturnsInternalServerErrorOnFailure(t *testing.T) {
+	originalRequeue := requeueAllQueuedScrapeSites
+	t.Cleanup(func() {
+		requeueAllQueuedScrapeSites = originalRequeue
+	})
+
+	requeueAllQueuedScrapeSites = func() (int64, error) {
+		return 0, errors.New("redis unavailable")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/global/scrapeSources/requeue", nil)
+	rec := httptest.NewRecorder()
+
+	requeueAllScrapeSources(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal error response: %v", err)
+	}
+	if payload["error"] != "Failed to requeue all scrape sources" {
+		t.Fatalf("error = %q, want failure message", payload["error"])
+	}
+}
+
 func TestResolveUserRegistrationPolicy_ProductionDefaults(t *testing.T) {
 	prevProduction := config.InProductionMode
 	config.SetProductionMode(true)

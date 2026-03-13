@@ -54,6 +54,9 @@ var (
 	requeueAllQueuedProxies          = func() (int64, error) {
 		return proxyqueue.PublicProxyQueue.RequeueAll()
 	}
+	requeueAllQueuedScrapeSites = func() (int64, error) {
+		return sitequeue.PublicScrapeSiteQueue.RequeueAll()
+	}
 )
 
 type userRegistrationPolicy struct {
@@ -352,6 +355,25 @@ func requeueAllProxies(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"message":     "All queued proxies were requeued successfully",
 		"proxy_count": count,
+	})
+}
+
+func requeueAllScrapeSources(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	count, err := requeueAllQueuedScrapeSites()
+	if err != nil {
+		log.Error("failed to requeue all scrape sources", "error", err)
+		writeError(w, "Failed to requeue all scrape sources", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message":      "All queued scrape sources were requeued successfully",
+		"source_count": count,
 	})
 }
 

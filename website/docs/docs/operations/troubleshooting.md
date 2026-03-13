@@ -26,6 +26,25 @@ Check registration policy envs:
 - `DISABLE_PUBLIC_REGISTRATION`
 - `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`
 
+## `Registration failed: CORS origin is not allowed`
+
+Magpie's default Docker stack only allows localhost frontend origins by default.
+
+If you run Magpie on a NAS, server, or another machine and open the UI from a browser using a LAN IP or hostname, set:
+
+- `CORS_ALLOWED_ORIGINS=http://<host-or-ip>:5050`
+
+Examples:
+
+- `CORS_ALLOWED_ORIGINS=http://192.168.6.143:5050`
+- `CORS_ALLOWED_ORIGINS=http://nas.local:5050`
+
+For multiple origins, use a comma-separated list.
+
+If you intentionally want to allow any origin in a trusted environment, set:
+
+- `CORS_ALLOWED_ORIGINS=*`
+
 ## `403 Forbidden` on `/healthz`, `/readyz`, or `/metrics`
 
 Observability protection is active.

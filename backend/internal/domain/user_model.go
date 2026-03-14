@@ -50,6 +50,7 @@ var validProxyListColumns = map[string]struct{}{
 	"country":        {},
 	"reputation":     {},
 	"latest_check":   {},
+	"check_now":      {},
 	"actions":        {},
 }
 
@@ -58,6 +59,7 @@ var validScrapeSourceListColumns = map[string]struct{}{
 	"proxy_count":  {},
 	"health":       {},
 	"robots_check": {},
+	"scrape_now":   {},
 	"actions":      {},
 }
 

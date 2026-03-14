@@ -305,7 +305,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   saveColumnPreferences(nextColumns: string[]): void {
     const previous = [...this.displayedColumns];
-    const next = this.filterAvailableColumns(normalizeScrapeSourceListColumns(nextColumns));
+    const next = normalizeScrapeSourceListColumns(nextColumns);
 
     this.displayedColumns = next;
     this.columnPanelOpen = false;
@@ -557,15 +557,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {
     const normalized = normalizeScrapeSourceListColumns(settings?.scrape_source_list_columns ?? DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS);
-    this.displayedColumns = this.filterAvailableColumns(normalized);
-  }
-
-  private filterAvailableColumns(columns: ScrapeSourceListColumnId[]): ScrapeSourceListColumnId[] {
-    const available = columns.filter(column => this.isAdmin || column !== 'scrape_now');
-    if (available.length > 0) {
-      return available;
-    }
-    return DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS.filter(column => this.isAdmin || column !== 'scrape_now');
+    this.displayedColumns = normalized;
   }
 
   private resolveColumnPickerColumns(): readonly ScrapeSourceListColumnDefinition[] {

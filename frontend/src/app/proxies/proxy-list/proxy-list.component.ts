@@ -419,7 +419,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
   saveColumnPreferences(nextColumns: string[]): void {
     const previous = this.displayedColumns();
-    const next = this.filterAvailableColumns(normalizeProxyTableColumns(nextColumns));
+    const next = normalizeProxyTableColumns(nextColumns);
     const previousIncludeHealth = this.columnsNeedHealth(previous);
     const nextIncludeHealth = this.columnsNeedHealth(next);
     const previousIncludeReputation = this.columnsNeedReputation(previous);
@@ -446,6 +446,10 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
           this.notification.showError('Could not save column settings: ' + message);
         }
       });
+  }
+
+  proxyTableColumns(): ProxyTableColumnId[] {
+    return this.displayedColumns().filter(column => this.isAdmin() || column !== 'check_now');
   }
 
   applyFilters(): void {
@@ -1007,15 +1011,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {
     const normalized = normalizeProxyTableColumns(settings?.proxy_list_columns ?? DEFAULT_PROXY_TABLE_COLUMNS);
-    this.displayedColumns.set(this.filterAvailableColumns(normalized));
-  }
-
-  private filterAvailableColumns(columns: ProxyTableColumnId[]): ProxyTableColumnId[] {
-    const available = columns.filter(column => this.isAdmin() || column !== 'check_now');
-    if (available.length > 0) {
-      return available;
-    }
-    return DEFAULT_PROXY_TABLE_COLUMNS.filter(column => this.isAdmin() || column !== 'check_now');
+    this.displayedColumns.set(normalized);
   }
 
   private resolveColumnPickerColumns() {

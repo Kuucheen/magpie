@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"magpie/internal/domain"
 	"magpie/internal/support"
 
 	"github.com/alicebob/miniredis/v2"
@@ -181,5 +182,44 @@ func TestRequeueAll_ReschedulesQueuedMembersAcrossInterval(t *testing.T) {
 	}
 	if headEntries[0].Member != legacyScrapesiteQueueKey {
 		t.Fatalf("queue head member = %v, want %q", headEntries[0].Member, legacyScrapesiteQueueKey)
+	}
+}
+
+func TestAddToQueue_DoesNotRescheduleExistingMember(t *testing.T) {
+	redisServer, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run failed: %v", err)
+	}
+	defer redisServer.Close()
+
+	client := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	defer client.Close()
+
+	queue := NewRedisScrapeSiteQueue(client)
+	ctx := context.Background()
+
+	site := "https://example.com/list.txt"
+	queueKey := queue.queueKeyForMember(site)
+	existingScore := float64(time.Now().Add(30 * time.Minute).UnixMilli())
+	if err := client.ZAdd(ctx, queueKey, redis.Z{
+		Score:  existingScore,
+		Member: site,
+	}).Err(); err != nil {
+		t.Fatalf("seed queue member: %v", err)
+	}
+
+	if err := queue.AddToQueue([]domain.ScrapeSite{{URL: site}}); err != nil {
+		t.Fatalf("AddToQueue failed: %v", err)
+	}
+
+	scoredMembers, err := client.ZRangeWithScores(ctx, queueKey, 0, -1).Result()
+	if err != nil {
+		t.Fatalf("read queue members: %v", err)
+	}
+	if len(scoredMembers) != 1 {
+		t.Fatalf("member count = %d, want 1", len(scoredMembers))
+	}
+	if scoredMembers[0].Score != existingScore {
+		t.Fatalf("score = %f, want existing %f", scoredMembers[0].Score, existingScore)
 	}
 }

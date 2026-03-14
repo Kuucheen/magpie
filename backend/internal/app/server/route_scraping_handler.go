@@ -176,6 +176,12 @@ func requeueScrapeSource(w http.ResponseWriter, r *http.Request) {
 		URL: detail.Url,
 	}
 
+	if err := removeScrapeSitesFromQueue([]domain.ScrapeSite{site}); err != nil {
+		log.Error("failed to remove scrape source from queue before requeue", "error", err, "scrape_source_id", sourceID, "user_id", userID)
+		writeError(w, "Failed to queue scrape source", http.StatusServiceUnavailable)
+		return
+	}
+
 	if err := enqueueScrapeSites([]domain.ScrapeSite{site}); err != nil {
 		log.Error("failed to queue scrape source", "error", err, "scrape_source_id", sourceID, "user_id", userID)
 		writeError(w, "Failed to queue scrape source", http.StatusServiceUnavailable)

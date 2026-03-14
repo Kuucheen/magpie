@@ -266,9 +266,12 @@ func (rssq *RedisScrapeSiteQueue) AddToQueue(sites []domain.ScrapeSite) error {
 		}
 
 		pipe.Set(ctx, siteKey, proxyJSON, 0)
-		pipe.ZAdd(ctx, queueKey, redis.Z{
-			Score:  float64(nextCheck.UnixMilli()),
-			Member: site.URL,
+		pipe.ZAddArgs(ctx, queueKey, redis.ZAddArgs{
+			NX: true,
+			Members: []redis.Z{{
+				Score:  float64(nextCheck.UnixMilli()),
+				Member: site.URL,
+			}},
 		})
 		if queueKey != legacyScrapesiteQueueKey {
 			pipe.ZRem(ctx, legacyScrapesiteQueueKey, site.URL)

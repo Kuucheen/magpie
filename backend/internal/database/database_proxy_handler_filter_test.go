@@ -75,3 +75,13 @@ func TestFilterProxiesForExport_ProtocolSpecificSelection(t *testing.T) {
 		t.Fatalf("expected only proxy ID 1, got %#v", filtered)
 	}
 }
+
+func TestHasProxyListFilters_HealthThresholdsCountAsFilters(t *testing.T) {
+	filters := dto.ProxyListFilters{
+		MinHealthOverall: 70,
+	}
+
+	if !hasProxyListFilters(filters) {
+		t.Fatal("expected health threshold to count as a proxy list filter")
+	}
+}

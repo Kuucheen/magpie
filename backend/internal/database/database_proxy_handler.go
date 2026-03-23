@@ -933,6 +933,31 @@ func buildProxyListFilterQuery(userId uint, filters dto.ProxyListFilters) *gorm.
 		query = query.Where("COALESCE(NULLIF(LOWER(proxies.estimated_type), ''), 'n/a') IN ?", filters.Types)
 	}
 
+	if hasProxyHealthFilters(filters) {
+		healthStats := buildProxyHealthSubQuery(userId)
+		query = query.Joins("JOIN (?) AS health_stats ON health_stats.proxy_id = proxies.id", healthStats)
+
+		if filters.MinHealthOverall > 0 {
+			query = query.Where("COALESCE(health_stats.health_overall, -1) >= ?", filters.MinHealthOverall)
+		}
+
+		if filters.MinHealthHTTP > 0 {
+			query = query.Where("COALESCE(health_stats.health_http, -1) >= ?", filters.MinHealthHTTP)
+		}
+
+		if filters.MinHealthHTTPS > 0 {
+			query = query.Where("COALESCE(health_stats.health_https, -1) >= ?", filters.MinHealthHTTPS)
+		}
+
+		if filters.MinHealthSOCKS4 > 0 {
+			query = query.Where("COALESCE(health_stats.health_socks4, -1) >= ?", filters.MinHealthSOCKS4)
+		}
+
+		if filters.MinHealthSOCKS5 > 0 {
+			query = query.Where("COALESCE(health_stats.health_socks5, -1) >= ?", filters.MinHealthSOCKS5)
+		}
+	}
+
 	needsLatestStats := len(filters.AnonymityLevels) > 0 || filters.MaxTimeout > 0 || filters.MaxRetries > 0
 	if needsLatestStats {
 		latestStats := buildLatestProxyStatisticSubQuery()
@@ -997,6 +1022,9 @@ func hasProxyListFilters(filters dto.ProxyListFilters) bool {
 	if filters.Status == "alive" || filters.Status == "dead" {
 		return true
 	}
+	if hasProxyHealthFilters(filters) {
+		return true
+	}
 	if filters.MaxTimeout > 0 || filters.MaxRetries > 0 {
 		return true
 	}
@@ -1004,6 +1032,14 @@ func hasProxyListFilters(filters dto.ProxyListFilters) bool {
 		return true
 	}
 	return false
+}
+
+func hasProxyHealthFilters(filters dto.ProxyListFilters) bool {
+	return filters.MinHealthOverall > 0 ||
+		filters.MinHealthHTTP > 0 ||
+		filters.MinHealthHTTPS > 0 ||
+		filters.MinHealthSOCKS4 > 0 ||
+		filters.MinHealthSOCKS5 > 0
 }
 
 func GetProxyFilterOptions(userId uint) (dto.ProxyFilterOptions, error) {

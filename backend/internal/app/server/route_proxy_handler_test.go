@@ -200,3 +200,19 @@ func TestRequeueProxy_ReturnsBadRequestOnInvalidID(t *testing.T) {
 		t.Fatalf("error = %q, want invalid id message", payload["error"])
 	}
 }
+
+func TestParseHealthPercentParam_ClampsRange(t *testing.T) {
+	testCases := map[string]int{
+		"":    0,
+		"-4":  0,
+		"42":  42,
+		"100": 100,
+		"140": 100,
+	}
+
+	for input, want := range testCases {
+		if got := parseHealthPercentParam(input); got != want {
+			t.Fatalf("parseHealthPercentParam(%q) = %d, want %d", input, got, want)
+		}
+	}
+}

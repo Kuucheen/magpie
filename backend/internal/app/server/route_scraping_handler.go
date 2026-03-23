@@ -88,6 +88,11 @@ func getScrapeSourceProxies(w http.ResponseWriter, r *http.Request) {
 	filters := dto.ProxyListFilters{
 		Status:           status,
 		Protocols:        normalizeQueryList(r.URL.Query()["protocol"]),
+		MinHealthOverall: parseHealthPercentParam(r.URL.Query().Get("minHealthOverall")),
+		MinHealthHTTP:    parseHealthPercentParam(r.URL.Query().Get("minHealthHttp")),
+		MinHealthHTTPS:   parseHealthPercentParam(r.URL.Query().Get("minHealthHttps")),
+		MinHealthSOCKS4:  parseHealthPercentParam(r.URL.Query().Get("minHealthSocks4")),
+		MinHealthSOCKS5:  parseHealthPercentParam(r.URL.Query().Get("minHealthSocks5")),
 		Countries:        normalizeQueryList(r.URL.Query()["country"]),
 		Types:            normalizeQueryList(r.URL.Query()["type"]),
 		AnonymityLevels:  normalizeQueryList(r.URL.Query()["anonymity"]),

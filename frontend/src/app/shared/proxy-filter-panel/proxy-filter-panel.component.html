@@ -194,74 +194,100 @@
       </div>
     </div>
 
-    <div class="filter-section filter-section--health">
-      <div class="filter-health-grid">
-        <div>
-          <label for="filterMinHealthOverall" class="filter-label">Overall Health</label>
-          <p-inputNumber
-            id="filterMinHealthOverall"
-            formControlName="minHealthOverall"
-            mode="decimal"
-            [showButtons]="true"
-            [min]="0"
-            [max]="100"
-            suffix="%"
-            inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
-          ></p-inputNumber>
-        </div>
-        <div>
-          <label for="filterMinHealthHttp" class="filter-label">HTTP Health</label>
-          <p-inputNumber
-            id="filterMinHealthHttp"
-            formControlName="minHealthHttp"
-            mode="decimal"
-            [showButtons]="true"
-            [min]="0"
-            [max]="100"
-            suffix="%"
-            inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
-          ></p-inputNumber>
-        </div>
-        <div>
-          <label for="filterMinHealthHttps" class="filter-label">HTTPS Health</label>
-          <p-inputNumber
-            id="filterMinHealthHttps"
-            formControlName="minHealthHttps"
-            mode="decimal"
-            [showButtons]="true"
-            [min]="0"
-            [max]="100"
-            suffix="%"
-            inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
-          ></p-inputNumber>
-        </div>
-        <div>
-          <label for="filterMinHealthSocks4" class="filter-label">SOCKS4 Health</label>
-          <p-inputNumber
-            id="filterMinHealthSocks4"
-            formControlName="minHealthSocks4"
-            mode="decimal"
-            [showButtons]="true"
-            [min]="0"
-            [max]="100"
-            suffix="%"
-            inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
-          ></p-inputNumber>
-        </div>
-        <div>
-          <label for="filterMinHealthSocks5" class="filter-label">SOCKS5 Health</label>
-          <p-inputNumber
-            id="filterMinHealthSocks5"
-            formControlName="minHealthSocks5"
-            mode="decimal"
-            [showButtons]="true"
-            [min]="0"
-            [max]="100"
-            suffix="%"
-            inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
-          ></p-inputNumber>
+    <div class="filter-health">
+      <div
+        class="filter-health__content"
+        [ngClass]="{'filter-health__content--open': healthFiltersExpanded()}"
+      >
+        <div class="filter-health__inner">
+          <div class="filter-health-grid">
+            <div>
+              <label for="filterMinHealthOverall" class="filter-label">Overall Health</label>
+              <p-inputNumber
+                id="filterMinHealthOverall"
+                formControlName="minHealthOverall"
+                mode="decimal"
+                [showButtons]="true"
+                [min]="0"
+                [max]="100"
+                suffix="%"
+                inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
+              ></p-inputNumber>
+            </div>
+            <div>
+              <label for="filterMinHealthHttp" class="filter-label">HTTP Health</label>
+              <p-inputNumber
+                id="filterMinHealthHttp"
+                formControlName="minHealthHttp"
+                mode="decimal"
+                [showButtons]="true"
+                [min]="0"
+                [max]="100"
+                suffix="%"
+                inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
+              ></p-inputNumber>
+            </div>
+            <div>
+              <label for="filterMinHealthHttps" class="filter-label">HTTPS Health</label>
+              <p-inputNumber
+                id="filterMinHealthHttps"
+                formControlName="minHealthHttps"
+                mode="decimal"
+                [showButtons]="true"
+                [min]="0"
+                [max]="100"
+                suffix="%"
+                inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
+              ></p-inputNumber>
+            </div>
+            <div>
+              <label for="filterMinHealthSocks4" class="filter-label">SOCKS4 Health</label>
+              <p-inputNumber
+                id="filterMinHealthSocks4"
+                formControlName="minHealthSocks4"
+                mode="decimal"
+                [showButtons]="true"
+                [min]="0"
+                [max]="100"
+                suffix="%"
+                inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
+              ></p-inputNumber>
+            </div>
+            <div>
+              <label for="filterMinHealthSocks5" class="filter-label">SOCKS5 Health</label>
+              <p-inputNumber
+                id="filterMinHealthSocks5"
+                formControlName="minHealthSocks5"
+                mode="decimal"
+                [showButtons]="true"
+                [min]="0"
+                [max]="100"
+                suffix="%"
+                inputStyleClass="w-full bg-gray-800 text-white border-gray-700 theme-focus"
+              ></p-inputNumber>
+            </div>
+          </div>
         </div>
       </div>
+
+      <button
+        type="button"
+        class="filter-health__toggle"
+        [attr.aria-expanded]="healthFiltersExpanded()"
+        (click)="toggleHealthFilters()"
+      >
+        <span class="filter-health__toggle-label">
+          More Filters
+          @if (activeHealthFilterCount() > 0) {
+            <span class="filter-health__toggle-count">({{ activeHealthFilterCount() }})</span>
+          }
+        </span>
+        <i
+          class="pi pi-angle-down filter-health__toggle-icon"
+          [ngClass]="{'filter-health__toggle-icon--open': healthFiltersExpanded()}"
+          aria-hidden="true"
+        ></i>
+      </button>
     </div>
   </form>
 </div>

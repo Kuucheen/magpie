@@ -1,4 +1,4 @@
-import {Component, EventEmitter, Input, Output} from '@angular/core';
+import {Component, EventEmitter, Input, Output, signal} from '@angular/core';
 import {FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {ButtonModule} from 'primeng/button';
 import {CheckboxModule} from 'primeng/checkbox';
@@ -35,4 +35,30 @@ export class ProxyFilterPanelComponent {
 
   @Output() apply = new EventEmitter<void>();
   @Output() clear = new EventEmitter<void>();
+
+  protected readonly healthFiltersExpanded = signal(false);
+
+  toggleHealthFilters(): void {
+    this.healthFiltersExpanded.update(value => !value);
+  }
+
+  activeHealthFilterCount(): number {
+    if (!this.form) {
+      return 0;
+    }
+
+    const value = this.form.getRawValue() as Record<string, unknown>;
+    const healthKeys = [
+      'minHealthOverall',
+      'minHealthHttp',
+      'minHealthHttps',
+      'minHealthSocks4',
+      'minHealthSocks5',
+    ];
+
+    return healthKeys.reduce((count, key) => {
+      const current = Number(value[key] ?? 0);
+      return Number.isFinite(current) && current > 0 ? count + 1 : count;
+    }, 0);
+  }
 }

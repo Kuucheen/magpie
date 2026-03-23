@@ -268,6 +268,26 @@ export class HttpService {
       });
     }
 
+    if (filters.minHealthOverall && filters.minHealthOverall > 0) {
+      params = params.set('minHealthOverall', filters.minHealthOverall.toString());
+    }
+
+    if (filters.minHealthHttp && filters.minHealthHttp > 0) {
+      params = params.set('minHealthHttp', filters.minHealthHttp.toString());
+    }
+
+    if (filters.minHealthHttps && filters.minHealthHttps > 0) {
+      params = params.set('minHealthHttps', filters.minHealthHttps.toString());
+    }
+
+    if (filters.minHealthSocks4 && filters.minHealthSocks4 > 0) {
+      params = params.set('minHealthSocks4', filters.minHealthSocks4.toString());
+    }
+
+    if (filters.minHealthSocks5 && filters.minHealthSocks5 > 0) {
+      params = params.set('minHealthSocks5', filters.minHealthSocks5.toString());
+    }
+
     if (filters.countries?.length) {
       filters.countries.forEach(country => {
         params = params.append('country', country);

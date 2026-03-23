@@ -69,6 +69,11 @@
   gap: 1rem;
 }
 
+.filter-panel__body-main {
+  display: grid;
+  gap: 1rem;
+}
+
 .filter-column {
   display: grid;
   gap: 0.9rem;
@@ -100,6 +105,23 @@
   margin-bottom: 0.55rem;
 }
 
+.filter-section__caption {
+  font-size: 0.74rem;
+  color: rgba(148, 163, 184, 0.86);
+  margin-bottom: 0.75rem;
+}
+
+.filter-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.85rem;
+}
+
+.filter-section--health {
+  margin-top: 0;
+  padding-top: 0.95rem;
+}
+
 .filter-label {
   display: block;
   font-size: 0.7rem;
@@ -119,23 +141,27 @@
 }
 
 @media (min-width: 960px) {
-  .filter-panel__body {
+  .filter-panel__body-main {
     grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr);
     align-items: start;
   }
 
-  .filter-panel__body > * {
+  .filter-panel__body-main > * {
     margin-top: 0;
   }
 
-  .filter-panel__body > .filter-column--right {
+  .filter-panel__body-main > .filter-column--right {
     border-left: 1px solid rgba(148, 163, 184, 0.2);
     padding-left: 1rem;
   }
 
-  .filter-panel__body > .filter-section {
+  .filter-panel__body-main > .filter-section {
     padding-top: 0;
     border-top: none;
+  }
+
+  .filter-health-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 

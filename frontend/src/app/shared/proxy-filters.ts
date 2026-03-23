@@ -13,6 +13,11 @@ export type ProxyListFilterFormValues = {
   https: boolean;
   socks4: boolean;
   socks5: boolean;
+  minHealthOverall: number;
+  minHealthHttp: number;
+  minHealthHttps: number;
+  minHealthSocks4: number;
+  minHealthSocks5: number;
   maxTimeout: number;
   maxRetries: number;
   countries: string[];
@@ -24,6 +29,11 @@ export type ProxyListFilterFormValues = {
 export type ProxyListAppliedFilters = {
   status: 'all' | 'alive' | 'dead';
   protocols: string[];
+  minHealthOverall: number;
+  minHealthHttp: number;
+  minHealthHttps: number;
+  minHealthSocks4: number;
+  minHealthSocks5: number;
   maxTimeout: number;
   maxRetries: number;
   countries: string[];
@@ -52,6 +62,11 @@ export function createDefaultProxyFilterValues(): ProxyListFilterFormValues {
     https: false,
     socks4: false,
     socks5: false,
+    minHealthOverall: 0,
+    minHealthHttp: 0,
+    minHealthHttps: 0,
+    minHealthSocks4: 0,
+    minHealthSocks5: 0,
     maxTimeout: 0,
     maxRetries: 0,
     countries: [],
@@ -65,6 +80,11 @@ export function createDefaultProxyListAppliedFilters(): ProxyListAppliedFilters 
   return {
     status: 'all',
     protocols: [],
+    minHealthOverall: 0,
+    minHealthHttp: 0,
+    minHealthHttps: 0,
+    minHealthSocks4: 0,
+    minHealthSocks5: 0,
     maxTimeout: 0,
     maxRetries: 0,
     countries: [],
@@ -80,6 +100,21 @@ export function activeProxyFilterCount(filters: ProxyListAppliedFilters): number
     count += 1;
   }
   if (filters.protocols.length > 0) {
+    count += 1;
+  }
+  if (filters.minHealthOverall > 0) {
+    count += 1;
+  }
+  if (filters.minHealthHttp > 0) {
+    count += 1;
+  }
+  if (filters.minHealthHttps > 0) {
+    count += 1;
+  }
+  if (filters.minHealthSocks4 > 0) {
+    count += 1;
+  }
+  if (filters.minHealthSocks5 > 0) {
     count += 1;
   }
   if (filters.countries.length > 0) {
@@ -136,6 +171,11 @@ export function syncFilterFormWithApplied(form: FormGroup, filters: ProxyListApp
     https: filters.protocols.includes('https'),
     socks4: filters.protocols.includes('socks4'),
     socks5: filters.protocols.includes('socks5'),
+    minHealthOverall: filters.minHealthOverall ?? 0,
+    minHealthHttp: filters.minHealthHttp ?? 0,
+    minHealthHttps: filters.minHealthHttps ?? 0,
+    minHealthSocks4: filters.minHealthSocks4 ?? 0,
+    minHealthSocks5: filters.minHealthSocks5 ?? 0,
     maxTimeout: filters.maxTimeout ?? 0,
     maxRetries: filters.maxRetries ?? 0,
     countries: [...filters.countries],
@@ -163,6 +203,11 @@ export function buildFiltersFromFormValue(formValue: ProxyListFilterFormValues):
   return {
     status: formValue.proxyStatus ?? 'all',
     protocols,
+    minHealthOverall: normalizePercentage(formValue.minHealthOverall),
+    minHealthHttp: normalizePercentage(formValue.minHealthHttp),
+    minHealthHttps: normalizePercentage(formValue.minHealthHttps),
+    minHealthSocks4: normalizePercentage(formValue.minHealthSocks4),
+    minHealthSocks5: normalizePercentage(formValue.minHealthSocks5),
     maxTimeout: normalizeNumber(formValue.maxTimeout),
     maxRetries: normalizeNumber(formValue.maxRetries),
     countries: normalizeSelection(formValue.countries),
@@ -180,6 +225,21 @@ export function buildProxyListFilterPayload(filters: ProxyListAppliedFilters): P
   }
   if (filters.protocols.length > 0) {
     payload.protocols = filters.protocols;
+  }
+  if (filters.minHealthOverall > 0) {
+    payload.minHealthOverall = filters.minHealthOverall;
+  }
+  if (filters.minHealthHttp > 0) {
+    payload.minHealthHttp = filters.minHealthHttp;
+  }
+  if (filters.minHealthHttps > 0) {
+    payload.minHealthHttps = filters.minHealthHttps;
+  }
+  if (filters.minHealthSocks4 > 0) {
+    payload.minHealthSocks4 = filters.minHealthSocks4;
+  }
+  if (filters.minHealthSocks5 > 0) {
+    payload.minHealthSocks5 = filters.minHealthSocks5;
   }
   if (filters.countries.length > 0) {
     payload.countries = filters.countries;
@@ -229,4 +289,8 @@ export function normalizeNumber(value: number | string | null | undefined): numb
     return 0;
   }
   return Math.max(0, Math.floor(parsed));
+}
+
+export function normalizePercentage(value: number | string | null | undefined): number {
+  return Math.min(100, normalizeNumber(value));
 }

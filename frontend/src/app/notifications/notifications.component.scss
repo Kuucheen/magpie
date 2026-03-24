@@ -628,17 +628,19 @@ $warning-text: #fecaca;
   border: 1px solid #262626;
   background: #141414;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.38);
+  background-clip: padding-box;
   overflow: hidden;
 }
 
 ::ng-deep .release-dialog .p-dialog-header {
-  background: #141414;
+  background: transparent;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem 1rem 0 0;
   padding: 1.2rem 1.35rem 1rem;
 }
 
 ::ng-deep .release-dialog .p-dialog-content {
-  background: #141414;
+  background: transparent;
   padding: 0 1.35rem 1.35rem;
 }
 

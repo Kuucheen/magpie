@@ -66,7 +66,7 @@ export default function Hero() {
               <rect width="1600" height="900" fill="white" />
               <text
                 x="50%"
-                y="31%"
+                y="38%"
                 fill="black"
                 fontFamily="Outfit, sans-serif"
                 fontSize="232"

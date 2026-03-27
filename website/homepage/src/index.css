@@ -213,23 +213,27 @@
 }
 
 .hero-landing-image {
-  background:
-    linear-gradient(180deg, rgba(5, 5, 5, 0.28), rgba(5, 5, 5, 0.78)),
-    url('/img.png') center center / cover no-repeat;
-  filter: contrast(1.08) saturate(1.02) brightness(0.9);
-  transform: scale(1.08);
+  background: url('/img.png') center center / cover no-repeat;
+  filter: contrast(1.04) saturate(0.96);
+  transform: scale(1.06);
 }
 
-.hero-landing-overlay {
-  background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.05), transparent 28%),
-    linear-gradient(180deg, rgba(5, 5, 5, 0.34), rgba(5, 5, 5, 0.82));
+.hero-landing-cutout {
+  isolation: isolate;
+}
+
+.hero-landing-cutout-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .hero-landing-logo {
   filter: grayscale(0.8) saturate(0.8) brightness(0.9) contrast(1.08) blur(0.12px);
 }
 
-.hero-wordmark-window {
-  filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.04));
+@media (max-width: 640px) {
+  .hero-landing-cutout-svg text {
+    letter-spacing: 56px;
+  }
 }

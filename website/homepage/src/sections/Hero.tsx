@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import gsap from 'gsap';
 
 import { Button } from '@/components/ui/button';
 
 export default function Hero() {
+  const maskId = useId().replace(/:/g, '');
   const heroRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
@@ -48,58 +49,76 @@ export default function Hero() {
     >
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
         <div className="hero-landing-image absolute inset-0 z-0" />
-        <div className="hero-landing-overlay absolute inset-0 z-[1]" />
+      </div>
+
+      <div
+        ref={titleRef}
+        className="hero-landing-cutout pointer-events-none absolute inset-0 z-[1] opacity-0"
+      >
+        <svg
+          className="hero-landing-cutout-svg"
+          viewBox="0 0 1600 900"
+          aria-hidden="true"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <mask id={maskId}>
+              <rect width="1600" height="900" fill="white" />
+              <text
+                x="50%"
+                y="31%"
+                fill="black"
+                fontFamily="Outfit, sans-serif"
+                fontSize="232"
+                fontWeight="700"
+                letterSpacing="84"
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                MAGPIE
+              </text>
+            </mask>
+
+            <linearGradient id={`${maskId}-shade`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#050505" stopOpacity="0.62" />
+              <stop offset="100%" stopColor="#050505" stopOpacity="0.84" />
+            </linearGradient>
+
+            <radialGradient id={`${maskId}-glow`} cx="50%" cy="18%" r="44%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.06" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+
+          <rect width="1600" height="900" fill={`url(#${maskId}-shade)`} mask={`url(#${maskId})`} />
+          <rect width="1600" height="900" fill={`url(#${maskId}-glow)`} mask={`url(#${maskId})`} />
+          <text
+            x="50%"
+            y="31%"
+            fill="none"
+            stroke="rgba(255,255,255,0.18)"
+            strokeWidth="4"
+            letterSpacing="84"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontFamily="Outfit, sans-serif"
+            fontSize="232"
+            fontWeight="700"
+            opacity="0.38"
+          >
+            MAGPIE
+          </text>
+        </svg>
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 pb-16 pt-24 sm:px-6 lg:px-8">
-        <div className="relative flex max-w-5xl flex-col items-center text-center">
-          <div className="relative z-10 flex flex-col items-center gap-5 sm:gap-7">
+        <div className="relative flex w-full max-w-5xl flex-col items-center text-center">
+          <div className="relative z-10 flex w-full flex-col items-center gap-5 px-6 pb-10 pt-[11rem] sm:gap-7 sm:px-10 sm:pb-12 sm:pt-[14rem] lg:px-14 lg:pb-16 lg:pt-[17rem]">
             <h1 className="sr-only">MAGPIE</h1>
-
-            <div
-              ref={titleRef}
-              className="hero-wordmark-window pointer-events-none relative h-[7rem] w-[min(92vw,72rem)] opacity-0 sm:h-[10rem] lg:h-[13rem]"
-            >
-              <svg
-                className="h-full w-full"
-                viewBox="0 0 1600 320"
-                aria-hidden="true"
-                preserveAspectRatio="xMidYMid meet"
-              >
-                <defs>
-                  <mask id="magpie-wordmark-mask">
-                    <rect width="1600" height="320" fill="black" />
-                    <text
-                      x="50%"
-                      y="54%"
-                      fill="white"
-                      fontFamily="Outfit, sans-serif"
-                      fontSize="240"
-                      fontWeight="700"
-                      letterSpacing="84"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                    >
-                      MAGPIE
-                    </text>
-                  </mask>
-                </defs>
-
-                <image
-                  href="/img.png"
-                  x="0"
-                  y="0"
-                  width="1600"
-                  height="320"
-                  preserveAspectRatio="xMidYMid slice"
-                  mask="url(#magpie-wordmark-mask)"
-                />
-              </svg>
-            </div>
 
             <p
               ref={subtitleRef}
-              className="max-w-2xl px-2 text-sm font-medium tracking-[0.08em] text-white/68 opacity-0 sm:text-base"
+              className="max-w-2xl px-2 text-sm font-medium tracking-[0.08em] text-white/72 opacity-0 sm:text-base"
             >
               A self-hostable multi-user proxy manager for teams, rotators, and scraping workloads.
             </p>

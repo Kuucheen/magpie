@@ -97,7 +97,7 @@ export default function Hero() {
             y="38%"
             fill="none"
             stroke="rgba(255,255,255,0.16)"
-            strokeWidth="2.5"
+            strokeWidth="4"
             strokeLinejoin="round"
             letterSpacing="56"
             textAnchor="middle"

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 
 export default function Hero() {
   const heroRef = useRef<HTMLElement>(null);
-  const logoRef = useRef<HTMLImageElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
@@ -20,29 +19,6 @@ export default function Hero() {
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      gsap.fromTo(
-        logoRef.current,
-        {
-          opacity: 0,
-          scale: 0.84,
-          rotate: -6,
-          filter: 'blur(18px)',
-          xPercent: -50,
-          yPercent: -50,
-        },
-        {
-          opacity: 0.18,
-          scale: 1,
-          rotate: 0,
-          filter: 'blur(0px)',
-          xPercent: -50,
-          yPercent: -50,
-          duration: 1.2,
-          delay: 0.15,
-          ease: 'expo.out',
-        }
-      );
-
       gsap.fromTo(
         titleRef.current,
         { opacity: 0, y: 48, filter: 'blur(18px)' },
@@ -75,14 +51,6 @@ export default function Hero() {
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 pb-16 pt-24 sm:px-6 lg:px-8">
         <div className="relative flex max-w-5xl flex-col items-center text-center">
-          <img
-            ref={logoRef}
-            src="/magpie-light-green.svg"
-            alt=""
-            aria-hidden="true"
-            className="hero-landing-logo pointer-events-none absolute left-1/2 top-1/2 z-0 w-[18rem] max-w-none opacity-0 sm:w-[24rem] lg:w-[30rem]"
-          />
-
           <div className="relative z-10 flex flex-col items-center gap-5 sm:gap-7">
             <h1
               ref={titleRef}

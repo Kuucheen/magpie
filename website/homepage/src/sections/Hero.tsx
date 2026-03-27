@@ -59,7 +59,7 @@ export default function Hero() {
           className="hero-landing-cutout-svg"
           viewBox="0 0 1600 900"
           aria-hidden="true"
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMidYMid slice"
         >
           <defs>
             <mask id={maskId}>
@@ -71,7 +71,7 @@ export default function Hero() {
                 fontFamily="Outfit, sans-serif"
                 fontSize="232"
                 fontWeight="700"
-                letterSpacing="84"
+                letterSpacing="56"
                 textAnchor="middle"
                 dominantBaseline="middle"
               >

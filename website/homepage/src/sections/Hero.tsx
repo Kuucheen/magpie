@@ -92,6 +92,23 @@ export default function Hero() {
 
           <rect width="1600" height="900" fill={`url(#${maskId}-shade)`} mask={`url(#${maskId})`} />
           <rect width="1600" height="900" fill={`url(#${maskId}-glow)`} mask={`url(#${maskId})`} />
+          <text
+            x="50%"
+            y="38%"
+            fill="none"
+            stroke="rgba(255,255,255,0.16)"
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+            letterSpacing="56"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontFamily="Outfit, sans-serif"
+            fontSize="232"
+            fontWeight="700"
+            mask={`url(#${maskId})`}
+          >
+            MAGPIE
+          </text>
         </svg>
       </div>
 

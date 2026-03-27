@@ -230,31 +230,6 @@
   filter: grayscale(0.8) saturate(0.8) brightness(0.9) contrast(1.08) blur(0.12px);
 }
 
-.hero-landing-wordmark {
-  color: transparent;
-  background-image:
-    radial-gradient(circle at 50% 52%, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.12) 34%, rgba(255, 255, 255, 0.28) 58%, rgba(255, 255, 255, 0.08) 82%),
-    linear-gradient(115deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.12) 18%, rgba(255, 255, 255, 0.34) 42%, rgba(255, 255, 255, 0.1) 68%, rgba(255, 255, 255, 0.38));
-  background-size: 180% 180%, 240% 240%;
-  background-position: 50% 50%, 0% 50%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 28px rgba(255, 255, 255, 0.03);
-  animation: hero-wordmark-flow 16s ease-in-out infinite alternate;
-}
-
-@keyframes hero-wordmark-flow {
-  0% {
-    background-position: 42% 48%, 0% 52%;
-  }
-  100% {
-    background-position: 58% 52%, 100% 48%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-landing-wordmark {
-    animation: none;
-  }
+.hero-wordmark-window {
+  filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.04));
 }

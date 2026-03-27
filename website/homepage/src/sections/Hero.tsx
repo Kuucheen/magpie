@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 export default function Hero() {
   const heroRef = useRef<HTMLElement>(null);
-  const titleRef = useRef<HTMLHeadingElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
 
@@ -44,20 +44,58 @@ export default function Hero() {
   return (
     <section
       ref={heroRef}
-      className="hero-landing relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#050505]"
+      className="hero-landing relative min-h-screen w-full overflow-hidden bg-transparent"
     >
-      <div className="hero-landing-image absolute inset-0 z-0" />
-      <div className="hero-landing-overlay absolute inset-0 z-[1]" />
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="hero-landing-image absolute inset-0 z-0" />
+        <div className="hero-landing-overlay absolute inset-0 z-[1]" />
+      </div>
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 pb-16 pt-24 sm:px-6 lg:px-8">
         <div className="relative flex max-w-5xl flex-col items-center text-center">
           <div className="relative z-10 flex flex-col items-center gap-5 sm:gap-7">
-            <h1
+            <h1 className="sr-only">MAGPIE</h1>
+
+            <div
               ref={titleRef}
-              className="hero-landing-wordmark text-[clamp(3.6rem,16vw,11.5rem)] font-bold uppercase leading-none tracking-[0.22em] opacity-0 sm:tracking-[0.28em]"
+              className="hero-wordmark-window pointer-events-none relative h-[7rem] w-[min(92vw,72rem)] opacity-0 sm:h-[10rem] lg:h-[13rem]"
             >
-              MAGPIE
-            </h1>
+              <svg
+                className="h-full w-full"
+                viewBox="0 0 1600 320"
+                aria-hidden="true"
+                preserveAspectRatio="xMidYMid meet"
+              >
+                <defs>
+                  <mask id="magpie-wordmark-mask">
+                    <rect width="1600" height="320" fill="black" />
+                    <text
+                      x="50%"
+                      y="54%"
+                      fill="white"
+                      fontFamily="Outfit, sans-serif"
+                      fontSize="240"
+                      fontWeight="700"
+                      letterSpacing="84"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                    >
+                      MAGPIE
+                    </text>
+                  </mask>
+                </defs>
+
+                <image
+                  href="/img.png"
+                  x="0"
+                  y="0"
+                  width="1600"
+                  height="320"
+                  preserveAspectRatio="xMidYMid slice"
+                  mask="url(#magpie-wordmark-mask)"
+                />
+              </svg>
+            </div>
 
             <p
               ref={subtitleRef}

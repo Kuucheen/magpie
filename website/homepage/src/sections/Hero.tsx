@@ -64,20 +64,7 @@ export default function Hero() {
           <defs>
             <mask id={maskId}>
               <rect width="1600" height="900" fill="white" />
-              <text
-                x="50%"
-                y="38%"
-                fill="black"
-                fontFamily="Outfit, sans-serif"
-                fontSize="232"
-                fontWeight="700"
-                letterSpacing="56"
-                textAnchor="middle"
-                dominantBaseline="middle"
-              >
-                <tspan fill="black">MAG</tspan>
-                <tspan fill="white">PIE</tspan>
-              </text>
+              <rect x="120" y="122" width="1360" height="250" rx="28" fill="black" />
             </mask>
 
             <mask id={`${maskId}-outline`}>
@@ -113,7 +100,7 @@ export default function Hero() {
           <text
             x="50%"
             y="38%"
-            fill="rgba(255,255,255,0.72)"
+            fill="rgba(255,255,255,0.84)"
             letterSpacing="56"
             textAnchor="middle"
             dominantBaseline="middle"
@@ -121,8 +108,7 @@ export default function Hero() {
             fontSize="232"
             fontWeight="700"
           >
-            <tspan fillOpacity="0">MAG</tspan>
-            <tspan>PIE</tspan>
+            MAGPIE
           </text>
           <text
             x="50%"

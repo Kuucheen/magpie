@@ -17,7 +17,7 @@ interface SectionFallbackProps {
 }
 
 function SectionFallback({ minHeight }: SectionFallbackProps) {
-  return <div style={{ minHeight }} aria-hidden="true" />;
+  return <div className="relative z-10 bg-[#0e0e0e]" style={{ minHeight }} aria-hidden="true" />;
 }
 
 function App() {
@@ -44,62 +44,64 @@ function App() {
       <Navigation />
 
       {/* Main Content */}
-      <main>
+      <main className="relative">
         {/* Hero Section */}
         <Hero />
 
-        {/* Features Section */}
-        <DeferredSection id="features" minHeight={760}>
-          <Suspense fallback={<SectionFallback minHeight={760} />}>
-            <Features />
-          </Suspense>
-        </DeferredSection>
+        <div className="relative z-10 bg-[#0e0e0e]">
+          {/* Features Section */}
+          <DeferredSection id="features" minHeight={760}>
+            <Suspense fallback={<SectionFallback minHeight={760} />}>
+              <Features />
+            </Suspense>
+          </DeferredSection>
 
-        {/* How It Works Section */}
-        <DeferredSection id="how-it-works" minHeight={640}>
-          <Suspense fallback={<SectionFallback minHeight={640} />}>
-            <HowItWorks />
-          </Suspense>
-        </DeferredSection>
+          {/* How It Works Section */}
+          <DeferredSection id="how-it-works" minHeight={640}>
+            <Suspense fallback={<SectionFallback minHeight={640} />}>
+              <HowItWorks />
+            </Suspense>
+          </DeferredSection>
 
-        {/* Dashboard Preview Section */}
-        <DeferredSection id="dashboard" minHeight={820}>
-          <Suspense fallback={<SectionFallback minHeight={820} />}>
-            <DashboardPreview />
-          </Suspense>
-        </DeferredSection>
+          {/* Dashboard Preview Section */}
+          <DeferredSection id="dashboard" minHeight={820}>
+            <Suspense fallback={<SectionFallback minHeight={820} />}>
+              <DashboardPreview />
+            </Suspense>
+          </DeferredSection>
 
-        {/* Tech Stack Section */}
-        <DeferredSection minHeight={700}>
-          <Suspense fallback={<SectionFallback minHeight={700} />}>
-            <TechStack />
-          </Suspense>
-        </DeferredSection>
+          {/* Tech Stack Section */}
+          <DeferredSection minHeight={700}>
+            <Suspense fallback={<SectionFallback minHeight={700} />}>
+              <TechStack />
+            </Suspense>
+          </DeferredSection>
 
-        {/* Installation Section */}
-        <DeferredSection id="install" minHeight={780}>
-          <Suspense fallback={<SectionFallback minHeight={780} />}>
-            <Installation />
-          </Suspense>
-        </DeferredSection>
+          {/* Installation Section */}
+          <DeferredSection id="install" minHeight={780}>
+            <Suspense fallback={<SectionFallback minHeight={780} />}>
+              <Installation />
+            </Suspense>
+          </DeferredSection>
 
-        {/* CTA Section */}
-        <DeferredSection minHeight={380}>
-          <Suspense fallback={<SectionFallback minHeight={380} />}>
-            <CTA />
-          </Suspense>
-        </DeferredSection>
+          {/* CTA Section */}
+          <DeferredSection minHeight={380}>
+            <Suspense fallback={<SectionFallback minHeight={380} />}>
+              <CTA />
+            </Suspense>
+          </DeferredSection>
 
-        {/* FAQ Section */}
-        <DeferredSection id="faq" minHeight={820}>
-          <Suspense fallback={<SectionFallback minHeight={820} />}>
-            <FAQ />
-          </Suspense>
-        </DeferredSection>
+          {/* FAQ Section */}
+          <DeferredSection id="faq" minHeight={820}>
+            <Suspense fallback={<SectionFallback minHeight={820} />}>
+              <FAQ />
+            </Suspense>
+          </DeferredSection>
+
+          {/* Footer */}
+          <Footer />
+        </div>
       </main>
-
-      {/* Footer */}
-      <Footer />
     </div>
   );
 }

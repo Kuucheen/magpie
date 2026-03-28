@@ -75,6 +75,24 @@ export default function Hero() {
                 textAnchor="middle"
                 dominantBaseline="middle"
               >
+                <tspan fill="black">MAG</tspan>
+                <tspan fill="white">PIE</tspan>
+              </text>
+            </mask>
+
+            <mask id={`${maskId}-outline`}>
+              <rect width="1600" height="900" fill="white" />
+              <text
+                x="50%"
+                y="38%"
+                fill="black"
+                fontFamily="Outfit, sans-serif"
+                fontSize="232"
+                fontWeight="700"
+                letterSpacing="56"
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
                 MAGPIE
               </text>
             </mask>
@@ -95,6 +113,20 @@ export default function Hero() {
           <text
             x="50%"
             y="38%"
+            fill="rgba(255,255,255,0.72)"
+            letterSpacing="56"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontFamily="Outfit, sans-serif"
+            fontSize="232"
+            fontWeight="700"
+          >
+            <tspan fillOpacity="0">MAG</tspan>
+            <tspan>PIE</tspan>
+          </text>
+          <text
+            x="50%"
+            y="38%"
             fill="none"
             stroke="rgba(255,255,255,0.16)"
             strokeWidth="4"
@@ -105,7 +137,7 @@ export default function Hero() {
             fontFamily="Outfit, sans-serif"
             fontSize="232"
             fontWeight="700"
-            mask={`url(#${maskId})`}
+            mask={`url(#${maskId}-outline)`}
           >
             MAGPIE
           </text>

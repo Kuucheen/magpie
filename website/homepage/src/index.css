@@ -232,8 +232,80 @@
   filter: grayscale(0.8) saturate(0.8) brightness(0.9) contrast(1.08) blur(0.12px);
 }
 
+@keyframes hero-scroll-cue {
+  0%,
+  58%,
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+
+  64% {
+    transform: translate3d(-50%, 8px, 0);
+  }
+
+  70% {
+    transform: translate3d(-50%, 2px, 0);
+  }
+
+  76% {
+    transform: translate3d(-50%, 10px, 0);
+  }
+
+  84% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes hero-scroll-cue-icon {
+  0%,
+  58%,
+  100% {
+    opacity: 0.58;
+    transform: translateY(0);
+  }
+
+  64%,
+  76% {
+    opacity: 1;
+    transform: translateY(2px);
+  }
+
+  70% {
+    opacity: 0.82;
+    transform: translateY(0);
+  }
+
+  84% {
+    opacity: 0.58;
+    transform: translateY(0);
+  }
+}
+
+.hero-scroll-cue {
+  animation: hero-scroll-cue 6.4s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+}
+
+.hero-scroll-cue-icon {
+  animation: hero-scroll-cue-icon 6.4s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+}
+
+.hero-scroll-cue:hover {
+  transform: translate3d(-50%, -2px, 0) scale(1.04);
+}
+
+.hero-scroll-cue:hover .hero-scroll-cue-icon {
+  transform: translateY(2px);
+}
+
 @media (max-width: 640px) {
   .hero-landing-cutout-svg text {
     letter-spacing: 38px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-scroll-cue,
+  .hero-scroll-cue-icon {
+    animation: none;
   }
 }

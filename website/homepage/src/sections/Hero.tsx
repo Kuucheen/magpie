@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { ArrowRight, BookOpen } from 'lucide-react';
+import { ArrowRight, BookOpen, ChevronDown } from 'lucide-react';
 import gsap from 'gsap';
 
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,13 @@ export default function Hero() {
 
   const scrollToInstall = () => {
     const element = document.querySelector('#install');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const scrollToFeatures = () => {
+    const element = document.querySelector('#features');
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
@@ -170,6 +177,15 @@ export default function Hero() {
           </div>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={scrollToFeatures}
+        className="hero-scroll-cue absolute bottom-6 left-1/2 z-20 flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full border border-white/10 bg-black/22 text-white/72 backdrop-blur-sm transition-[background-color,border-color,color,box-shadow] duration-300 hover:border-white/24 hover:bg-black/32 hover:text-white hover:shadow-[0_14px_32px_rgba(0,0,0,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 sm:bottom-8"
+        aria-label="Scroll to features"
+      >
+        <ChevronDown className="hero-scroll-cue-icon h-5 w-5 transition-transform duration-300" />
+      </button>
     </section>
   );
 }

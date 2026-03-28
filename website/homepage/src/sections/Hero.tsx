@@ -64,7 +64,7 @@ export default function Hero() {
           <defs>
             <mask id={maskId}>
               <rect width="1600" height="900" fill="white" />
-              <rect x="120" y="122" width="1360" height="250" rx="28" fill="black" />
+              <rect x="120" y="96" width="1360" height="708" rx="32" fill="black" />
             </mask>
 
             <mask id={`${maskId}-outline`}>

@@ -137,9 +137,9 @@ export default function Hero() {
         </svg>
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-7xl items-center justify-center px-4 pb-16 pt-24 sm:min-h-screen sm:px-6 lg:px-8">
+      <div className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-7xl items-center justify-center px-4 py-24 sm:min-h-screen sm:px-6 sm:pb-16 sm:pt-24 lg:px-8">
         <div className="relative flex w-full max-w-5xl flex-col items-center text-center">
-          <div className="relative z-10 flex w-full flex-col items-center gap-5 px-6 pb-10 pt-[11rem] sm:gap-7 sm:px-10 sm:pb-12 sm:pt-[14rem] lg:px-14 lg:pb-16 lg:pt-[17rem]">
+          <div className="relative z-10 flex w-full flex-col items-center gap-5 px-6 py-20 sm:gap-7 sm:px-10 sm:pb-12 sm:pt-[14rem] lg:px-14 lg:pb-16 lg:pt-[17rem]">
             <h1 className="hero-mobile-wordmark font-['Outfit',sans-serif] text-[clamp(2.9rem,18vw,5.5rem)] font-bold uppercase tracking-[0.16em] text-white sm:sr-only">
               MAGPIE
             </h1>

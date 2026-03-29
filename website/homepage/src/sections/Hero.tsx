@@ -54,7 +54,7 @@ export default function Hero() {
       ref={heroRef}
       className="hero-landing relative min-h-[100svh] w-full overflow-hidden bg-transparent sm:min-h-screen"
     >
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+      <div className="fixed left-0 right-0 top-0 z-0 h-[100lvh] overflow-hidden pointer-events-none sm:h-screen">
         <div className="hero-landing-image absolute inset-0 z-0" />
       </div>
 

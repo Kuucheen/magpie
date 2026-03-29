@@ -232,6 +232,10 @@
   filter: grayscale(0.8) saturate(0.8) brightness(0.9) contrast(1.08) blur(0.12px);
 }
 
+.hero-mobile-wordmark {
+  text-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+
 @keyframes hero-scroll-cue {
   0%,
   58%,
@@ -298,6 +302,10 @@
 }
 
 @media (max-width: 640px) {
+  .hero-mobile-wordmark {
+    letter-spacing: 0.12em;
+  }
+
   .hero-landing-cutout-svg text {
     letter-spacing: 38px;
   }

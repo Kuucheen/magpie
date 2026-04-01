@@ -42,6 +42,14 @@ export class HttpService {
     return this.http.post<jwtToken>(this.apiUrl + '/login', user)
   }
 
+  requestPasswordReset(payload: { email: string }) {
+    return this.http.post<{message: string}>(this.apiUrl + '/forgotPassword', payload);
+  }
+
+  resetPasswordWithToken(payload: { token: string; newPassword: string }) {
+    return this.http.post<{message: string}>(this.apiUrl + '/resetPassword', payload);
+  }
+
   changePassword(changePassword: ChangePassword) {
     return this.http.post<string>(this.apiUrl + '/changePassword', changePassword)
   }

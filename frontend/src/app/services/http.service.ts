@@ -204,7 +204,9 @@ export class HttpService {
   }
 
   exportProxies(settings: ExportSettings) {
-    return this.http.post<string>(this.apiUrl + '/user/export', settings)
+    return this.http.post(this.apiUrl + '/user/export', settings, {
+      responseType: 'text',
+    });
   }
 
   uploadScrapeSources(formData: FormData) {

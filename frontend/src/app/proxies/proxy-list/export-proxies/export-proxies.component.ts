@@ -164,7 +164,7 @@ export class ExportProxiesComponent implements OnChanges {
       },
       error: err => {
         this.isExporting = false;
-        const message = err?.error?.message ?? err?.message ?? 'Unknown error';
+        const message = this.extractExportErrorMessage(err);
         this.notification.showError('Error while exporting proxies: ' + message);
       }
     });
@@ -257,5 +257,44 @@ export class ExportProxiesComponent implements OnChanges {
       return [rawValue.trim()];
     }
     return [];
+  }
+
+  private extractExportErrorMessage(error: unknown): string {
+    if (typeof error === 'object' && error !== null) {
+      const httpError = error as {
+        error?: unknown;
+        message?: unknown;
+      };
+
+      if (typeof httpError.error === 'string' && httpError.error.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(httpError.error) as {error?: unknown; message?: unknown};
+          if (typeof parsed.error === 'string' && parsed.error.trim().length > 0) {
+            return parsed.error;
+          }
+          if (typeof parsed.message === 'string' && parsed.message.trim().length > 0) {
+            return parsed.message;
+          }
+        } catch {
+          return httpError.error;
+        }
+      }
+
+      if (typeof httpError.error === 'object' && httpError.error !== null) {
+        const payload = httpError.error as {error?: unknown; message?: unknown};
+        if (typeof payload.error === 'string' && payload.error.trim().length > 0) {
+          return payload.error;
+        }
+        if (typeof payload.message === 'string' && payload.message.trim().length > 0) {
+          return payload.message;
+        }
+      }
+
+      if (typeof httpError.message === 'string' && httpError.message.trim().length > 0) {
+        return httpError.message;
+      }
+    }
+
+    return 'Unknown error';
   }
 }

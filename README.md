@@ -98,6 +98,7 @@ all via a web dashboard.
    # edit .env and set PROXY_ENCRYPTION_KEY
    # optional: override JWT_SECRET
    # optional: override DB_USERNAME/DB_PASSWORD/DB_NAME
+   # optional: configure MAIL_FROM_ADDRESS/SMTP_HOST for email delivery
    docker compose up -d
    ```
    > `docker-compose.yml` is local/dev oriented. For production deployments, use hardened manifests and secure DB/Redis/TLS settings.
@@ -147,6 +148,13 @@ Use the helper scripts that match how you installed Magpie.
 - Backend: `cd backend && go run ./cmd/magpie`
 - Frontend: `cd frontend && npm install && npm run start`
 - Docs site: `cd website/docs && npm install && npm run start`
+
+Optional email delivery env vars for the backend:
+- `MAIL_FROM_ADDRESS`: sender address used in outbound email, for example `no-reply@example.com`
+- `MAIL_FROM_NAME`: optional display name, for example `Magpie`
+- `SMTP_HOST`: SMTP server host
+- `SMTP_PORT`: SMTP server port, defaults to `587`
+- `SMTP_USERNAME` and `SMTP_PASSWORD`: optional SMTP auth credentials; if one is set, both must be set
 
 ## Attributions & External Sources
 - [AbuseIPDB](https://www.abuseipdb.com/) — logo used with permission when linking to their site.

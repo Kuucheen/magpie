@@ -201,6 +201,16 @@ Actions:
 - Set to `false` to fail closed during a revocation-store outage.
 - In multi-instance deployments, keep this value identical on all instances.
 
+### Outbound email settings
+- Use these env vars for password recovery or other outbound email:
+  - `MAIL_FROM_ADDRESS`
+  - `MAIL_FROM_NAME` (optional)
+  - `SMTP_HOST`
+  - `SMTP_PORT` (optional, defaults to `587`)
+  - `SMTP_USERNAME` and `SMTP_PASSWORD` (optional; set both or neither)
+- Startup fails fast if email env vars are partially configured or invalid.
+- In multi-instance deployments, keep the same mail settings on all instances.
+
 ### Proxy encryption key (`PROXY_ENCRYPTION_KEY`)
 - Rotate only with explicit migration/export plan.
 - Changing key without migration breaks decryption of stored proxy secrets.

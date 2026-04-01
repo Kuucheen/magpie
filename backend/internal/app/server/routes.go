@@ -72,6 +72,8 @@ func OpenRoutes(ctx context.Context, port int) error {
 	apiMux.Handle("/graphql", applyRequestBodyLimit(auth.RequireAuth(withGraphQLGuard(gqlHandler)), resolveJSONMaxBodyBytes()))
 	apiMux.Handle("POST /register", withRegisterRateLimit(http.HandlerFunc(registerUser)))
 	apiMux.Handle("POST /login", withLoginRateLimit(http.HandlerFunc(loginUser)))
+	apiMux.Handle("POST /forgotPassword", withForgotPasswordRateLimit(http.HandlerFunc(forgotPassword)))
+	apiMux.Handle("POST /resetPassword", withResetPasswordRateLimit(http.HandlerFunc(resetPassword)))
 	apiMux.Handle("POST /logout", auth.RequireAuth(http.HandlerFunc(logoutUser)))
 	apiMux.Handle("POST /refreshToken", auth.RequireAuth(http.HandlerFunc(refreshToken)))
 	apiMux.Handle("GET /checkLogin", auth.RequireAuth(http.HandlerFunc(checkLogin)))

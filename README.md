@@ -152,9 +152,11 @@ Use the helper scripts that match how you installed Magpie.
 Optional email delivery env vars for the backend:
 - `MAIL_FROM_ADDRESS`: sender address used in outbound email, for example `no-reply@example.com`
 - `MAIL_FROM_NAME`: optional display name, for example `Magpie`
+- `PUBLIC_APP_URL`: public frontend base URL used in password reset links, for example `https://magpie.example.com`
 - `SMTP_HOST`: SMTP server host
 - `SMTP_PORT`: SMTP server port, defaults to `587`
 - `SMTP_USERNAME` and `SMTP_PASSWORD`: optional SMTP auth credentials; if one is set, both must be set
+- `PASSWORD_RESET_TOKEN_TTL_MINUTES`: optional reset-link lifetime, defaults to `30`
 
 ## Attributions & External Sources
 - [AbuseIPDB](https://www.abuseipdb.com/) — logo used with permission when linking to their site.

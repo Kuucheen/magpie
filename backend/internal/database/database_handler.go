@@ -168,6 +168,7 @@ func silentLogger() logger.Interface {
 func defaultMigrations() []any {
 	return []any{
 		domain.User{},
+		domain.PasswordResetToken{},
 		domain.Proxy{},
 		domain.BlacklistedIP{},
 		domain.BlacklistedRange{},

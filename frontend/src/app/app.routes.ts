@@ -4,6 +4,8 @@ import {ProxiesComponent} from './proxies/proxies.component';
 import {ProxyDetailComponent} from './proxies/proxy-detail/proxy-detail.component';
 import {RegisterComponent} from './auth/register/register.component';
 import {LoginComponent} from './auth/login/login.component';
+import {ForgotPasswordComponent} from './auth/forgot-password/forgot-password.component';
+import {ResetPasswordComponent} from './auth/reset-password/reset-password.component';
 import {AuthGuardService} from './services/authorization/auth-guard.service';
 import {AccountComponent} from './account/account.component';
 import {AuthGuardAdminService} from './services/authorization/auth-guard-admin.service';
@@ -27,6 +29,8 @@ const loginGuard = [AuthLoginGuardService];
 export const routes: Routes = [
   {path: 'register', component: RegisterComponent, canActivate: loginGuard},
   {path: 'login', component: LoginComponent, canActivate: loginGuard},
+  {path: 'forgot-password', component: ForgotPasswordComponent},
+  {path: 'reset-password', component: ResetPasswordComponent},
 
   {path: 'global/checker', component: AdminCheckerComponent, canActivate: adminGuard},
   {path: 'global/scraper', component: AdminScraperComponent, canActivate: adminGuard},

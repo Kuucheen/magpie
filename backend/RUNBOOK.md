@@ -205,9 +205,11 @@ Actions:
 - Use these env vars for password recovery or other outbound email:
   - `MAIL_FROM_ADDRESS`
   - `MAIL_FROM_NAME` (optional)
+  - `PUBLIC_APP_URL` (recommended for production reset links)
   - `SMTP_HOST`
   - `SMTP_PORT` (optional, defaults to `587`)
   - `SMTP_USERNAME` and `SMTP_PASSWORD` (optional; set both or neither)
+- Password reset links expire after `30` minutes by default; override with `PASSWORD_RESET_TOKEN_TTL_MINUTES` if needed.
 - Startup fails fast if email env vars are partially configured or invalid.
 - In multi-instance deployments, keep the same mail settings on all instances.
 

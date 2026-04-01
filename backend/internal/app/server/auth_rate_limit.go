@@ -21,6 +21,8 @@ const (
 	envAuthRequestWindowSeconds      = "AUTH_REQUEST_RATE_LIMIT_WINDOW_SECONDS"
 	envAuthLoginRequestsPerWindow    = "AUTH_LOGIN_RATE_LIMIT_PER_WINDOW"
 	envAuthRegisterRequestsPerWindow = "AUTH_REGISTER_RATE_LIMIT_PER_WINDOW"
+	envAuthForgotPasswordPerWindow   = "AUTH_FORGOT_PASSWORD_RATE_LIMIT_PER_WINDOW"
+	envAuthResetPasswordPerWindow    = "AUTH_RESET_PASSWORD_RATE_LIMIT_PER_WINDOW"
 	envAuthLoginFailureWindowSeconds = "AUTH_LOGIN_FAILURE_WINDOW_SECONDS"
 	envAuthLoginFailuresPerIP        = "AUTH_LOGIN_FAILURE_LIMIT_PER_IP"
 	envAuthLoginFailuresPerEmail     = "AUTH_LOGIN_FAILURE_LIMIT_PER_EMAIL"
@@ -29,6 +31,8 @@ const (
 	defaultAuthRequestWindowSeconds      = 60
 	defaultAuthLoginRequestsPerWindow    = 60
 	defaultAuthRegisterRequestsPerWindow = 20
+	defaultAuthForgotPasswordPerWindow   = 10
+	defaultAuthResetPasswordPerWindow    = 20
 	defaultAuthLoginFailureWindowSeconds = 15 * 60
 	defaultAuthLoginFailuresPerIP        = 30
 	defaultAuthLoginFailuresPerEmail     = 10
@@ -39,6 +43,8 @@ const (
 const (
 	authLoginRateExceededMessage    = "Too many login requests. Please try again later."
 	authRegisterRateExceededMessage = "Too many registration requests. Please try again later."
+	authForgotPasswordRateMessage   = "Too many password reset requests. Please try again later."
+	authResetPasswordRateMessage    = "Too many password reset attempts. Please try again later."
 	authLoginBlockedMessage         = "Too many login attempts. Please try again later."
 )
 
@@ -57,6 +63,8 @@ return {count, ttl}
 type authRateLimits struct {
 	loginRequests    *fixedWindowLimiter
 	registerRequests *fixedWindowLimiter
+	forgotPassword   *fixedWindowLimiter
+	resetPassword    *fixedWindowLimiter
 	loginFailures    *loginFailureLimiter
 }
 
@@ -105,6 +113,16 @@ func withRegisterRateLimit(next http.Handler) http.Handler {
 	return limits.registerRequests.wrap(next, authRegisterRateExceededMessage, "register_request")
 }
 
+func withForgotPasswordRateLimit(next http.Handler) http.Handler {
+	limits := getAuthRateLimits()
+	return limits.forgotPassword.wrap(next, authForgotPasswordRateMessage, "forgot_password_request")
+}
+
+func withResetPasswordRateLimit(next http.Handler) http.Handler {
+	limits := getAuthRateLimits()
+	return limits.resetPassword.wrap(next, authResetPasswordRateMessage, "reset_password_request")
+}
+
 func loginFailuresBlocked(r *http.Request, email string) (bool, time.Duration) {
 	limits := getAuthRateLimits()
 	return limits.loginFailures.isBlocked(getAuthRateLimitKey(r), email)
@@ -136,6 +154,18 @@ func getAuthRateLimits() *authRateLimits {
 			registerRequests: newFixedWindowLimiter(
 				"magpie:ratelimit:register:request",
 				int64(resolvePositiveEnvInt(envAuthRegisterRequestsPerWindow, defaultAuthRegisterRequestsPerWindow)),
+				requestWindow,
+				localFallbackMaxKeys,
+			),
+			forgotPassword: newFixedWindowLimiter(
+				"magpie:ratelimit:forgot_password:request",
+				int64(resolvePositiveEnvInt(envAuthForgotPasswordPerWindow, defaultAuthForgotPasswordPerWindow)),
+				requestWindow,
+				localFallbackMaxKeys,
+			),
+			resetPassword: newFixedWindowLimiter(
+				"magpie:ratelimit:reset_password:request",
+				int64(resolvePositiveEnvInt(envAuthResetPasswordPerWindow, defaultAuthResetPasswordPerWindow)),
 				requestWindow,
 				localFallbackMaxKeys,
 			),

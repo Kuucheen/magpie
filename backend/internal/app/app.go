@@ -52,6 +52,9 @@ func Run() error {
 	if err := support.RequireEmailConfigValid(); err != nil {
 		return err
 	}
+	if err := support.RequirePasswordResetConfigValid(); err != nil {
+		return err
+	}
 
 	backendPort := resolvePort("BACKEND_PORT", "backend-port", *backendPortFlag)
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

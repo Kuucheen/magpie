@@ -100,6 +100,30 @@
   font-size: 14px;
 }
 
+.auth-inline-link {
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--theme-link-color);
+  opacity: 0.84;
+  transition: color 0.18s ease, opacity 0.18s ease, text-decoration-color 0.18s ease;
+}
+
+.auth-inline-link:hover,
+.auth-inline-link:focus-visible {
+  color: var(--theme-link-color);
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.auth-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 a {
   color: var(--theme-link-color);
   text-decoration: none;

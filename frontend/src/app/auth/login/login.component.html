@@ -27,14 +27,13 @@
             <input id="password" type="password" pInputText formControlName="password" />
           </div>
 
-          <div class="text-right text-sm">
-            <a routerLink="/forgot-password" class="text-blue-500 hover:underline">Forgot password?</a>
-          </div>
-
           <!-- Remember login -->
-          <div class="flex items-center gap-2">
-            <p-checkbox inputId="remember" [(ngModel)]="rememberPass" [ngModelOptions]="{standalone: true}" [binary]="true"></p-checkbox>
-            <label for="remember">Remember login</label>
+          <div class="auth-options-row">
+            <div class="flex items-center gap-2">
+              <p-checkbox inputId="remember" [(ngModel)]="rememberPass" [ngModelOptions]="{standalone: true}" [binary]="true"></p-checkbox>
+              <label for="remember">Remember login</label>
+            </div>
+            <a routerLink="/forgot-password" class="auth-inline-link">Forgot password?</a>
           </div>
 
           <!-- Submit -->

@@ -438,7 +438,7 @@ export default function Hero() {
             </h1>
 
             <p className="mt-7 max-w-[31rem] text-lg leading-8 text-[#d8e1dc]">
-              A self-hostable multi-user proxy manager for teams, rotators, and scraping workloads.
+              A self-hostable multi-user proxy manager for personal use, teams, rotators, and scraping workloads.
             </p>
 
             <div className="mt-10 flex flex-col items-start gap-3 sm:flex-row">

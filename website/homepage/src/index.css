@@ -212,28 +212,8 @@
   isolation: isolate;
 }
 
-.hero-landing-image {
-  background: url('/hero-landing-background.png') center center / cover no-repeat;
-  filter: contrast(1.04) saturate(0.96);
-  transform: scale(1.06);
-}
-
-.hero-landing-cutout {
-  isolation: isolate;
-}
-
-.hero-landing-cutout-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.hero-landing-logo {
-  filter: grayscale(0.8) saturate(0.8) brightness(0.9) contrast(1.08) blur(0.12px);
-}
-
-.hero-mobile-wordmark {
-  text-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+.hero-bouncing-logo {
+  filter: drop-shadow(0 24px 40px rgba(0, 0, 0, 0.28));
 }
 
 @keyframes hero-scroll-cue {
@@ -299,16 +279,6 @@
 
 .hero-scroll-cue:hover .hero-scroll-cue-icon {
   transform: translateY(2px);
-}
-
-@media (max-width: 640px) {
-  .hero-mobile-wordmark {
-    letter-spacing: 0.12em;
-  }
-
-  .hero-landing-cutout-svg text {
-    letter-spacing: 38px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

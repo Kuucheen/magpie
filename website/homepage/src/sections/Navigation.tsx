@@ -36,7 +36,7 @@ export default function Navigation() {
     <>
       <div
         className={`fixed inset-x-0 top-0 z-50 px-4 pb-3 pt-4 transition-all duration-500 sm:px-6 ${
-          showNav ? 'translate-y-0 opacity-100' : '-translate-y-5 opacity-0 pointer-events-none'
+          showNav ? 'translate-y-0' : '-translate-y-5 pointer-events-none'
         }`}
       >
         <nav className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 rounded-full border border-white/10 bg-[#090a09]/78 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.26)] backdrop-blur-xl sm:px-5">

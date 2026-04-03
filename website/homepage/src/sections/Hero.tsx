@@ -129,7 +129,13 @@ function mergeIntervals(intervals: Interval[]) {
   return merged;
 }
 
-function getBlockedIntervalsForBand(mask: LogoMask, rect: Rect, bandTop: number, bandBottom: number) {
+function getBlockedIntervalsForBand(
+  mask: LogoMask,
+  rect: Rect,
+  bandTop: number,
+  bandBottom: number,
+  padding: number
+) {
   const localTop = Math.max(0, Math.floor(bandTop - rect.y));
   const localBottom = Math.min(mask.height, Math.ceil(bandBottom - rect.y));
   if (localBottom <= localTop) {
@@ -147,7 +153,6 @@ function getBlockedIntervalsForBand(mask: LogoMask, rect: Rect, bandTop: number,
   }
 
   const intervals: Interval[] = [];
-  const padding = 8;
   let x = 0;
 
   while (x < mask.width) {
@@ -213,6 +218,8 @@ function createBackgroundLayout(
 ) {
   const paddingX = stage.width >= 1024 ? 18 : 12;
   const paddingY = stage.width >= 768 ? 12 : 10;
+  const logoPadding = stage.width >= 768 ? 8 : 2;
+  const minimumSlotWidth = stage.width >= 768 ? 144 : 72;
   const region = { left: paddingX, right: stage.width - paddingX };
   const fragments: ProxyFragment[] = [];
   const mask =
@@ -225,14 +232,14 @@ function createBackgroundLayout(
   for (let lineTop = paddingY; lineTop + lineHeight <= stage.height - paddingY; lineTop += lineHeight) {
     const blocked =
       mask && logoRect
-        ? getBlockedIntervalsForBand(mask, logoRect, lineTop, lineTop + lineHeight)
+        ? getBlockedIntervalsForBand(mask, logoRect, lineTop, lineTop + lineHeight, logoPadding)
         : [];
     const slots = carveSlots(region, blocked);
 
     for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
       const slot = slots[slotIndex]!;
       const width = Math.max(0, Math.floor(slot.right - slot.left));
-      if (width < 144) {
+      if (width < minimumSlotWidth) {
         continue;
       }
 

@@ -13,7 +13,7 @@ const navLinks = [
 export default function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const showNav = isScrolled || isMobileMenuOpen;
+  const isFloating = isScrolled || isMobileMenuOpen;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -35,11 +35,17 @@ export default function Navigation() {
   return (
     <>
       <div
-        className={`fixed inset-x-0 top-0 z-50 px-4 pb-3 pt-4 transition-all duration-500 sm:px-6 ${
-          showNav ? 'translate-y-0' : '-translate-y-5 pointer-events-none'
+        className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
+          isFloating ? 'px-4 pb-3 pt-4 sm:px-6' : 'px-4 pb-0 pt-0 sm:px-6'
         }`}
       >
-        <nav className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 rounded-full border border-white/10 bg-[#090a09]/78 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.26)] backdrop-blur-xl sm:px-5">
+        <nav
+          className={`mx-auto flex w-full items-center justify-between gap-4 border bg-[#090a09]/78 px-4 py-3 backdrop-blur-xl transition-all duration-500 sm:px-5 ${
+            isFloating
+              ? 'max-w-6xl rounded-full border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.26)]'
+              : 'max-w-6xl rounded-b-[28px] border-white/8 border-t-0 shadow-none'
+          }`}
+        >
           <a
             href="#"
             className="flex items-center gap-3"
@@ -100,13 +106,24 @@ export default function Navigation() {
       </div>
 
       <div
-        className={`fixed inset-0 z-40 md:hidden transition-all duration-300 ${
-          isMobileMenuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+        className={`fixed inset-0 z-40 md:hidden ${
+          isMobileMenuOpen ? 'pointer-events-auto' : 'pointer-events-none'
         }`}
       >
-        <div className="absolute inset-0 bg-black/68 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+        <div
+          className={`absolute inset-0 bg-black/68 backdrop-blur-sm transition-opacity duration-300 ${
+            isMobileMenuOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
 
-        <div className="absolute left-4 right-4 top-24 rounded-[28px] border border-white/10 bg-[#090a09]/92 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+        <div
+          className={`absolute left-4 right-4 top-24 rounded-[28px] border border-white/10 bg-[#090a09]/92 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-[transform,opacity] duration-300 ${
+            isMobileMenuOpen
+              ? 'translate-y-0 scale-100 opacity-100'
+              : '-translate-y-3 scale-[0.98] opacity-0'
+          }`}
+        >
           <div className="space-y-2">
             {navLinks.map((link) => (
               <button

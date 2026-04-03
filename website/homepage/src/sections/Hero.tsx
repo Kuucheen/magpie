@@ -438,8 +438,8 @@ export default function Hero() {
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-7xl items-center px-4 pb-20 pt-28 sm:min-h-screen sm:px-6 sm:pb-16 sm:pt-24 lg:px-8">
-        <div className="grid w-full items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] lg:gap-8">
-          <div className="max-w-[34rem]">
+        <div className="grid w-full items-center gap-12 lg:grid-cols-[minmax(500px,1fr)_minmax(0,1fr)]">
+          <div className="max-w-[34rem] lg:justify-self-center">
             <h1 className="mt-2 max-w-[10ch] font-['Outfit',sans-serif] text-[clamp(3.35rem,10vw,5.8rem)] font-semibold uppercase leading-[0.94] tracking-[0.2em] text-[#f6f2ea]">
               MAGPIE
             </h1>
@@ -472,7 +472,7 @@ export default function Hero() {
             </div>
           </div>
 
-          <div className="relative flex min-h-[260px] items-center justify-center lg:min-h-[560px]">
+          <div className="relative flex min-h-[260px] items-center justify-center lg:min-h-[560px] lg:translate-x-8 lg:justify-self-center">
             <img
               ref={logoRef}
               src="/magpie-light-green.svg"

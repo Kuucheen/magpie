@@ -19,14 +19,15 @@ export default function DeferredSection({
   rootMargin = '400px 0px',
 }: DeferredSectionProps) {
   const sectionRef = useRef<HTMLElement | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(
+    () => typeof IntersectionObserver === 'undefined'
+  );
 
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return;
 
     if (typeof IntersectionObserver === 'undefined') {
-      setIsVisible(true);
       return;
     }
 

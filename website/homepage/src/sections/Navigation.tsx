@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Github, Menu, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ const navLinks = [
 ];
 
 export default function Navigation() {
+  const navRef = useRef<HTMLElement>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isFloating = isScrolled || isMobileMenuOpen;
@@ -26,7 +27,6 @@ export default function Navigation() {
   }, []);
 
   const scrollToSection = (href: string) => {
-    const navbarOffset = isFloating ? 112 : 88;
     window.dispatchEvent(new Event(REVEAL_ALL_DEFERRED_SECTIONS_EVENT));
     setIsMobileMenuOpen(false);
 
@@ -34,6 +34,8 @@ export default function Navigation() {
     if (!element) return;
 
     const scrollToTarget = (behavior: ScrollBehavior) => {
+      const navRect = navRef.current?.getBoundingClientRect();
+      const navbarOffset = navRect ? navRect.bottom - 50 : isFloating ? 0 : 0;
       const top = Math.max(0, window.scrollY + element.getBoundingClientRect().top - navbarOffset);
       window.scrollTo({ top, behavior });
     };
@@ -52,6 +54,7 @@ export default function Navigation() {
         }`}
       >
         <nav
+          ref={navRef}
           className={`mx-auto flex w-full items-center justify-between gap-4 border bg-[#090a09]/78 px-4 py-3 backdrop-blur-xl transition-all duration-500 sm:px-5 ${
             isFloating
               ? 'max-w-6xl rounded-full border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.26)]'

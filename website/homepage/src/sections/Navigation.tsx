@@ -3,6 +3,7 @@ import { Github, Menu, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
+const REVEAL_ALL_DEFERRED_SECTIONS_EVENT = 'magpie:reveal-deferred-sections';
 const navLinks = [
   { label: 'Features', href: '#features' },
   { label: 'How It Works', href: '#how-it-works' },
@@ -25,11 +26,22 @@ export default function Navigation() {
   }, []);
 
   const scrollToSection = (href: string) => {
-    const element = document.querySelector(href);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
+    const navbarOffset = isFloating ? 112 : 88;
+    window.dispatchEvent(new Event(REVEAL_ALL_DEFERRED_SECTIONS_EVENT));
     setIsMobileMenuOpen(false);
+
+    const element = document.querySelector(href);
+    if (!element) return;
+
+    const scrollToTarget = (behavior: ScrollBehavior) => {
+      const top = Math.max(0, window.scrollY + element.getBoundingClientRect().top - navbarOffset);
+      window.scrollTo({ top, behavior });
+    };
+
+    scrollToTarget('smooth');
+
+    window.setTimeout(() => scrollToTarget('auto'), 250);
+    window.setTimeout(() => scrollToTarget('auto'), 700);
   };
 
   return (

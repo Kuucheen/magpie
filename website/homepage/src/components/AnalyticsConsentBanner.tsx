@@ -44,6 +44,7 @@ export default function AnalyticsConsentBanner({
             side="top"
             align="start"
             sideOffset={10}
+            showArrow={false}
             className="w-[min(20rem,calc(100vw-3rem))] rounded-2xl border border-white/10 bg-[#090a09]/78 px-3 py-2 text-xs leading-5 text-[#b8b8b8] shadow-[0_20px_60px_rgba(0,0,0,0.32)] backdrop-blur-xl"
             style={{
               backdropFilter: 'blur(24px)',

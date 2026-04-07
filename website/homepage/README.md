@@ -71,3 +71,13 @@ export default defineConfig([
   },
 ])
 ```
+
+## Cloudflare Web Analytics
+
+This site supports an opt-in Cloudflare Web Analytics integration.
+
+1. Create a `.env` file in this directory.
+2. Add `VITE_CLOUDFLARE_BEACON_TOKEN=your-token-here`.
+3. Rebuild the site.
+
+If the token is missing, the consent banner stays hidden and the analytics script is never loaded.

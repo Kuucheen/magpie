@@ -1,8 +1,11 @@
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import Navigation from './sections/Navigation';
 import Hero from './sections/Hero';
 import Footer from './sections/Footer';
 import DeferredSection from './components/DeferredSection';
+import AnalyticsConsentBanner from './components/AnalyticsConsentBanner';
+import CloudflareAnalytics from './components/CloudflareAnalytics';
+import { useAnalyticsConsent } from './hooks/useAnalyticsConsent';
 
 const Features = lazy(() => import('./sections/Features'));
 const HowItWorks = lazy(() => import('./sections/HowItWorks'));
@@ -21,6 +24,11 @@ function SectionFallback({ minHeight }: SectionFallbackProps) {
 }
 
 function App() {
+  const cloudflareBeaconToken = import.meta.env.VITE_CLOUDFLARE_BEACON_TOKEN?.trim();
+  const analyticsConfigured = Boolean(cloudflareBeaconToken);
+  const { consent, setConsent, hasStoredPreference } = useAnalyticsConsent();
+  const [isConsentPreferencesOpen, setIsConsentPreferencesOpen] = useState(false);
+
   // Smooth scroll behavior
   useEffect(() => {
     // Check for reduced motion preference
@@ -38,8 +46,22 @@ function App() {
     };
   }, []);
 
+  const handleAcceptAnalytics = () => {
+    setConsent('granted');
+    setIsConsentPreferencesOpen(false);
+  };
+
+  const handleDeclineAnalytics = () => {
+    setConsent('denied');
+    setIsConsentPreferencesOpen(false);
+  };
+
+  const isConsentBannerOpen = analyticsConfigured && (!hasStoredPreference || isConsentPreferencesOpen);
+
   return (
     <div className="relative min-h-screen bg-[#0e0e0e] text-white overflow-x-hidden">
+      <CloudflareAnalytics consent={consent} token={cloudflareBeaconToken} />
+
       {/* Navigation */}
       <Navigation />
 
@@ -99,9 +121,21 @@ function App() {
           </DeferredSection>
 
           {/* Footer */}
-          <Footer />
+          <Footer
+            onManageAnalytics={
+              analyticsConfigured ? () => setIsConsentPreferencesOpen(true) : undefined
+            }
+          />
         </div>
       </main>
+
+      <AnalyticsConsentBanner
+        consent={consent}
+        isOpen={isConsentBannerOpen}
+        onAccept={handleAcceptAnalytics}
+        onDecline={handleDeclineAnalytics}
+        onClose={() => setIsConsentPreferencesOpen(false)}
+      />
     </div>
   );
 }

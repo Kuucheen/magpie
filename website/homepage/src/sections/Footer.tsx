@@ -1,4 +1,4 @@
-import { Github, FileText, Scale, Heart } from 'lucide-react';
+import { Github, FileText, Scale, Heart, Shield } from 'lucide-react';
 
 const footerLinks = [
   {
@@ -18,7 +18,11 @@ const footerLinks = [
   },
 ];
 
-export default function Footer() {
+interface FooterProps {
+  onManageAnalytics?: () => void;
+}
+
+export default function Footer({ onManageAnalytics }: FooterProps) {
   return (
     <footer className="relative w-full py-12 bg-[#0e0e0e] border-t border-[#1a1a1a]">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
@@ -85,6 +89,16 @@ export default function Footer() {
             </a>
             and contributors
           </p>
+          {onManageAnalytics ? (
+            <button
+              type="button"
+              onClick={onManageAnalytics}
+              className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#2a2a2a] px-4 py-2 text-xs text-[#a0a0a0] transition-colors duration-300 hover:border-[#3fa37a]/50 hover:text-white"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              Privacy choices
+            </button>
+          ) : null}
         </div>
       </div>
     </footer>

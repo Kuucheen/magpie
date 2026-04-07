@@ -55,6 +55,7 @@ export default function Navigation() {
       >
         <nav
           ref={navRef}
+          data-site-nav="true"
           className={`mx-auto flex w-full items-center justify-between gap-4 border bg-[#090a09]/78 px-4 py-3 backdrop-blur-xl transition-all duration-500 sm:px-5 ${
             isFloating
               ? 'max-w-6xl rounded-full border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.26)]'

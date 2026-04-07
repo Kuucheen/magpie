@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, ChevronDown } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
+const REVEAL_ALL_DEFERRED_SECTIONS_EVENT = 'magpie:reveal-deferred-sections';
 const PROXY_BREAK = '\u200b';
 const LINE_START_CURSOR: LayoutCursor = { segmentIndex: 0, graphemeIndex: 0 };
 const PROXY_TOKENS = createProxyTokens(2600);
@@ -281,18 +282,24 @@ export default function Hero() {
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [logoRect, setLogoRect] = useState<Rect | null>(null);
 
-  const scrollToInstall = () => {
-    const element = document.querySelector('#install');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
+  const scrollToSection = (href: string) => {
+    window.dispatchEvent(new Event(REVEAL_ALL_DEFERRED_SECTIONS_EVENT));
 
-  const scrollToFeatures = () => {
-    const element = document.querySelector('#features');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
+    const element = document.querySelector(href);
+    if (!element) return;
+
+    const scrollToTarget = (behavior: ScrollBehavior) => {
+      const navRect = document
+        .querySelector<HTMLElement>('[data-site-nav="true"]')
+        ?.getBoundingClientRect();
+      const navbarOffset = navRect ? navRect.bottom - 50 : 0;
+      const top = Math.max(0, window.scrollY + element.getBoundingClientRect().top - navbarOffset);
+      window.scrollTo({ top, behavior });
+    };
+
+    scrollToTarget('smooth');
+    window.setTimeout(() => scrollToTarget('auto'), 250);
+    window.setTimeout(() => scrollToTarget('auto'), 700);
   };
 
   useEffect(() => {
@@ -452,7 +459,7 @@ export default function Hero() {
               <Button
                 size="lg"
                 className="min-w-[12rem] bg-[#f2ede2] text-[#0f1311] transition-all duration-300 hover:scale-[1.02] hover:bg-[#faf5ea]"
-                onClick={scrollToInstall}
+                onClick={() => scrollToSection('#install')}
               >
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -489,7 +496,7 @@ export default function Hero() {
 
       <button
         type="button"
-        onClick={scrollToFeatures}
+        onClick={() => scrollToSection('#features')}
         className="hero-scroll-cue absolute bottom-6 left-1/2 z-20 flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full border border-white/10 bg-black/22 text-white/72 backdrop-blur-sm transition-[background-color,border-color,color,box-shadow] duration-300 hover:border-white/24 hover:bg-black/32 hover:text-white hover:shadow-[0_14px_32px_rgba(0,0,0,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 sm:bottom-8"
         aria-label="Scroll to features"
       >

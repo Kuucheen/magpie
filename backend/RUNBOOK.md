@@ -220,7 +220,7 @@ Actions:
 - Password recovery abuse controls include both request and identifier-based throttles; tune with:
   - `AUTH_FORGOT_PASSWORD_RATE_LIMIT_PER_WINDOW`
   - `AUTH_RESET_PASSWORD_RATE_LIMIT_PER_WINDOW`
-  - `AUTH_FORGOT_PASSWORD_LIMIT_PER_EMAIL`
+  - `AUTH_FORGOT_PASSWORD_LIMIT_PER_EMAIL` (default `1` per minute)
   - `AUTH_RESET_PASSWORD_LIMIT_PER_EMAIL`
 - Expired password reset tokens are cleaned up automatically; tune with:
   - `PASSWORD_RESET_CLEANUP_INTERVAL`

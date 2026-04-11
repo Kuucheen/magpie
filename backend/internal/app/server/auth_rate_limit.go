@@ -35,7 +35,7 @@ const (
 	defaultAuthRegisterRequestsPerWindow = 20
 	defaultAuthForgotPasswordPerWindow   = 10
 	defaultAuthResetPasswordPerWindow    = 20
-	defaultAuthForgotPasswordPerEmail    = 3
+	defaultAuthForgotPasswordPerEmail    = 1
 	defaultAuthResetPasswordPerEmail     = 5
 	defaultAuthLoginFailureWindowSeconds = 15 * 60
 	defaultAuthLoginFailuresPerIP        = 30

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ func TestForgotPassword_GenericSuccessAndEmailSentForExistingUser(t *testing.T) 
 		t.Fatalf("hash password: %v", err)
 	}
 
-	user := domain.User{Email: "reset@example.com", Password: hashedPassword, Role: "user"}
+	user := domain.User{Email: "forgot-rate@example.com", Password: hashedPassword, Role: "user"}
 	if err := database.DB.Create(&user).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -36,7 +37,7 @@ func TestForgotPassword_GenericSuccessAndEmailSentForExistingUser(t *testing.T) 
 
 	var deliveredTo string
 	var deliveredBody string
-	sendEmailFn = func(cfg support.EmailConfig, toAddress, subject, body string) error {
+	queueEmailFn = func(kind, toAddress, subject, body string) error {
 		deliveredTo = toAddress
 		deliveredBody = body
 		return nil
@@ -82,6 +83,50 @@ func TestForgotPassword_GenericSuccessAndEmailSentForExistingUser(t *testing.T) 
 	}
 }
 
+func TestForgotPassword_ReturnsServiceUnavailableWhenEmailOutboxPersistFails(t *testing.T) {
+	setupPasswordResetTestDB(t)
+
+	hashedPassword, err := support.HashPassword("current-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	user := domain.User{Email: "reset@example.com", Password: hashedPassword, Role: "user"}
+	if err := database.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	restore := stubPasswordResetConfigForTests(t)
+	defer restore()
+
+	queueEmailFn = func(kind, toAddress, subject, body string) error {
+		return errors.New("outbox unavailable")
+	}
+
+	body, err := json.Marshal(dto.PasswordResetRequest{Email: user.Email})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/forgotPassword", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	forgotPassword(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+
+	var tokenCount int64
+	if err := database.DB.Model(&domain.PasswordResetToken{}).Where("user_id = ?", user.ID).Count(&tokenCount).Error; err != nil {
+		t.Fatalf("count reset tokens: %v", err)
+	}
+	if tokenCount != 0 {
+		t.Fatalf("token count = %d, want 0", tokenCount)
+	}
+}
+
 func TestForgotPassword_GenericSuccessForUnknownUser(t *testing.T) {
 	setupPasswordResetTestDB(t)
 
@@ -89,7 +134,7 @@ func TestForgotPassword_GenericSuccessForUnknownUser(t *testing.T) {
 	defer restore()
 
 	sent := false
-	sendEmailFn = func(cfg support.EmailConfig, toAddress, subject, body string) error {
+	queueEmailFn = func(kind, toAddress, subject, body string) error {
 		sent = true
 		return nil
 	}
@@ -113,6 +158,68 @@ func TestForgotPassword_GenericSuccessForUnknownUser(t *testing.T) {
 	}
 }
 
+func TestForgotPassword_RateLimitsByEmailAcrossIPs(t *testing.T) {
+	setupPasswordResetTestDB(t)
+	resetAuthRateLimitsForTest(t)
+	t.Setenv(envAuthForgotPasswordPerEmail, "1")
+
+	hashedPassword, err := support.HashPassword("current-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	user := domain.User{Email: "reset@example.com", Password: hashedPassword, Role: "user"}
+	if err := database.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	restore := stubPasswordResetConfigForTests(t)
+	defer restore()
+
+	limits := getAuthRateLimits()
+	if limits.forgotPerEmail == nil {
+		t.Fatal("forgotPerEmail limiter was nil")
+	}
+	if limits.forgotPerEmail.limit != 1 {
+		t.Fatalf("forgotPerEmail limit = %d, want 1", limits.forgotPerEmail.limit)
+	}
+	if blocked, retryAfter := forgotPasswordEmailBlocked(user.Email); blocked {
+		t.Fatalf("forgotPasswordEmailBlocked before first request = true (retryAfter=%s)", retryAfter)
+	}
+
+	deliveryCount := 0
+	queueEmailFn = func(kind, toAddress, subject, body string) error {
+		deliveryCount++
+		return nil
+	}
+
+	body, err := json.Marshal(dto.PasswordResetRequest{Email: user.Email})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/forgotPassword", bytes.NewReader(body))
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstReq.RemoteAddr = "203.0.113.10:1234"
+	firstRec := httptest.NewRecorder()
+	forgotPassword(firstRec, firstReq)
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("first status code = %d, want %d", firstRec.Code, http.StatusOK)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/forgotPassword", bytes.NewReader(body))
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondReq.RemoteAddr = "198.51.100.20:4321"
+	secondRec := httptest.NewRecorder()
+	forgotPassword(secondRec, secondReq)
+	if secondRec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status code = %d, want %d", secondRec.Code, http.StatusTooManyRequests)
+	}
+	if deliveryCount != 1 {
+		t.Fatalf("delivery count = %d, want 1", deliveryCount)
+	}
+}
+
 func TestResetPasswordWithToken_ChangesPasswordAndDeletesTokens(t *testing.T) {
 	setupPasswordResetTestDB(t)
 
@@ -121,7 +228,7 @@ func TestResetPasswordWithToken_ChangesPasswordAndDeletesTokens(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 
-	user := domain.User{Email: "reset@example.com", Password: oldHash, Role: "user"}
+	user := domain.User{Email: "reset-rate@example.com", Password: oldHash, Role: "user"}
 	if err := database.DB.Create(&user).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -141,7 +248,7 @@ func TestResetPasswordWithToken_ChangesPasswordAndDeletesTokens(t *testing.T) {
 		revokeUserSessions = previousRevoke
 	})
 
-	if err := resetPasswordWithToken(rawToken, "new-password-123"); err != nil {
+	if _, err := resetPasswordWithToken(rawToken, "New-password-123"); err != nil {
 		t.Fatalf("resetPasswordWithToken returned error: %v", err)
 	}
 
@@ -149,7 +256,7 @@ func TestResetPasswordWithToken_ChangesPasswordAndDeletesTokens(t *testing.T) {
 	if err := database.DB.First(&updatedUser, user.ID).Error; err != nil {
 		t.Fatalf("reload user: %v", err)
 	}
-	if !support.CheckPasswordHash("new-password-123", updatedUser.Password) {
+	if !support.CheckPasswordHash("New-password-123", updatedUser.Password) {
 		t.Fatal("new password hash was not stored")
 	}
 
@@ -190,7 +297,7 @@ func TestResetPasswordWithToken_RollsBackWhenSessionRevocationFails(t *testing.T
 		revokeUserSessions = previousRevoke
 	})
 
-	err = resetPasswordWithToken(rawToken, "new-password-123")
+	_, err = resetPasswordWithToken(rawToken, "New-password-123")
 	if !errors.Is(err, errRevokeActiveSessions) {
 		t.Fatalf("expected errRevokeActiveSessions, got %v", err)
 	}
@@ -212,6 +319,79 @@ func TestResetPasswordWithToken_RollsBackWhenSessionRevocationFails(t *testing.T
 	}
 }
 
+func TestResetPassword_RateLimitsByResolvedEmailAcrossIPs(t *testing.T) {
+	setupPasswordResetTestDB(t)
+	resetAuthRateLimitsForTest(t)
+	t.Setenv(envAuthResetPasswordPerEmail, "1")
+
+	oldHash, err := support.HashPassword("old-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	user := domain.User{Email: "reset@example.com", Password: oldHash, Role: "user"}
+	if err := database.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	rawToken := "rate-limited-reset-token"
+	if err := database.DB.Create(&domain.PasswordResetToken{
+		UserID:    user.ID,
+		TokenHash: hashPasswordResetToken(rawToken),
+		ExpiresAt: time.Now().Add(30 * time.Minute),
+	}).Error; err != nil {
+		t.Fatalf("create reset token: %v", err)
+	}
+
+	restore := stubPasswordResetConfigForTests(t)
+	defer restore()
+
+	limits := getAuthRateLimits()
+	if limits.resetPerEmail == nil {
+		t.Fatal("resetPerEmail limiter was nil")
+	}
+	if limits.resetPerEmail.limit != 1 {
+		t.Fatalf("resetPerEmail limit = %d, want 1", limits.resetPerEmail.limit)
+	}
+	if blocked, retryAfter := resetPasswordEmailBlocked(user.Email); blocked {
+		t.Fatalf("resetPasswordEmailBlocked before first request = true (retryAfter=%s)", retryAfter)
+	}
+
+	firstBody, err := json.Marshal(dto.PasswordResetConfirm{
+		Token:       rawToken,
+		NewPassword: "short",
+	})
+	if err != nil {
+		t.Fatalf("marshal first request: %v", err)
+	}
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/resetPassword", bytes.NewReader(firstBody))
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstReq.RemoteAddr = "203.0.113.30:1234"
+	firstRec := httptest.NewRecorder()
+	resetPassword(firstRec, firstReq)
+	if firstRec.Code != http.StatusBadRequest {
+		t.Fatalf("first status code = %d, want %d", firstRec.Code, http.StatusBadRequest)
+	}
+
+	secondBody, err := json.Marshal(dto.PasswordResetConfirm{
+		Token:       rawToken,
+		NewPassword: "New-password-123",
+	})
+	if err != nil {
+		t.Fatalf("marshal second request: %v", err)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/resetPassword", bytes.NewReader(secondBody))
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondReq.RemoteAddr = "198.51.100.40:4321"
+	secondRec := httptest.NewRecorder()
+	resetPassword(secondRec, secondReq)
+	if secondRec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status code = %d, want %d", secondRec.Code, http.StatusTooManyRequests)
+	}
+}
+
 func setupPasswordResetTestDB(t *testing.T) {
 	t.Helper()
 
@@ -229,7 +409,7 @@ func setupPasswordResetTestDB(t *testing.T) {
 	if _, err := database.SetupDB(func(cfg *database.Config) {
 		cfg.ExistingDB = db
 		cfg.AutoMigrate = true
-		cfg.Migrations = []any{domain.User{}, domain.PasswordResetToken{}}
+		cfg.Migrations = []any{domain.User{}, domain.PasswordResetToken{}, domain.EmailOutbox{}}
 		cfg.SeedDefaults = false
 	}); err != nil {
 		t.Fatalf("setup db: %v", err)
@@ -242,9 +422,10 @@ func stubPasswordResetConfigForTests(t *testing.T) func() {
 	previousEmailConfig := readEmailConfigFn
 	previousResetConfig := readPasswordResetConfigFn
 	previousBuildURL := buildPasswordResetURLFn
-	previousSendEmail := sendEmailFn
+	previousQueueEmail := queueEmailFn
 	previousGetUserByEmail := getUserByEmailFn
 	previousCreateToken := createPasswordResetToken
+	previousDeleteTokens := deleteResetTokensForUser
 	previousNow := nowFn
 
 	readEmailConfigFn = func() (support.EmailConfig, error) {
@@ -258,21 +439,23 @@ func stubPasswordResetConfigForTests(t *testing.T) func() {
 	readPasswordResetConfigFn = func() (support.PasswordResetConfig, error) {
 		return support.PasswordResetConfig{PublicAppURL: "https://app.example", TokenTTL: 30 * time.Minute}, nil
 	}
-	buildPasswordResetURLFn = func(cfg support.PasswordResetConfig, r *http.Request, token string) (string, error) {
+	buildPasswordResetURLFn = func(cfg support.PasswordResetConfig, token string) (string, error) {
 		return "https://app.example/reset-password?token=" + token, nil
 	}
-	sendEmailFn = previousSendEmail
+	queueEmailFn = previousQueueEmail
 	getUserByEmailFn = database.GetUserByEmail
 	createPasswordResetToken = database.CreatePasswordResetToken
+	deleteResetTokensForUser = database.DeletePasswordResetTokensForUser
 	nowFn = time.Now
 
 	return func() {
 		readEmailConfigFn = previousEmailConfig
 		readPasswordResetConfigFn = previousResetConfig
 		buildPasswordResetURLFn = previousBuildURL
-		sendEmailFn = previousSendEmail
+		queueEmailFn = previousQueueEmail
 		getUserByEmailFn = previousGetUserByEmail
 		createPasswordResetToken = previousCreateToken
+		deleteResetTokensForUser = previousDeleteTokens
 		nowFn = previousNow
 	}
 }
@@ -290,4 +473,27 @@ func extractTokenFromBody(body string) string {
 		token = token[:newline]
 	}
 	return token
+}
+
+func resetAuthRateLimitsForTest(t *testing.T) {
+	t.Helper()
+
+	previousOnce := authRateLimitsOnce
+	previousLimits := globalAuthLimits
+	previousRetryAt := authRedisRetryAt
+
+	t.Setenv("REDIS_URL", "redis://127.0.0.1:1")
+	t.Setenv("redisUrl", "redis://127.0.0.1:1")
+	_ = support.CloseRedisClient()
+
+	authRateLimitsOnce = sync.Once{}
+	globalAuthLimits = authRateLimits{}
+	authRedisRetryAt = time.Time{}
+
+	t.Cleanup(func() {
+		_ = support.CloseRedisClient()
+		authRateLimitsOnce = previousOnce
+		globalAuthLimits = previousLimits
+		authRedisRetryAt = previousRetryAt
+	})
 }

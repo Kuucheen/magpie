@@ -12,6 +12,7 @@ import {Password} from 'primeng/password';
 import {DeleteAccount} from '../models/DeleteAccount';
 import {UserService} from '../services/authorization/user.service';
 import {DialogModule} from 'primeng/dialog';
+import { passwordPolicyMessages, passwordPolicyValidators } from '../auth/password-policy';
 
 @Component({
     selector: 'app-account',
@@ -46,6 +47,7 @@ export class AccountComponent {
     red: '#dc2626',
     purple: '#8b5cf6'
   };
+  readonly passwordRequirements = passwordPolicyMessages();
 
   constructor(private fb: FormBuilder,
               private http: HttpService,
@@ -55,7 +57,7 @@ export class AccountComponent {
     this.passwordForm = this.fb.group(
       {
         oldPassword: ['', [Validators.required]],
-        newPassword: ['', [Validators.required, Validators.minLength(8)]],
+        newPassword: ['', passwordPolicyValidators()],
         newPasswordCheck: ['', [Validators.required]],
       },
       { validators: this.passwordsMatchValidator }

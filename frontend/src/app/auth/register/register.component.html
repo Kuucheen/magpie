@@ -29,8 +29,12 @@
           @if (registerForm.get('password')?.hasError?.('required') && registerForm.get('password')?.touched) {
             <small class="p-error">Password is required</small>
           }
-          @if (registerForm.get('password')?.hasError?.('minlength') && registerForm.get('password')?.touched) {
-            <small class="p-error">Minimum length is 8 characters</small>
+          @if (registerForm.get('password')?.invalid && registerForm.get('password')?.touched && !registerForm.get('password')?.hasError?.('required')) {
+            <div class="flex flex-col gap-1">
+              @for (requirement of passwordRequirements; track requirement) {
+                <small class="p-error">{{ requirement }}</small>
+              }
+            </div>
           }
         </div>
 

@@ -23,6 +23,8 @@ const (
 	envAuthRegisterRequestsPerWindow = "AUTH_REGISTER_RATE_LIMIT_PER_WINDOW"
 	envAuthForgotPasswordPerWindow   = "AUTH_FORGOT_PASSWORD_RATE_LIMIT_PER_WINDOW"
 	envAuthResetPasswordPerWindow    = "AUTH_RESET_PASSWORD_RATE_LIMIT_PER_WINDOW"
+	envAuthForgotPasswordPerEmail    = "AUTH_FORGOT_PASSWORD_LIMIT_PER_EMAIL"
+	envAuthResetPasswordPerEmail     = "AUTH_RESET_PASSWORD_LIMIT_PER_EMAIL"
 	envAuthLoginFailureWindowSeconds = "AUTH_LOGIN_FAILURE_WINDOW_SECONDS"
 	envAuthLoginFailuresPerIP        = "AUTH_LOGIN_FAILURE_LIMIT_PER_IP"
 	envAuthLoginFailuresPerEmail     = "AUTH_LOGIN_FAILURE_LIMIT_PER_EMAIL"
@@ -33,6 +35,8 @@ const (
 	defaultAuthRegisterRequestsPerWindow = 20
 	defaultAuthForgotPasswordPerWindow   = 10
 	defaultAuthResetPasswordPerWindow    = 20
+	defaultAuthForgotPasswordPerEmail    = 3
+	defaultAuthResetPasswordPerEmail     = 5
 	defaultAuthLoginFailureWindowSeconds = 15 * 60
 	defaultAuthLoginFailuresPerIP        = 30
 	defaultAuthLoginFailuresPerEmail     = 10
@@ -64,7 +68,9 @@ type authRateLimits struct {
 	loginRequests    *fixedWindowLimiter
 	registerRequests *fixedWindowLimiter
 	forgotPassword   *fixedWindowLimiter
+	forgotPerEmail   *fixedWindowLimiter
 	resetPassword    *fixedWindowLimiter
+	resetPerEmail    *fixedWindowLimiter
 	loginFailures    *loginFailureLimiter
 }
 
@@ -138,6 +144,38 @@ func clearLoginFailures(r *http.Request, email string) {
 	limits.loginFailures.recordSuccess(getAuthRateLimitKey(r), email)
 }
 
+func forgotPasswordEmailBlocked(email string) (bool, time.Duration) {
+	limits := getAuthRateLimits()
+	if limits == nil || limits.forgotPerEmail == nil {
+		return false, 0
+	}
+	return limits.forgotPerEmail.currentIdentifier(email)
+}
+
+func recordForgotPasswordAttempt(email string) {
+	limits := getAuthRateLimits()
+	if limits == nil || limits.forgotPerEmail == nil {
+		return
+	}
+	limits.forgotPerEmail.incrementIdentifier(email)
+}
+
+func resetPasswordEmailBlocked(email string) (bool, time.Duration) {
+	limits := getAuthRateLimits()
+	if limits == nil || limits.resetPerEmail == nil {
+		return false, 0
+	}
+	return limits.resetPerEmail.currentIdentifier(email)
+}
+
+func recordResetPasswordAttempt(email string) {
+	limits := getAuthRateLimits()
+	if limits == nil || limits.resetPerEmail == nil {
+		return
+	}
+	limits.resetPerEmail.incrementIdentifier(email)
+}
+
 func getAuthRateLimits() *authRateLimits {
 	authRateLimitsOnce.Do(func() {
 		requestWindow := time.Duration(resolvePositiveEnvInt(envAuthRequestWindowSeconds, defaultAuthRequestWindowSeconds)) * time.Second
@@ -163,9 +201,21 @@ func getAuthRateLimits() *authRateLimits {
 				requestWindow,
 				localFallbackMaxKeys,
 			),
+			forgotPerEmail: newFixedWindowLimiter(
+				"magpie:ratelimit:forgot_password:email",
+				int64(resolvePositiveEnvInt(envAuthForgotPasswordPerEmail, defaultAuthForgotPasswordPerEmail)),
+				requestWindow,
+				localFallbackMaxKeys,
+			),
 			resetPassword: newFixedWindowLimiter(
 				"magpie:ratelimit:reset_password:request",
 				int64(resolvePositiveEnvInt(envAuthResetPasswordPerWindow, defaultAuthResetPasswordPerWindow)),
+				requestWindow,
+				localFallbackMaxKeys,
+			),
+			resetPerEmail: newFixedWindowLimiter(
+				"magpie:ratelimit:reset_password:email",
+				int64(resolvePositiveEnvInt(envAuthResetPasswordPerEmail, defaultAuthResetPasswordPerEmail)),
 				requestWindow,
 				localFallbackMaxKeys,
 			),
@@ -496,6 +546,26 @@ func (l *fixedWindowLimiter) key(parts ...string) string {
 		return "unknown"
 	}
 	return strings.Join(filtered, ":")
+}
+
+func (l *fixedWindowLimiter) currentIdentifier(identifier string) (bool, time.Duration) {
+	if l == nil {
+		return false, 0
+	}
+
+	count, ttl := l.current(l.key(hashIdentifier(strings.ToLower(strings.TrimSpace(identifier)))))
+	if count >= l.limit {
+		return true, ttl
+	}
+
+	return false, 0
+}
+
+func (l *fixedWindowLimiter) incrementIdentifier(identifier string) {
+	if l == nil {
+		return
+	}
+	l.increment(l.key(hashIdentifier(strings.ToLower(strings.TrimSpace(identifier)))))
 }
 
 func (l *loginFailureLimiter) isBlocked(ip string, email string) (bool, time.Duration) {

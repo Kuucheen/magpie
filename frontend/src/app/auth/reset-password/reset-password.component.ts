@@ -10,6 +10,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { HttpService } from '../../services/http.service';
 import { NotificationService } from '../../services/notification-service.service';
 import { ThemeService } from '../../services/theme.service';
+import { passwordPolicyMessages, passwordPolicyValidators } from '../password-policy';
 
 @Component({
   selector: 'app-reset-password',
@@ -27,6 +28,7 @@ import { ThemeService } from '../../services/theme.service';
 export class ResetPasswordComponent {
   resetPasswordForm: FormGroup;
   token: string;
+  readonly passwordRequirements = passwordPolicyMessages();
 
   constructor(
     private fb: FormBuilder,
@@ -38,7 +40,7 @@ export class ResetPasswordComponent {
   ) {
     this.token = this.route.snapshot.queryParamMap.get('token')?.trim() ?? '';
     this.resetPasswordForm = this.fb.group({
-      password: ['', [Validators.required, Validators.minLength(8)]],
+      password: ['', passwordPolicyValidators()],
       confirmPassword: ['', [Validators.required]],
     });
   }

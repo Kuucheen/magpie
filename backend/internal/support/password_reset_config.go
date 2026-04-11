@@ -2,7 +2,6 @@ package support
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"path"
 	"strconv"
@@ -60,20 +59,31 @@ func ReadPasswordResetConfig() (PasswordResetConfig, error) {
 }
 
 func RequirePasswordResetConfigValid() error {
-	if _, err := ReadPasswordResetConfig(); err != nil {
+	emailCfg, err := ReadEmailConfig()
+	if err != nil {
+		return err
+	}
+	if !emailCfg.IsConfigured() {
+		return nil
+	}
+
+	cfg, err := ReadPasswordResetConfig()
+	if err != nil {
+		log.Error("password reset configuration invalid", "error", err)
+		return err
+	}
+	if strings.TrimSpace(cfg.PublicAppURL) == "" {
+		err := fmt.Errorf("password reset configuration incomplete: set %s", envPublicAppURL)
 		log.Error("password reset configuration invalid", "error", err)
 		return err
 	}
 	return nil
 }
 
-func BuildPasswordResetURL(cfg PasswordResetConfig, r *http.Request, token string) (string, error) {
+func BuildPasswordResetURL(cfg PasswordResetConfig, token string) (string, error) {
 	baseURL := cfg.PublicAppURL
 	if baseURL == "" {
-		baseURL = requestPublicBaseURL(r)
-	}
-	if baseURL == "" {
-		return "", fmt.Errorf("password reset link cannot be built: set %s or send requests with a public Origin/Host", envPublicAppURL)
+		return "", fmt.Errorf("password reset link cannot be built: set %s", envPublicAppURL)
 	}
 
 	base, err := normalizePublicURL(baseURL)
@@ -112,39 +122,4 @@ func normalizePublicURL(raw string) (*url.URL, error) {
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed, nil
-}
-
-func requestPublicBaseURL(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-
-	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
-		if _, err := normalizePublicURL(origin); err == nil {
-			return origin
-		}
-	}
-
-	scheme := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
-	if scheme == "" {
-		if r.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-	}
-
-	host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
-	if host == "" {
-		host = strings.TrimSpace(r.Host)
-	}
-	if host == "" {
-		return ""
-	}
-
-	candidate := scheme + "://" + host
-	if _, err := normalizePublicURL(candidate); err != nil {
-		return ""
-	}
-	return candidate
 }

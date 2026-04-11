@@ -8,6 +8,7 @@ import { ResetPasswordComponent } from './reset-password.component';
 import { HttpService } from '../../services/http.service';
 import { NotificationService } from '../../services/notification-service.service';
 import { ThemeService } from '../../services/theme.service';
+import { passwordMinLength } from '../password-policy';
 
 describe('ResetPasswordComponent', () => {
   let component: ResetPasswordComponent;
@@ -62,15 +63,15 @@ describe('ResetPasswordComponent', () => {
   it('should submit the token and new password', () => {
     resetPasswordWithTokenSpy.and.returnValue(of({ message: 'Password reset successfully' }));
     component.resetPasswordForm.setValue({
-      password: 'newpassword123',
-      confirmPassword: 'newpassword123',
+      password: 'StrongPassword123',
+      confirmPassword: 'StrongPassword123',
     });
 
     component.onSubmit();
 
     expect(resetPasswordWithTokenSpy).toHaveBeenCalledWith({
       token: 'reset-token',
-      newPassword: 'newpassword123',
+      newPassword: 'StrongPassword123',
     });
     expect(showSuccessSpy).toHaveBeenCalledWith('Password reset successfully');
   });
@@ -83,12 +84,25 @@ describe('ResetPasswordComponent', () => {
       }))
     );
     component.resetPasswordForm.setValue({
-      password: 'newpassword123',
-      confirmPassword: 'newpassword123',
+      password: 'StrongPassword123',
+      confirmPassword: 'StrongPassword123',
     });
 
     component.onSubmit();
 
     expect(showErrorSpy).toHaveBeenCalledWith('Could not reset password: Invalid or expired password reset token');
+  });
+
+  it('should reject weak passwords before submitting', () => {
+    component.resetPasswordForm.setValue({
+      password: 'weakpass',
+      confirmPassword: 'weakpass',
+    });
+
+    component.onSubmit();
+
+    expect(resetPasswordWithTokenSpy).not.toHaveBeenCalled();
+    expect(component.resetPasswordForm.get('password')?.hasError('minlength')).toBeTrue();
+    expect(passwordMinLength).toBe(12);
   });
 });

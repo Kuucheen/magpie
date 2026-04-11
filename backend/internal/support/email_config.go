@@ -71,6 +71,10 @@ func (c EmailConfig) HasSMTPAuth() bool {
 	return c.SMTPUsername != "" && c.SMTPPassword != ""
 }
 
+func (c EmailConfig) SMTPImplicitTLS() bool {
+	return c.SMTPPort == 465
+}
+
 func (c EmailConfig) SMTPAddress() string {
 	if c.SMTPHost == "" || c.SMTPPort <= 0 {
 		return ""

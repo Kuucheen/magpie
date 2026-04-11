@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +89,50 @@ func TestCreateUserWithFirstAdminRole_AllowsBootstrapWhenEnabled(t *testing.T) {
 	}
 	if user.Role != "admin" {
 		t.Fatalf("expected first user role admin, got %q", user.Role)
+	}
+}
+
+func TestLoginUser_FindsUserCaseInsensitively(t *testing.T) {
+	setupUserRegistrationTestDB(t)
+
+	hashedPassword, err := support.HashPassword("Valid-password-123")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	user := domain.User{
+		Email:    "mixedcase@example.com",
+		Password: hashedPassword,
+		Role:     "user",
+	}
+	if err := database.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	body, err := json.Marshal(dto.Credentials{
+		Email:    "MixedCase@Example.Com",
+		Password: "Valid-password-123",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	loginUser(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if strings.TrimSpace(payload["token"]) == "" {
+		t.Fatal("expected login token in response")
 	}
 }
 
@@ -574,7 +619,7 @@ func TestChangePasswordWithSessionRevocation_RejectsInvalidOldPassword(t *testin
 
 	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
 		OldPassword: "wrong-old",
-		NewPassword: "new-secret",
+		NewPassword: "New-secret-123",
 	})
 	if !errors.Is(err, errInvalidOldPassword) {
 		t.Fatalf("expected errInvalidOldPassword, got %v", err)
@@ -623,7 +668,7 @@ func TestChangePasswordWithSessionRevocation_RevocationFailureDoesNotChangePassw
 
 	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
 		OldPassword: "correct-old",
-		NewPassword: "new-secret",
+		NewPassword: "New-secret-123",
 	})
 	if !errors.Is(err, errRevokeActiveSessions) {
 		t.Fatalf("expected errRevokeActiveSessions, got %v", err)
@@ -660,7 +705,7 @@ func TestChangePasswordWithSessionRevocation_RollbackFailureIsSurfaced(t *testin
 
 	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
 		OldPassword: "correct-old",
-		NewPassword: "new-secret",
+		NewPassword: "New-secret-123",
 	})
 	if !errors.Is(err, errPasswordRollbackFailed) {
 		t.Fatalf("expected errPasswordRollbackFailed, got %v", err)
@@ -706,7 +751,7 @@ func TestChangePasswordWithSessionRevocation_RollbackDoesNotClobberConcurrentPas
 
 	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
 		OldPassword: "correct-old",
-		NewPassword: "new-secret",
+		NewPassword: "New-secret-123",
 	})
 	if !errors.Is(err, errRevokeActiveSessions) {
 		t.Fatalf("expected errRevokeActiveSessions, got %v", err)
@@ -747,7 +792,7 @@ func TestChangePasswordWithSessionRevocation_ChangesPasswordBeforeRevocation(t *
 
 	err = changePasswordWithSessionRevocation(1, currentHash, dto.ChangePassword{
 		OldPassword: "correct-old",
-		NewPassword: "new-secret",
+		NewPassword: "New-secret-123",
 	})
 	if err != nil {
 		t.Fatalf("changePasswordWithSessionRevocation returned error: %v", err)

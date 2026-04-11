@@ -8,6 +8,7 @@ import { HttpService } from '../../services/http.service';
 import { NotificationService } from '../../services/notification-service.service';
 import { ThemeService } from '../../services/theme.service';
 import { UserService } from '../../services/authorization/user.service';
+import { passwordMinLength } from '../password-policy';
 
 describe('RegisterComponent', () => {
   let component: RegisterComponent;
@@ -64,8 +65,8 @@ describe('RegisterComponent', () => {
     );
     component.registerForm.setValue({
       email: 'test@example.com',
-      password: 'password123',
-      confirmPassword: 'password123',
+      password: 'StrongPassword123',
+      confirmPassword: 'StrongPassword123',
     });
 
     component.onRegister();
@@ -82,12 +83,26 @@ describe('RegisterComponent', () => {
     );
     component.registerForm.setValue({
       email: 'test@example.com',
-      password: 'password123',
-      confirmPassword: 'password123',
+      password: 'StrongPassword123',
+      confirmPassword: 'StrongPassword123',
     });
 
     component.onRegister();
 
     expect(showErrorSpy).toHaveBeenCalledWith('Registration failed: Unable to reach the server');
+  });
+
+  it('should reject weak passwords before calling the backend', () => {
+    component.registerForm.setValue({
+      email: 'test@example.com',
+      password: 'weakpass',
+      confirmPassword: 'weakpass',
+    });
+
+    component.onRegister();
+
+    expect(registerUserSpy).not.toHaveBeenCalled();
+    expect(component.registerForm.get('password')?.hasError('minlength')).toBeTrue();
+    expect(passwordMinLength).toBe(12);
   });
 });

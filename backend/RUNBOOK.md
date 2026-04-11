@@ -205,11 +205,26 @@ Actions:
 - Use these env vars for password recovery or other outbound email:
   - `MAIL_FROM_ADDRESS`
   - `MAIL_FROM_NAME` (optional)
-  - `PUBLIC_APP_URL` (recommended for production reset links)
+  - `PUBLIC_APP_URL` (required for password reset links)
   - `SMTP_HOST`
-  - `SMTP_PORT` (optional, defaults to `587`)
+  - `SMTP_PORT` (optional, defaults to `587`; `465` also works for implicit TLS SMTP)
   - `SMTP_USERNAME` and `SMTP_PASSWORD` (optional; set both or neither)
 - Password reset links expire after `30` minutes by default; override with `PASSWORD_RESET_TOKEN_TTL_MINUTES` if needed.
+- Reset and confirmation emails are written to the durable DB outbox and retried by the background worker; tune with:
+  - `EMAIL_OUTBOX_POLL_INTERVAL` or `EMAIL_OUTBOX_POLL_INTERVAL_SECONDS`
+  - `EMAIL_OUTBOX_BATCH_SIZE`
+  - `EMAIL_PROCESSING_TIMEOUT` or `EMAIL_PROCESSING_TIMEOUT_SECONDS`
+  - `EMAIL_OUTBOX_RETENTION_HOURS`
+  - `EMAIL_RETRY_BASE_SECONDS`
+  - `EMAIL_MAX_ATTEMPTS`
+- Password recovery abuse controls include both request and identifier-based throttles; tune with:
+  - `AUTH_FORGOT_PASSWORD_RATE_LIMIT_PER_WINDOW`
+  - `AUTH_RESET_PASSWORD_RATE_LIMIT_PER_WINDOW`
+  - `AUTH_FORGOT_PASSWORD_LIMIT_PER_EMAIL`
+  - `AUTH_RESET_PASSWORD_LIMIT_PER_EMAIL`
+- Expired password reset tokens are cleaned up automatically; tune with:
+  - `PASSWORD_RESET_CLEANUP_INTERVAL`
+  - `PASSWORD_RESET_CLEANUP_INTERVAL_MINUTES`
 - Startup fails fast if email env vars are partially configured or invalid.
 - In multi-instance deployments, keep the same mail settings on all instances.
 

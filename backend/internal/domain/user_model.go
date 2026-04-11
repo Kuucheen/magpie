@@ -65,8 +65,8 @@ var validScrapeSourceListColumns = map[string]struct{}{
 
 type User struct {
 	ID       uint   `gorm:"primaryKey;autoIncrement"`
-	Email    string `gorm:"uniqueIndex;not null;size:255"`
-	Password string `gorm:"not null;size:100;check:length(password) >= 8" json:"-"`
+	Email    string `gorm:"not null;size:255"`
+	Password string `gorm:"not null;size:100" json:"-"`
 	Role     string `gorm:"not null;default:'user';check:role IN ('user', 'admin')"`
 
 	//Settings

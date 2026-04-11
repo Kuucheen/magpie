@@ -73,6 +73,7 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBodyLimited(w, r, &credentials, resolveJSONMaxBodyBytes()) {
 		return
 	}
+	credentials.Email = auth.NormalizeEmail(credentials.Email)
 
 	user := domain.User{
 		Email:    credentials.Email,
@@ -85,9 +86,8 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if password is provided
-	if len(user.Password) < 8 {
-		writeError(w, "Password must be at least 8 characters long", http.StatusBadRequest)
+	if err := support.ValidatePassword(user.Password); err != nil {
+		writeError(w, support.PasswordValidationMessage(), http.StatusBadRequest)
 		return
 	}
 
@@ -155,6 +155,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBodyLimited(w, r, &credentials, resolveJSONMaxBodyBytes()) {
 		return
 	}
+	credentials.Email = auth.NormalizeEmail(credentials.Email)
 
 	if blocked, retryAfter := loginFailuresBlocked(r, credentials.Email); blocked {
 		setRetryAfterHeader(w, retryAfter)
@@ -164,7 +165,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user domain.User
-	if err := database.DB.Where("email = ?", credentials.Email).First(&user).Error; err != nil {
+	if err := database.DB.Where("LOWER(email) = ?", credentials.Email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			consumeInvalidPasswordWork(credentials.Password)
 			recordLoginFailure(r, credentials.Email)
@@ -464,6 +465,10 @@ func changePassword(w http.ResponseWriter, r *http.Request) {
 
 	var payload dto.ChangePassword
 	if !decodeJSONBodyLimited(w, r, &payload, resolveJSONMaxBodyBytes()) {
+		return
+	}
+	if err := support.ValidatePassword(payload.NewPassword); err != nil {
+		writeError(w, support.PasswordValidationMessage(), http.StatusBadRequest)
 		return
 	}
 

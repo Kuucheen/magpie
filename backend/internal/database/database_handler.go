@@ -169,6 +169,7 @@ func defaultMigrations() []any {
 	return []any{
 		domain.User{},
 		domain.PasswordResetToken{},
+		domain.EmailOutbox{},
 		domain.Proxy{},
 		domain.BlacklistedIP{},
 		domain.BlacklistedRange{},
@@ -288,6 +289,7 @@ type schemaEnsureStep struct {
 
 func ensurePostMigrateSchemas(db *gorm.DB) error {
 	steps := []schemaEnsureStep{
+		{name: "user auth schema", run: ensureUserAuthSchema},
 		{name: "proxy reputation schema", run: ensureProxyReputationSchema},
 		{name: "proxy statistics retention schema", run: ensureProxyStatisticsRetentionSchema},
 		{name: "proxy timeline retention schema", run: ensureProxyTimelineRetentionSchema},
@@ -297,6 +299,52 @@ func ensurePostMigrateSchemas(db *gorm.DB) error {
 	}
 
 	return runSchemaEnsureSteps(db, steps)
+}
+
+func ensureUserAuthSchema(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("nil database connection")
+	}
+	if !db.Migrator().HasTable(&domain.User{}) {
+		return nil
+	}
+
+	type duplicateEmailRow struct {
+		Normalized string
+		Count      int64
+	}
+
+	var duplicate duplicateEmailRow
+	err := db.Raw(`
+		SELECT LOWER(TRIM(email)) AS normalized, COUNT(*) AS count
+		FROM users
+		GROUP BY LOWER(TRIM(email))
+		HAVING COUNT(*) > 1
+		LIMIT 1
+	`).Scan(&duplicate).Error
+	if err != nil {
+		return fmt.Errorf("detect duplicate canonical emails: %w", err)
+	}
+	if strings.TrimSpace(duplicate.Normalized) != "" {
+		return fmt.Errorf("duplicate user emails exist after normalization: %s", duplicate.Normalized)
+	}
+
+	if err := db.Exec(`UPDATE users SET email = LOWER(TRIM(email)) WHERE email <> LOWER(TRIM(email)) OR email <> TRIM(email)`).Error; err != nil {
+		return fmt.Errorf("normalize stored user emails: %w", err)
+	}
+
+	stmts := []string{
+		`DROP INDEX IF EXISTS idx_users_email`,
+		`DROP INDEX IF EXISTS users_email_key`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower_unique ON users (LOWER(email))`,
+	}
+	for _, stmt := range stmts {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("user auth schema: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func runSchemaEnsureSteps(db *gorm.DB, steps []schemaEnsureStep) error {

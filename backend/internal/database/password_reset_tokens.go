@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 func GetUserByEmail(email string) (domain.User, error) {
 	var user domain.User
-	err := DB.Where("email = ?", email).First(&user).Error
+	err := DB.Where("LOWER(email) = ?", email).First(&user).Error
 	return user, err
 }
 
@@ -41,4 +42,17 @@ func DeletePasswordResetTokensForUser(tx *gorm.DB, userID uint) error {
 		tx = DB
 	}
 	return tx.Where("user_id = ?", userID).Delete(&domain.PasswordResetToken{}).Error
+}
+
+func DeleteExpiredPasswordResetTokens(ctx context.Context, before time.Time) (int64, error) {
+	tx := DB
+	if ctx != nil {
+		tx = tx.WithContext(ctx)
+	}
+
+	result := tx.Where("expires_at <= ?", before.UTC()).Delete(&domain.PasswordResetToken{})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
 }

@@ -20,7 +20,7 @@
   <section class="password-card">
     <div class="password-card__head">
       <h3 class="mt-0">Change Password</h3>
-      <p class="muted">Use at least 8 characters.</p>
+      <p class="muted">Use the same password policy as registration and password reset.</p>
     </div>
 
     <form [formGroup]="passwordForm" (ngSubmit)="onSubmit()" class="form-grid">
@@ -28,8 +28,8 @@
       <!-- Current password -->
       <div class="field">
         <label for="oldPassword">Current password</label>
-        <p-password inputId="newPassword"
-                    formControlName="newPassword"
+        <p-password inputId="oldPassword"
+                    formControlName="oldPassword"
                     [feedback]="false"
                     [toggleMask]="true"
                     promptLabel="Enter a password"
@@ -56,8 +56,12 @@
         @if (passwordForm.get('newPassword')?.hasError('required') && passwordForm.get('newPassword')?.touched) {
           <small class="field-error">New password is required</small>
         }
-        @if (passwordForm.get('newPassword')?.hasError('minlength') && passwordForm.get('newPassword')?.touched) {
-          <small class="field-error">Minimum length is 8 characters</small>
+        @if (passwordForm.get('newPassword')?.invalid && passwordForm.get('newPassword')?.touched && !passwordForm.get('newPassword')?.hasError('required')) {
+          <div class="flex flex-col gap-1">
+            @for (requirement of passwordRequirements; track requirement) {
+              <small class="field-error">{{ requirement }}</small>
+            }
+          </div>
         }
       </div>
 

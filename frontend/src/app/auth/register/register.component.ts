@@ -13,6 +13,7 @@ import { UserService } from '../../services/authorization/user.service';
 import { AuthInterceptor } from '../../services/auth-interceptor.interceptor';
 import { NotificationService } from '../../services/notification-service.service';
 import { ThemeService } from '../../services/theme.service';
+import { passwordPolicyMessages, passwordPolicyValidators } from '../password-policy';
 
 @Component({
   selector: 'app-register',
@@ -29,6 +30,7 @@ import { ThemeService } from '../../services/theme.service';
 })
 export class RegisterComponent {
   registerForm: FormGroup;
+  readonly passwordRequirements = passwordPolicyMessages();
 
   constructor(
     private fb: FormBuilder,
@@ -40,35 +42,33 @@ export class RegisterComponent {
   ) {
     this.registerForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required, Validators.minLength(8)]],
+      password: ['', passwordPolicyValidators()],
       confirmPassword: ['', [Validators.required]]
     });
   }
 
   onRegister() {
-    if (this.registerForm.valid) {
-      const { email, password, confirmPassword } = this.registerForm.value;
-
-      if (!this.passwordIsTheSame() || password.length < 8) {
-        return;
-      }
-
-      const user: User = { email, password };
-
-      this.http.registerUser(user).subscribe({
-        next: (response) => {
-          localStorage.removeItem('magpie-jwt');
-          AuthInterceptor.setToken(response.token);
-          UserService.setLoggedIn(true);
-          this.user.getAndSetRole();
-          this.notification.showSuccess('Registration successful');
-          this.router.navigate(['/']);
-        },
-        error: (error: HttpErrorResponse) => {
-          this.notification.showError(`Registration failed: ${this.getRegistrationErrorMessage(error)}`);
-        }
-      });
+    if (this.registerForm.invalid || !this.passwordIsTheSame()) {
+      this.registerForm.markAllAsTouched();
+      return;
     }
+
+    const { email, password } = this.registerForm.value;
+    const user: User = { email, password };
+
+    this.http.registerUser(user).subscribe({
+      next: (response) => {
+        localStorage.removeItem('magpie-jwt');
+        AuthInterceptor.setToken(response.token);
+        UserService.setLoggedIn(true);
+        this.user.getAndSetRole();
+        this.notification.showSuccess('Registration successful');
+        this.router.navigate(['/']);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.notification.showError(`Registration failed: ${this.getRegistrationErrorMessage(error)}`);
+      }
+    });
   }
 
   passwordIsTheSame() {

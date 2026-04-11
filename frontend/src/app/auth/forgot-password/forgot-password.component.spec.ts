@@ -1,4 +1,4 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 import { of, throwError } from 'rxjs';
@@ -58,6 +58,7 @@ describe('ForgotPasswordComponent', () => {
 
     expect(showSuccessSpy).toHaveBeenCalled();
     expect(component.submitted()).toBeTrue();
+    expect(component.cooldownSeconds()).toBe(60);
   });
 
   it('should show the backend error detail when reset requests fail', () => {
@@ -72,5 +73,21 @@ describe('ForgotPasswordComponent', () => {
     component.onSubmit();
 
     expect(showErrorSpy).toHaveBeenCalledWith('Could not send password reset email: Password recovery is not configured');
+  });
+
+  it('should start a countdown from Retry-After on rate limits', () => {
+    requestPasswordResetSpy.and.returnValue(
+      throwError(() => new HttpErrorResponse({
+        status: 429,
+        headers: new HttpHeaders({ 'Retry-After': '42' }),
+        error: { error: 'Too many password reset requests. Please try again later.' },
+      }))
+    );
+    component.forgotPasswordForm.setValue({ email: 'user@example.com' });
+
+    component.onSubmit();
+
+    expect(component.cooldownSeconds()).toBe(42);
+    expect(component.sendButtonLabel()).toBe('42s');
   });
 });

@@ -124,6 +124,30 @@
   gap: 1rem;
 }
 
+.auth-input-action {
+  position: relative;
+}
+
+input.auth-input-action__field.p-inputtext {
+  width: 100%;
+  padding-right: 6.25rem;
+  height: 3rem;
+}
+
+.auth-input-action__button.p-button {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  transform: translateY(-50%);
+  width: auto;
+  min-width: 4.75rem;
+  height: 2.2rem;
+  margin-top: 0;
+  padding-inline: 0.9rem;
+  border-radius: 0.9rem;
+  z-index: 1;
+}
+
 a {
   color: var(--theme-link-color);
   text-decoration: none;

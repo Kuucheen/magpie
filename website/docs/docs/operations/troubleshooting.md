@@ -7,9 +7,9 @@ Possible causes:
 - Missing `Authorization: Bearer <token>`
 - Expired or invalid JWT
 - Token signed with different `JWT_SECRET`
-- Token revoked (logout/password change/account delete)
+- Token revoked (logout/password change/password reset/account delete)
 
-## `429 Too Many Requests` on register/login
+## `429 Too Many Requests` on auth routes
 
 Auth endpoints are rate limited.
 
@@ -18,6 +18,31 @@ Check:
 - `AUTH_*` rate-limit env values
 - response `Retry-After` header
 - whether multiple users are sharing a single untrusted proxy IP without proper `TRUSTED_PROXY_CIDRS`
+- whether forgot-password/reset-password requests are hitting identifier-based throttles in addition to request-volume throttles
+
+Common defaults:
+
+- forgot-password per-email limit: `AUTH_FORGOT_PASSWORD_LIMIT_PER_EMAIL=1`
+- forgot-password/reset-password request window: `AUTH_REQUEST_RATE_LIMIT_WINDOW_SECONDS=60`
+
+## Password reset email not arriving
+
+Check:
+
+- mail envs: `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
+- `PUBLIC_APP_URL` is set correctly
+- SMTP provider accepts the sender address and credentials
+- outbox worker envs if mail is backing up or retrying (`EMAIL_OUTBOX_*`, `EMAIL_RETRY_BASE_SECONDS`, `EMAIL_MAX_ATTEMPTS`)
+- backend logs for SMTP, outbox, or configuration errors
+
+## Password reset link is invalid or expired
+
+Possible causes:
+
+- token already used
+- token expired (`PASSWORD_RESET_TOKEN_TTL_MINUTES`)
+- a newer forgot-password request replaced the previous token
+- copied link was truncated or modified
 
 ## Registration fails in production
 

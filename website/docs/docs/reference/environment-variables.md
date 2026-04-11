@@ -52,10 +52,43 @@ Auth route rate limiting:
 - `AUTH_REQUEST_RATE_LIMIT_WINDOW_SECONDS` (default `60`)
 - `AUTH_LOGIN_RATE_LIMIT_PER_WINDOW` (default `60`)
 - `AUTH_REGISTER_RATE_LIMIT_PER_WINDOW` (default `20`)
+- `AUTH_FORGOT_PASSWORD_RATE_LIMIT_PER_WINDOW` (default `10`)
+- `AUTH_RESET_PASSWORD_RATE_LIMIT_PER_WINDOW` (default `20`)
+- `AUTH_FORGOT_PASSWORD_LIMIT_PER_EMAIL` (default `1`)
+- `AUTH_RESET_PASSWORD_LIMIT_PER_EMAIL` (default `5`)
 - `AUTH_LOGIN_FAILURE_WINDOW_SECONDS` (default `900`)
 - `AUTH_LOGIN_FAILURE_LIMIT_PER_IP` (default `30`)
 - `AUTH_LOGIN_FAILURE_LIMIT_PER_EMAIL` (default `10`)
 - `AUTH_RATE_LIMIT_LOCAL_FALLBACK_MAX_KEYS` (default `10000`)
+
+## Outbound email and password recovery
+
+Mail configuration:
+
+- `MAIL_FROM_ADDRESS`: sender address used for outbound auth/recovery mail.
+- `MAIL_FROM_NAME`: optional sender display name.
+- `SMTP_HOST`: SMTP server hostname.
+- `SMTP_PORT` (default `587`): SMTP submission port. Port `587` requires successful `STARTTLS`; port `465` uses implicit TLS.
+- `SMTP_USERNAME`: optional SMTP auth username. Set together with `SMTP_PASSWORD`.
+- `SMTP_PASSWORD`: optional SMTP auth password. Set together with `SMTP_USERNAME`.
+- `PUBLIC_APP_URL`: required base URL used to build password-reset links.
+
+Password reset behavior:
+
+- `PASSWORD_RESET_TOKEN_TTL_MINUTES` (default `30`)
+- `PASSWORD_RESET_CLEANUP_INTERVAL`: duration string for expired-token cleanup
+- `PASSWORD_RESET_CLEANUP_INTERVAL_MINUTES`: integer fallback for expired-token cleanup
+
+Durable email outbox worker:
+
+- `EMAIL_OUTBOX_POLL_INTERVAL`: duration string poll interval
+- `EMAIL_OUTBOX_POLL_INTERVAL_SECONDS`: integer fallback poll interval
+- `EMAIL_OUTBOX_BATCH_SIZE` (default `10`)
+- `EMAIL_PROCESSING_TIMEOUT`: duration string for stale in-flight email recovery
+- `EMAIL_PROCESSING_TIMEOUT_SECONDS`: integer fallback processing timeout
+- `EMAIL_OUTBOX_RETENTION_HOURS` (default `24`): how long sent outbox rows are kept before cleanup
+- `EMAIL_RETRY_BASE_SECONDS` (default `5`): exponential backoff base for email retries
+- `EMAIL_MAX_ATTEMPTS` (default `4`): max delivery attempts before abandoning an outbox row
 
 ## Observability and health
 

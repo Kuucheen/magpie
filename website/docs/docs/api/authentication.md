@@ -4,7 +4,7 @@ Magpie uses JWT bearer tokens for API authentication.
 
 ## Token lifecycle
 
-- Public auth endpoints: `POST /api/register`, `POST /api/login`
+- Public auth endpoints: `POST /api/register`, `POST /api/login`, `POST /api/forgotPassword`, `POST /api/resetPassword`
 - Token rotation endpoint: `POST /api/refreshToken` (requires auth)
 - Logout endpoint: `POST /api/logout` (requires auth; revokes current token)
 - JWTs contain `user_id`, `role`, `exp`, `iat`, and `jti` claims.
@@ -32,9 +32,17 @@ If the header is missing, malformed, or invalid, protected endpoints return `401
 
 - Tokens are revocable by token id (`jti`) and by user-wide revoke cutoff (used for password change/account deletion/session revocation).
 - Revocation state is stored in Redis.
+- Password change and successful password reset revoke active sessions under normal revocation-store operation.
 - `AUTH_REVOCATION_FAIL_OPEN` controls outage behavior when Redis is unavailable:
   - default: `true` (availability-first)
   - when `false`: revocation-store outages cause strict auth failures.
+
+## Password recovery
+
+- Password recovery uses short-lived, single-use reset tokens stored only as hashes in the database.
+- Reset links are generated from `PUBLIC_APP_URL` rather than request headers.
+- Reset requests are throttled both by request volume and by target account identifier.
+- Default per-email forgot-password throttle is 1 request per 60 seconds.
 
 ## GraphQL authentication
 

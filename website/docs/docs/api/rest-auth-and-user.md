@@ -9,14 +9,20 @@ Request:
 ```json
 {
   "email": "admin@example.com",
-  "password": "change-me-now"
+  "password": "StrongPassword123"
 }
 ```
 
 Behavior:
 
 - Validates email format.
-- Requires password length `>= 8`.
+- Normalizes email input to trimmed lowercase.
+- Requires a strong password:
+  - at least 12 characters
+  - at least one uppercase letter
+  - at least one lowercase letter
+  - at least one number
+  - no whitespace
 - First user in DB becomes `admin`; later users become `user`.
 - Registration policy can be restricted by env flags (`DISABLE_PUBLIC_REGISTRATION`, `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`).
 - Route is rate-limited (`429` + `Retry-After`).
@@ -39,7 +45,7 @@ Request:
 ```json
 {
   "email": "admin@example.com",
-  "password": "change-me-now"
+  "password": "StrongPassword123"
 }
 ```
 
@@ -54,8 +60,69 @@ Success (`200`):
 
 Notes:
 
+- Login email lookup is case-insensitive.
 - Invalid credentials return `401` with `{"error":"Invalid email or password"}`.
 - Login is protected by request and failure-based rate limiting (`429` + `Retry-After`).
+
+## `POST /api/forgotPassword`
+
+Requests a password-reset email.
+
+Request:
+
+```json
+{
+  "email": "admin@example.com"
+}
+```
+
+Success (`200`):
+
+```json
+{
+  "message": "If an account exists for that email, a password reset link has been sent."
+}
+```
+
+Notes:
+
+- Response is intentionally generic.
+- If outbound email is configured and the account exists, the backend stores a hashed reset token and queues the email in the durable outbox.
+- Reset links are built from `PUBLIC_APP_URL`; request headers are not trusted for link generation.
+- Route is rate-limited both by request volume and by normalized email address.
+- Default per-email throttle is 1 reset-email request per 60 seconds.
+- If password recovery is not configured or the email outbox cannot persist the request, the endpoint returns `503`.
+
+## `POST /api/resetPassword`
+
+Consumes a reset token and sets a new password.
+
+Request:
+
+```json
+{
+  "token": "raw-reset-token",
+  "newPassword": "StrongPassword123"
+}
+```
+
+Success (`200`):
+
+```json
+{
+  "message": "Password reset successfully"
+}
+```
+
+Notes:
+
+- Reset tokens are single-use and expire automatically.
+- `newPassword` must satisfy the same strong password policy as registration.
+- Invalid or expired tokens return `401`.
+- Route is rate-limited both by request volume and, for valid tokens, by the resolved account email.
+- Successful reset removes all outstanding reset tokens for that user.
+- Successful reset revokes active sessions under normal revocation-store operation.
+- A confirmation email is queued after a successful reset.
 
 ## `POST /api/refreshToken`
 
@@ -93,11 +160,17 @@ Request:
 ```json
 {
   "oldPassword": "old-value",
-  "newPassword": "new-value"
+  "newPassword": "StrongPassword123"
 }
 ```
 
 Success returns a JSON string body: `"Password changed successfully"`.
+
+Notes:
+
+- `oldPassword` must match the current password.
+- `newPassword` must satisfy the same strong password policy as registration and password reset.
+- Successful password change revokes active sessions.
 
 ## `POST /api/deleteAccount`
 

@@ -14,10 +14,29 @@
   - `DISABLE_PUBLIC_REGISTRATION=true`
   - enable `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=true` only during controlled bootstrap windows
 - Enforce auth-rate limiting defaults unless you have measured reasons to relax them.
+- Registration, password reset, and password change all enforce the same strong password policy.
+- User email identity is normalized and stored/enforced case-insensitively.
+
+## Password recovery hardening
+
+- Password reset links are generated from fixed `PUBLIC_APP_URL` rather than request headers.
+- Reset tokens are random, single-use, short-lived, and stored only as hashes.
+- Successful password reset removes all outstanding reset tokens for the user.
+- Forgot-password and reset-password are throttled by both request volume and account identifier.
+- Default forgot-password per-email throttle is 1 request per minute.
+- Reset and confirmation emails are written to the durable DB outbox and retried asynchronously.
+
+## SMTP and transport hardening
+
+- SMTP delivery fails closed unless TLS is established.
+- Port `587` requires successful `STARTTLS` before auth or message submission.
+- Port `465` uses implicit TLS.
+- Set `SMTP_USERNAME` and `SMTP_PASSWORD` together or leave both unset.
 
 ## JWT revocation behavior
 
 - Logout, password-change, and account-delete flows revoke existing sessions.
+- Successful password reset also revokes active sessions under normal revocation-store operation.
 - Revocation state lives in Redis.
 - Default `AUTH_REVOCATION_FAIL_OPEN=true` favors availability during Redis outage.
 - For strict security posture, set `AUTH_REVOCATION_FAIL_OPEN=false` and ensure Redis HA.

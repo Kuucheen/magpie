@@ -217,6 +217,7 @@ Actions:
   - `EMAIL_OUTBOX_RETENTION_HOURS`
   - `EMAIL_RETRY_BASE_SECONDS`
   - `EMAIL_MAX_ATTEMPTS`
+- Email delivery scales horizontally: every backend instance polls and claims outbox rows from the shared database. Only outbox housekeeping remains leader-coordinated.
 - Password recovery abuse controls include both request and identifier-based throttles; tune with:
   - `AUTH_FORGOT_PASSWORD_RATE_LIMIT_PER_WINDOW`
   - `AUTH_RESET_PASSWORD_RATE_LIMIT_PER_WINDOW`

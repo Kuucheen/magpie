@@ -38,6 +38,8 @@ Before production rollout, run the load/soak gate documented in [Performance Val
 
 Leader-based routines use Redis locks. If running multiple backend instances, ensure all instances share the same Redis and database.
 
+Email delivery scales horizontally through the shared database outbox: every backend instance can claim and send queued messages, while only outbox maintenance remains leader-coordinated.
+
 For rotating proxy listeners, set per-instance identity vars so instances are distinguishable in the UI and API:
 
 - `MAGPIE_INSTANCE_ID`: stable unique id for the instance.

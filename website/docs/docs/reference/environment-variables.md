@@ -90,6 +90,8 @@ Durable email outbox worker:
 - `EMAIL_RETRY_BASE_SECONDS` (default `5`): exponential backoff base for email retries
 - `EMAIL_MAX_ATTEMPTS` (default `4`): max delivery attempts before abandoning an outbox row
 
+In multi-instance deployments, all backend instances can poll and deliver from the shared outbox concurrently. Stale-message recovery and sent-row cleanup remain leader-coordinated.
+
 ## Observability and health
 
 - `ALLOW_PUBLIC_OBSERVABILITY_ENDPOINTS` (default non-production `true`, production `false`): controls public access to `/healthz`, `/readyz`, `/metrics`.

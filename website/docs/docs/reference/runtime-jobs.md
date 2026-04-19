@@ -23,7 +23,10 @@ Magpie starts several long-running routines on backend startup.
 
 Some routines are executed with leader-election semantics using Redis locks to avoid duplicate execution across instances.
 
-This includes the email delivery routine, which processes outbox rows and retries failed deliveries asynchronously.
+The durable email outbox is split across two coordination models:
+
+- Every backend instance runs the email delivery worker and can poll, claim, and send queued outbox rows in parallel.
+- Outbox housekeeping remains leader-coordinated to avoid duplicate stale-message recovery and sent-row cleanup work.
 
 ## Timers
 

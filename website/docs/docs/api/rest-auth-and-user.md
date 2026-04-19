@@ -88,6 +88,7 @@ Notes:
 
 - Response is intentionally generic.
 - If outbound email is configured and the account exists, the backend stores a hashed reset token and queues the email in the durable outbox.
+- In multi-instance deployments, every backend instance can process queued outbox rows from the shared database.
 - Reset links are built from `PUBLIC_APP_URL`; request headers are not trusted for link generation.
 - Route is rate-limited both by request volume and by normalized email address.
 - Default per-email throttle is 1 reset-email request per 60 seconds.

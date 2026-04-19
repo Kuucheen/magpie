@@ -24,7 +24,7 @@
 - Successful password reset removes all outstanding reset tokens for the user.
 - Forgot-password and reset-password are throttled by both request volume and account identifier.
 - Default forgot-password per-email throttle is 1 request per minute.
-- Reset and confirmation emails are written to the durable DB outbox and retried asynchronously.
+- Reset and confirmation emails are written to the durable DB outbox and retried asynchronously across backend instances.
 
 ## SMTP and transport hardening
 

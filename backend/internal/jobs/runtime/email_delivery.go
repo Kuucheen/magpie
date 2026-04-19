@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 )
 
 const (
-	emailDeliveryLockKey              = "magpie:leader:email_delivery"
+	emailDeliveryMaintenanceLockKey   = "magpie:leader:email_delivery_maintenance"
 	envEmailOutboxPollInterval        = "EMAIL_OUTBOX_POLL_INTERVAL"
 	envEmailOutboxPollIntervalSeconds = "EMAIL_OUTBOX_POLL_INTERVAL_SECONDS"
 	envEmailOutboxBatchSize           = "EMAIL_OUTBOX_BATCH_SIZE"
@@ -36,11 +35,19 @@ func StartEmailDeliveryRoutine(ctx context.Context) {
 		ctx = context.Background()
 	}
 
-	err := support.RunWithLeader(ctx, emailDeliveryLockKey, support.DefaultLeadershipTTL, func(leaderCtx context.Context) {
-		runEmailDeliveryLoop(leaderCtx)
+	runEmailDeliveryLoop(ctx)
+}
+
+func StartEmailDeliveryMaintenanceRoutine(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	err := support.RunWithLeader(ctx, emailDeliveryMaintenanceLockKey, support.DefaultLeadershipTTL, func(leaderCtx context.Context) {
+		runEmailDeliveryMaintenanceLoop(leaderCtx)
 	})
-	if err != nil && !errors.Is(err, context.Canceled) {
-		log.Error("Email delivery routine stopped", "error", err)
+	if err != nil && ctx.Err() == nil {
+		log.Error("Email delivery maintenance routine stopped", "error", err)
 	}
 }
 
@@ -60,16 +67,23 @@ func runEmailDeliveryLoop(ctx context.Context) {
 	}
 }
 
-func runEmailDeliveryPass(ctx context.Context) {
-	processingTimeout := resolveEmailProcessingTimeout()
-	if processingTimeout > 0 {
-		if recovered, err := database.RequeueStaleEmailOutboxMessages(ctx, time.Now().UTC().Add(-processingTimeout)); err != nil {
-			log.Error("Failed to requeue stale email outbox messages", "error", err)
-		} else if recovered > 0 {
-			log.Warn("Recovered stale email outbox messages", "count", recovered)
+func runEmailDeliveryMaintenanceLoop(ctx context.Context) {
+	ticker := time.NewTicker(resolveEmailOutboxPollInterval())
+	defer ticker.Stop()
+
+	runEmailDeliveryMaintenancePass(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			runEmailDeliveryMaintenancePass(ctx)
 		}
 	}
+}
 
+func runEmailDeliveryPass(ctx context.Context) {
 	batchSize := resolveEmailOutboxBatchSize()
 	messages, err := database.ClaimPendingEmailOutbox(ctx, batchSize, time.Now().UTC())
 	if err != nil {
@@ -78,7 +92,6 @@ func runEmailDeliveryPass(ctx context.Context) {
 	}
 	if len(messages) == 0 {
 		updateEmailQueueDepthMetric(ctx)
-		cleanupSentEmailOutbox(ctx)
 		return
 	}
 
@@ -94,6 +107,18 @@ func runEmailDeliveryPass(ctx context.Context) {
 	wg.Wait()
 
 	updateEmailQueueDepthMetric(ctx)
+}
+
+func runEmailDeliveryMaintenancePass(ctx context.Context) {
+	processingTimeout := resolveEmailProcessingTimeout()
+	if processingTimeout > 0 {
+		if recovered, err := database.RequeueStaleEmailOutboxMessages(ctx, time.Now().UTC().Add(-processingTimeout)); err != nil {
+			log.Error("Failed to requeue stale email outbox messages", "error", err)
+		} else if recovered > 0 {
+			log.Warn("Recovered stale email outbox messages", "count", recovered)
+		}
+	}
+
 	cleanupSentEmailOutbox(ctx)
 }
 

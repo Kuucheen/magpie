@@ -29,7 +29,7 @@ Common defaults:
 
 Check:
 
-- mail envs: `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
+- mail envs: `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `EMAIL_BRAND_IMAGE_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
 - `PUBLIC_APP_URL` is set correctly
 - SMTP provider accepts the sender address and credentials
 - outbox worker envs if mail is backing up or retrying (`EMAIL_OUTBOX_*`, `EMAIL_RETRY_BASE_SECONDS`, `EMAIL_MAX_ATTEMPTS`)

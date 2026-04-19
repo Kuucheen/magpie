@@ -65,6 +65,12 @@ func TestForgotPassword_GenericSuccessAndEmailSentForExistingUser(t *testing.T) 
 	if !strings.Contains(deliveredBody, "https://app.example/reset-password?token=") {
 		t.Fatalf("email body did not contain reset URL: %q", deliveredBody)
 	}
+	if !strings.Contains(deliveredBody, "<!doctype html>") {
+		t.Fatalf("email body was not rendered as HTML: %q", deliveredBody)
+	}
+	if !strings.Contains(deliveredBody, "https://assets.example.com/magpie-email.png") {
+		t.Fatalf("email body did not include brand image: %q", deliveredBody)
+	}
 
 	var tokens []domain.PasswordResetToken
 	if err := database.DB.Find(&tokens).Error; err != nil {
@@ -124,6 +130,30 @@ func TestForgotPassword_ReturnsServiceUnavailableWhenEmailOutboxPersistFails(t *
 	}
 	if tokenCount != 0 {
 		t.Fatalf("token count = %d, want 0", tokenCount)
+	}
+}
+
+func TestRenderPasswordResetConfirmationEmail_UsesBrandedHTML(t *testing.T) {
+	cfg := support.EmailConfig{
+		FromAddress:   "no-reply@example.com",
+		FromName:      "Magpie",
+		BrandImageURL: "https://assets.example.com/magpie-email.png",
+	}
+
+	subject, body := renderPasswordResetConfirmationEmail(cfg)
+
+	if subject != "Your Magpie password was changed" {
+		t.Fatalf("subject = %q", subject)
+	}
+	for _, want := range []string{
+		"<!doctype html>",
+		"Your password was changed",
+		"https://assets.example.com/magpie-email.png",
+		"This email was sent by Magpie",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q: %q", want, body)
+		}
 	}
 }
 
@@ -430,10 +460,11 @@ func stubPasswordResetConfigForTests(t *testing.T) func() {
 
 	readEmailConfigFn = func() (support.EmailConfig, error) {
 		return support.EmailConfig{
-			FromAddress: "no-reply@example.com",
-			FromName:    "Magpie",
-			SMTPHost:    "smtp.example.com",
-			SMTPPort:    587,
+			FromAddress:   "no-reply@example.com",
+			FromName:      "Magpie",
+			SMTPHost:      "smtp.example.com",
+			SMTPPort:      587,
+			BrandImageURL: "https://assets.example.com/magpie-email.png",
 		}, nil
 	}
 	readPasswordResetConfigFn = func() (support.PasswordResetConfig, error) {
@@ -469,8 +500,8 @@ func extractTokenFromBody(body string) string {
 
 	token := body[idx+len(marker):]
 	token = strings.TrimSpace(token)
-	if newline := strings.IndexAny(token, "\r\n"); newline >= 0 {
-		token = token[:newline]
+	if end := strings.IndexAny(token, "\"'<& \r\n"); end >= 0 {
+		token = token[:end]
 	}
 	return token
 }

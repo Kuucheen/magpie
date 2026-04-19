@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
+	stdhtml "html"
 	"net"
 	"net/mail"
 	"net/smtp"
 	"strings"
 	"time"
+
+	xhtml "golang.org/x/net/html"
 )
 
 func SendEmail(cfg EmailConfig, toAddress, subject, body string) error {
@@ -24,18 +27,7 @@ func SendEmail(cfg EmailConfig, toAddress, subject, body string) error {
 		return fmt.Errorf("invalid recipient address %q: %w", recipient, err)
 	}
 
-	var message bytes.Buffer
-	message.WriteString("From: " + cfg.FormattedFrom() + "\r\n")
-	message.WriteString("To: " + recipient + "\r\n")
-	message.WriteString("Subject: " + strings.TrimSpace(subject) + "\r\n")
-	message.WriteString("Date: " + time.Now().UTC().Format(time.RFC1123Z) + "\r\n")
-	message.WriteString("MIME-Version: 1.0\r\n")
-	message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-	message.WriteString("\r\n")
-	message.WriteString(body)
-	if !strings.HasSuffix(body, "\r\n") {
-		message.WriteString("\r\n")
-	}
+	message := buildEmailMessage(cfg, recipient, subject, body, time.Now().UTC())
 
 	var auth smtp.Auth
 	if cfg.HasSMTPAuth() {
@@ -73,7 +65,7 @@ func SendEmail(cfg EmailConfig, toAddress, subject, body string) error {
 	if err != nil {
 		return fmt.Errorf("smtp DATA failed: %w", err)
 	}
-	if _, err := writer.Write(message.Bytes()); err != nil {
+	if _, err := writer.Write(message); err != nil {
 		_ = writer.Close()
 		return fmt.Errorf("smtp write failed: %w", err)
 	}
@@ -85,6 +77,142 @@ func SendEmail(cfg EmailConfig, toAddress, subject, body string) error {
 	}
 
 	return nil
+}
+
+func buildEmailMessage(cfg EmailConfig, recipient, subject, body string, sentAt time.Time) []byte {
+	var message bytes.Buffer
+	message.WriteString("From: " + cfg.FormattedFrom() + "\r\n")
+	message.WriteString("To: " + strings.TrimSpace(recipient) + "\r\n")
+	message.WriteString("Subject: " + sanitizeEmailHeader(subject) + "\r\n")
+	message.WriteString("Date: " + sentAt.UTC().Format(time.RFC1123Z) + "\r\n")
+	message.WriteString("MIME-Version: 1.0\r\n")
+	writeEmailBody(&message, body, sentAt)
+	return message.Bytes()
+}
+
+func writeEmailBody(message *bytes.Buffer, body string, sentAt time.Time) {
+	if isHTMLBody(body) {
+		boundary := fmt.Sprintf("magpie-alt-%d", sentAt.UnixNano())
+		message.WriteString("Content-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n")
+		message.WriteString("\r\n")
+		message.WriteString("--" + boundary + "\r\n")
+		message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+		message.WriteString("Content-Transfer-Encoding: 8bit\r\n")
+		message.WriteString("\r\n")
+		message.WriteString(normalizeEmailLineEndings(htmlToPlainText(body)))
+		message.WriteString("\r\n")
+		message.WriteString("--" + boundary + "\r\n")
+		message.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+		message.WriteString("Content-Transfer-Encoding: 8bit\r\n")
+		message.WriteString("\r\n")
+		message.WriteString(normalizeEmailLineEndings(body))
+		message.WriteString("\r\n")
+		message.WriteString("--" + boundary + "--\r\n")
+		return
+	}
+
+	message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	message.WriteString("Content-Transfer-Encoding: 8bit\r\n")
+	message.WriteString("\r\n")
+	plainBody := normalizeEmailLineEndings(body)
+	message.WriteString(plainBody)
+	if !strings.HasSuffix(plainBody, "\r\n") {
+		message.WriteString("\r\n")
+	}
+}
+
+func sanitizeEmailHeader(value string) string {
+	return strings.Join(strings.Fields(strings.NewReplacer("\r", " ", "\n", " ").Replace(strings.TrimSpace(value))), " ")
+}
+
+func isHTMLBody(body string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(body))
+	return strings.HasPrefix(trimmed, "<!doctype html") ||
+		strings.HasPrefix(trimmed, "<html") ||
+		strings.Contains(trimmed, "<body")
+}
+
+func normalizeEmailLineEndings(value string) string {
+	normalized := strings.ReplaceAll(value, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	return strings.ReplaceAll(normalized, "\n", "\r\n")
+}
+
+func htmlToPlainText(body string) string {
+	doc, err := xhtml.Parse(strings.NewReader(body))
+	if err != nil {
+		return "Open this message in an HTML-capable email client."
+	}
+
+	var builder strings.Builder
+	var walk func(*xhtml.Node)
+	walk = func(node *xhtml.Node) {
+		if node.Type == xhtml.TextNode {
+			appendPlainText(&builder, node.Data)
+			return
+		}
+		if node.Type == xhtml.ElementNode {
+			switch node.Data {
+			case "head", "style", "script", "meta", "title":
+				return
+			case "br":
+				appendPlainNewline(&builder)
+			case "p", "div", "table", "tr", "h1", "h2", "h3", "li":
+				appendPlainNewline(&builder)
+			}
+		}
+
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+
+		if node.Type == xhtml.ElementNode {
+			if node.Data == "a" {
+				if href := htmlNodeAttr(node, "href"); href != "" {
+					appendPlainText(&builder, "("+href+")")
+				}
+			}
+			switch node.Data {
+			case "p", "div", "table", "tr", "h1", "h2", "h3", "li":
+				appendPlainNewline(&builder)
+			}
+		}
+	}
+	walk(doc)
+
+	plain := strings.TrimSpace(builder.String())
+	if plain == "" {
+		return "Open this message in an HTML-capable email client."
+	}
+	return stdhtml.UnescapeString(plain)
+}
+
+func appendPlainText(builder *strings.Builder, value string) {
+	parts := strings.Fields(value)
+	if len(parts) == 0 {
+		return
+	}
+	current := builder.String()
+	if current != "" && !strings.HasSuffix(current, "\n") && !strings.HasSuffix(current, " ") {
+		builder.WriteByte(' ')
+	}
+	builder.WriteString(strings.Join(parts, " "))
+}
+
+func appendPlainNewline(builder *strings.Builder) {
+	current := builder.String()
+	if current != "" && !strings.HasSuffix(current, "\n") {
+		builder.WriteByte('\n')
+	}
+}
+
+func htmlNodeAttr(node *xhtml.Node, key string) string {
+	for _, attr := range node.Attr {
+		if attr.Key == key {
+			return attr.Val
+		}
+	}
+	return ""
 }
 
 func dialSMTPClient(cfg EmailConfig) (*smtp.Client, error) {

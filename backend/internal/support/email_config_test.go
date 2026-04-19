@@ -24,6 +24,7 @@ func TestReadEmailConfig_TrimsAndFormatsValues(t *testing.T) {
 	t.Setenv(envSMTPPort, " 2525 ")
 	t.Setenv(envSMTPUsername, " smtp-user ")
 	t.Setenv(envSMTPPassword, " smtp-pass ")
+	t.Setenv(envEmailBrandImage, " https://assets.example.com/magpie-email.png ")
 
 	cfg, err := ReadEmailConfig()
 	if err != nil {
@@ -44,6 +45,9 @@ func TestReadEmailConfig_TrimsAndFormatsValues(t *testing.T) {
 	}
 	if cfg.SMTPAddress() != "smtp.example.com:2525" {
 		t.Fatalf("SMTPAddress() = %q, want smtp.example.com:2525", cfg.SMTPAddress())
+	}
+	if cfg.BrandImageURL != "https://assets.example.com/magpie-email.png" {
+		t.Fatalf("BrandImageURL = %q, want https://assets.example.com/magpie-email.png", cfg.BrandImageURL)
 	}
 	if cfg.FormattedFrom() != "\"Magpie Bot\" <sender@example.com>" {
 		t.Fatalf("FormattedFrom() = %q", cfg.FormattedFrom())
@@ -81,5 +85,15 @@ func TestReadEmailConfig_RejectsPartialAuth(t *testing.T) {
 
 	if _, err := ReadEmailConfig(); err == nil {
 		t.Fatal("ReadEmailConfig unexpectedly succeeded with partial SMTP auth config")
+	}
+}
+
+func TestReadEmailConfig_RejectsInvalidBrandImageURL(t *testing.T) {
+	t.Setenv(envMailFromAddress, "sender@example.com")
+	t.Setenv(envSMTPHost, "smtp.example.com")
+	t.Setenv(envEmailBrandImage, "/assets/magpie.png")
+
+	if _, err := ReadEmailConfig(); err == nil {
+		t.Fatal("ReadEmailConfig unexpectedly succeeded with relative brand image URL")
 	}
 }

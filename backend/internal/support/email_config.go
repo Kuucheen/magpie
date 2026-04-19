@@ -3,6 +3,7 @@ package support
 import (
 	"fmt"
 	"net/mail"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -16,27 +17,30 @@ const (
 	envSMTPPort        = "SMTP_PORT"
 	envSMTPUsername    = "SMTP_USERNAME"
 	envSMTPPassword    = "SMTP_PASSWORD"
+	envEmailBrandImage = "EMAIL_BRAND_IMAGE_URL"
 
 	defaultSMTPPort = 587
 )
 
 type EmailConfig struct {
-	FromAddress  string
-	FromName     string
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUsername string
-	SMTPPassword string
+	FromAddress   string
+	FromName      string
+	SMTPHost      string
+	SMTPPort      int
+	SMTPUsername  string
+	SMTPPassword  string
+	BrandImageURL string
 }
 
 func ReadEmailConfig() (EmailConfig, error) {
 	cfg := EmailConfig{
-		FromAddress:  strings.TrimSpace(GetEnv(envMailFromAddress, "")),
-		FromName:     strings.TrimSpace(GetEnv(envMailFromName, "")),
-		SMTPHost:     strings.TrimSpace(GetEnv(envSMTPHost, "")),
-		SMTPUsername: strings.TrimSpace(GetEnv(envSMTPUsername, "")),
-		SMTPPassword: strings.TrimSpace(GetEnv(envSMTPPassword, "")),
-		SMTPPort:     defaultSMTPPort,
+		FromAddress:   strings.TrimSpace(GetEnv(envMailFromAddress, "")),
+		FromName:      strings.TrimSpace(GetEnv(envMailFromName, "")),
+		SMTPHost:      strings.TrimSpace(GetEnv(envSMTPHost, "")),
+		SMTPUsername:  strings.TrimSpace(GetEnv(envSMTPUsername, "")),
+		SMTPPassword:  strings.TrimSpace(GetEnv(envSMTPPassword, "")),
+		BrandImageURL: strings.TrimSpace(GetEnv(envEmailBrandImage, "")),
+		SMTPPort:      defaultSMTPPort,
 	}
 
 	rawPort := strings.TrimSpace(GetEnv(envSMTPPort, ""))
@@ -124,6 +128,12 @@ func (c EmailConfig) Validate() error {
 	if (c.SMTPUsername == "") != (c.SMTPPassword == "") {
 		return fmt.Errorf("SMTP authentication is incomplete: set both %s and %s or leave both unset", envSMTPUsername, envSMTPPassword)
 	}
+	if c.BrandImageURL != "" {
+		brandURL, err := url.Parse(c.BrandImageURL)
+		if err != nil || brandURL.Host == "" || brandURL.Scheme != "https" {
+			return fmt.Errorf("invalid %s value %q: must be an absolute https URL", envEmailBrandImage, c.BrandImageURL)
+		}
+	}
 
 	return nil
 }
@@ -134,5 +144,6 @@ func (c EmailConfig) hasAnyValue() bool {
 		c.SMTPHost != "" ||
 		c.SMTPPort != defaultSMTPPort ||
 		c.SMTPUsername != "" ||
-		c.SMTPPassword != ""
+		c.SMTPPassword != "" ||
+		c.BrandImageURL != ""
 }

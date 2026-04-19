@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	stdhtml "html"
 	"net/http"
 	"strings"
 	"time"
@@ -201,22 +202,135 @@ func hashPasswordResetToken(token string) string {
 
 func renderPasswordResetEmail(cfg support.EmailConfig, resetURL string, expiresAt time.Time) (string, string) {
 	subject := "Reset your Magpie password"
-	body := fmt.Sprintf(
-		"Hello,\n\nWe received a request to reset the password for your Magpie account.\n\nUse this link to choose a new password:\n%s\n\nThis link expires at %s.\nIf you did not request this, you can ignore this email.\n\n%s\n",
+	expiresText := expiresAt.UTC().Format(time.RFC1123)
+	body := renderBrandedAuthEmail(
+		cfg,
+		subject,
+		"Use the secure link in this email to choose a new Magpie password.",
+		"Account security",
+		"Reset your password",
+		"We received a request to reset the password for your Magpie account.",
+		"Reset password",
 		resetURL,
-		expiresAt.UTC().Format(time.RFC1123),
-		emailSenderDisplayName(cfg),
+		fmt.Sprintf("This link expires at <strong>%s</strong>. If you did not request this, you can ignore this email.", escapeEmailHTML(expiresText)),
 	)
-	return subject, strings.ReplaceAll(body, "\n", "\r\n")
+	return subject, body
 }
 
 func renderPasswordResetConfirmationEmail(cfg support.EmailConfig) (string, string) {
 	subject := "Your Magpie password was changed"
-	body := fmt.Sprintf(
-		"Hello,\n\nThe password for your Magpie account has just been changed.\nIf you did not perform this action, reset your password again immediately and review your account access.\n\n%s\n",
-		emailSenderDisplayName(cfg),
+	body := renderBrandedAuthEmail(
+		cfg,
+		subject,
+		"The password for your Magpie account was changed.",
+		"Account security",
+		"Your password was changed",
+		"The password for your Magpie account has just been changed.",
+		"",
+		"",
+		"If you did not perform this action, reset your password again immediately and review your account access.",
 	)
-	return subject, strings.ReplaceAll(body, "\n", "\r\n")
+	return subject, body
+}
+
+func renderBrandedAuthEmail(cfg support.EmailConfig, title, preheader, eyebrow, heading, intro, actionLabel, actionURL, detailHTML string) string {
+	brandName := emailSenderDisplayName(cfg)
+	if strings.TrimSpace(brandName) == "" {
+		brandName = "Magpie"
+	}
+	escapedBrandName := escapeEmailHTML(brandName)
+	escapedTitle := escapeEmailHTML(title)
+	escapedPreheader := escapeEmailHTML(preheader)
+	escapedEyebrow := escapeEmailHTML(eyebrow)
+	escapedHeading := escapeEmailHTML(heading)
+	escapedIntro := escapeEmailHTML(intro)
+	actionHTML := ""
+	fallbackHTML := ""
+	if strings.TrimSpace(actionLabel) != "" && strings.TrimSpace(actionURL) != "" {
+		escapedActionLabel := escapeEmailHTML(actionLabel)
+		escapedActionURL := escapeEmailHTML(actionURL)
+		actionHTML = fmt.Sprintf(`
+                    <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 28px 0 26px;">
+                      <tr>
+                        <td bgcolor="#276941" style="border-radius: 6px;">
+                          <a href="%s" style="display: inline-block; padding: 14px 22px; font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 700; color: #f9f3f0; text-decoration: none; border-radius: 6px;">%s</a>
+                        </td>
+                      </tr>
+                    </table>`, escapedActionURL, escapedActionLabel)
+		fallbackHTML = fmt.Sprintf(`
+                    <p style="margin: 0 0 24px; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 20px; color: #536057;">
+                      If the button does not work, paste this link into your browser:<br>
+                      <a href="%s" style="color: #276941; word-break: break-all;">%s</a>
+                    </p>`, escapedActionURL, escapedActionURL)
+	}
+
+	return fmt.Sprintf(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>%s</title>
+  </head>
+  <body style="margin: 0; padding: 0; background: #f2f5f0;">
+    <div style="display: none; max-height: 0; overflow: hidden; opacity: 0; color: transparent;">%s</div>
+    <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="background: #f2f5f0; margin: 0; padding: 32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="width: 100%%; max-width: 640px; background: #ffffff; border: 1px solid #dbe3d7; border-radius: 8px; overflow: hidden;">
+            <tr>
+              <td style="background: #101412; padding: 30px 40px 24px;">
+                %s
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 38px 40px 34px;">
+                <p style="margin: 0 0 12px; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 700; line-height: 18px; color: #276941; text-transform: uppercase;">%s</p>
+                <h1 style="margin: 0 0 18px; font-family: Arial, Helvetica, sans-serif; font-size: 30px; line-height: 38px; font-weight: 800; color: #16221a;">%s</h1>
+                <p style="margin: 0 0 18px; font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 25px; color: #303a33;">%s</p>
+                %s
+                %s
+                <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="margin: 0; background: #eef5ec; border-left: 4px solid #276941;">
+                  <tr>
+                    <td style="padding: 16px 18px;">
+                      <p style="margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 22px; color: #303a33;">%s</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 22px 40px 28px; background: #f7f9f5; border-top: 1px solid #e2e9de;">
+                <p style="margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 18px; color: #68746b;">This email was sent by %s. Please do not reply to this automated message.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
+		escapedTitle,
+		escapedPreheader,
+		renderEmailBrand(cfg, escapedBrandName),
+		escapedEyebrow,
+		escapedHeading,
+		escapedIntro,
+		actionHTML,
+		fallbackHTML,
+		detailHTML,
+		escapedBrandName,
+	)
+}
+
+func renderEmailBrand(cfg support.EmailConfig, escapedBrandName string) string {
+	if strings.TrimSpace(cfg.BrandImageURL) == "" {
+		return fmt.Sprintf(`<div style="font-family: Arial, Helvetica, sans-serif; font-size: 28px; line-height: 34px; font-weight: 800; color: #f9f3f0;">%s</div>`, escapedBrandName)
+	}
+	return fmt.Sprintf(`<img src="%s" width="360" alt="%s" style="display: block; width: 100%%; max-width: 360px; height: auto; border: 0; outline: none; text-decoration: none;">`, escapeEmailHTML(cfg.BrandImageURL), escapedBrandName)
+}
+
+func escapeEmailHTML(value string) string {
+	return stdhtml.EscapeString(strings.TrimSpace(value))
 }
 
 func resolveEmailOutboxMaxAttempts() int {

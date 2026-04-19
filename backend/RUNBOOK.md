@@ -205,6 +205,7 @@ Actions:
 - Use these env vars for password recovery or other outbound email:
   - `MAIL_FROM_ADDRESS`
   - `MAIL_FROM_NAME` (optional)
+  - `EMAIL_BRAND_IMAGE_URL` (optional public absolute `https://` image URL for branded auth emails)
   - `PUBLIC_APP_URL` (required for password reset links)
   - `SMTP_HOST`
   - `SMTP_PORT` (optional, defaults to `587`; `465` also works for implicit TLS SMTP)

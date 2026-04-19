@@ -67,6 +67,7 @@ Mail configuration:
 
 - `MAIL_FROM_ADDRESS`: sender address used for outbound auth/recovery mail.
 - `MAIL_FROM_NAME`: optional sender display name.
+- `EMAIL_BRAND_IMAGE_URL`: optional public absolute `https://` image URL shown at the top of branded auth/recovery emails.
 - `SMTP_HOST`: SMTP server hostname.
 - `SMTP_PORT` (default `587`): SMTP submission port. Port `587` requires successful `STARTTLS`; port `465` uses implicit TLS.
 - `SMTP_USERNAME`: optional SMTP auth username. Set together with `SMTP_PASSWORD`.

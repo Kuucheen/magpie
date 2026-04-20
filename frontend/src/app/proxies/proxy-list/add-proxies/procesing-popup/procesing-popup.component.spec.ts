@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { ProcesingPopupComponent } from './procesing-popup.component';
+import {provideNoopAnimations} from '@angular/platform-browser/animations';
 
 describe('ProcesingPopupComponent', () => {
   let component: ProcesingPopupComponent;
@@ -8,7 +9,8 @@ describe('ProcesingPopupComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ProcesingPopupComponent]
+      imports: [ProcesingPopupComponent],
+      providers: [provideNoopAnimations()]
     })
     .compileComponents();
 

@@ -8,6 +8,7 @@ import {NotificationService} from '../services/notification-service.service';
 
 const httpServiceMock = {
   getRotatingProxies: jasmine.createSpy().and.returnValue(of([])),
+  getRotatingProxyInstances: jasmine.createSpy().and.returnValue(of([])),
   getUserSettings: jasmine.createSpy().and.returnValue(of({
     http_protocol: true,
     https_protocol: true,

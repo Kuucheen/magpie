@@ -20,6 +20,7 @@ class SettingsServiceStub {
     judges: [{ url: 'https://example.com', regex: 'default' }],
     scraping_sources: []
   };
+  userSettings$ = of(this.settings);
   lastPayload: any;
 
   getUserSettings(): UserSettings {
@@ -54,7 +55,7 @@ describe('CheckerSettingsComponent', () => {
     expect(component).toBeTruthy();
     expect(component.settingsForm.value.HTTPProtocol).toBeTrue();
     expect(component.settingsForm.value.AutoRemoveFailingProxies).toBeFalse();
-    expect(component.settingsForm.value.AutoRemoveFailureThreshold).toBe(3);
+    expect(component.settingsForm.getRawValue().AutoRemoveFailureThreshold).toBe(3);
   });
 
   it('normalizes auto-remove threshold before saving', () => {

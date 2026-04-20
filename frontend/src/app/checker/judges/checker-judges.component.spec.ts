@@ -20,6 +20,7 @@ class SettingsServiceStub {
     judges: [{ url: 'https://example.com', regex: 'default' }],
     scraping_sources: []
   };
+  userSettings$ = of(this.settings);
 
   getUserSettings(): UserSettings {
     return this.settings;

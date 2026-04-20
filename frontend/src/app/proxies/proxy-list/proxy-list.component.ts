@@ -299,7 +299,8 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (
       this.filterPanelOpen() &&
-      !this.isTargetWithin(target, this.filterToggleAnchor, this.filterPanelRef)
+      !this.isTargetWithin(target, this.filterToggleAnchor, this.filterPanelRef) &&
+      !this.isTargetWithinProxyFilterOverlay(target)
     ) {
       this.filterPanelOpen.set(false);
     }
@@ -1040,6 +1041,11 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
     return false;
+  }
+
+  private isTargetWithinProxyFilterOverlay(target: Node): boolean {
+    const element = target instanceof Element ? target : target.parentElement;
+    return !!element?.closest('.proxy-filter-panel__overlay');
   }
 
   private stopTriggerEvent(event?: Event | { originalEvent?: Event }): void {

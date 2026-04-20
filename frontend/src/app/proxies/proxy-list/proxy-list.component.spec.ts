@@ -46,4 +46,26 @@ describe('ProxyListComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('keeps the filter panel open when clicking an appended filter select overlay', () => {
+    const overlay = document.createElement('div');
+    const option = document.createElement('button');
+    overlay.className = 'proxy-filter-panel__overlay';
+    overlay.appendChild(option);
+    document.body.appendChild(overlay);
+    component.filterPanelOpen.set(true);
+
+    option.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+
+    expect(component.filterPanelOpen()).toBeTrue();
+    overlay.remove();
+  });
+
+  it('closes the filter panel when clicking outside the panel and filter overlays', () => {
+    component.filterPanelOpen.set(true);
+
+    document.body.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+
+    expect(component.filterPanelOpen()).toBeFalse();
+  });
 });

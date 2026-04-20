@@ -398,6 +398,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       this.syncFilterFormWithApplied();
       this.ensureFilterOptionsLoaded();
       this.suppressOutsideCloseUntil = Date.now() + 180;
+      this.columnPanelOpen.set(false);
     }
     this.filterPanelOpen.set(nextState);
   }
@@ -409,6 +410,7 @@ export class ProxyListComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     this.suppressOutsideCloseUntil = Date.now() + 180;
+    this.filterPanelOpen.set(false);
     this.columnPanelOpen.set(true);
   }
 

@@ -68,4 +68,22 @@ describe('ProxyListComponent', () => {
 
     expect(component.filterPanelOpen()).toBeFalse();
   });
+
+  it('closes the column panel when opening the filter panel', () => {
+    component.columnPanelOpen.set(true);
+
+    component.toggleFilterPanel();
+
+    expect(component.filterPanelOpen()).toBeTrue();
+    expect(component.columnPanelOpen()).toBeFalse();
+  });
+
+  it('closes the filter panel when opening the column panel', () => {
+    component.filterPanelOpen.set(true);
+
+    component.openColumnPanel();
+
+    expect(component.columnPanelOpen()).toBeTrue();
+    expect(component.filterPanelOpen()).toBeFalse();
+  });
 });

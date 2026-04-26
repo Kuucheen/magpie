@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -524,7 +525,7 @@ func runProxyStatisticsStreamWorker(ctx context.Context, dirtyProxyIDsQueue chan
 			Block:    statisticsStreamReadBlock,
 			NoAck:    false,
 		}).Result()
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			if streamID == "0" {
 				streamID = ">"
 			}

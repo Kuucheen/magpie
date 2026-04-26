@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/log"
 	"magpie/internal/api/dto"
 	"magpie/internal/auth"
 	"magpie/internal/config"
@@ -19,6 +18,8 @@ import (
 	sitequeue "magpie/internal/jobs/queue/sites"
 	"magpie/internal/jobs/scraper"
 	"magpie/internal/support"
+
+	"github.com/charmbracelet/log"
 )
 
 func getScrapeSourcesCount(w http.ResponseWriter, r *http.Request) {

@@ -1,13 +1,14 @@
 package bootstrap
 
 import (
-	"github.com/charmbracelet/log"
 	"magpie/internal/config"
 	"magpie/internal/database"
 	"magpie/internal/domain"
 	"magpie/internal/jobs/checker/judges"
 	"magpie/internal/support"
 	"sync"
+
+	"github.com/charmbracelet/log"
 )
 
 var addDefaultJudgeMutex sync.Mutex

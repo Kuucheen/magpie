@@ -265,15 +265,13 @@ func buildMetrics(samples []reputationSample, input *proxyReputationInput) reput
 
 	var earliest time.Time
 	if total > 0 {
-		latest := samples[0].CreatedAt
-		latestCheck = &latest
+		latestCheck = new(samples[0].CreatedAt)
 		earliest = samples[len(samples)-1].CreatedAt
 		for _, sample := range samples {
 			if sample.Alive {
 				success++
 				if latestSuccess == nil {
-					ts := sample.CreatedAt
-					latestSuccess = &ts
+					latestSuccess = new(sample.CreatedAt)
 				}
 			}
 			if sample.ResponseMS > 0 {

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -138,7 +139,7 @@ func OpenRoutes(ctx context.Context, port int) error {
 	serverErrCh := make(chan error, 1)
 	go func() {
 		err := server.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrCh <- fmt.Errorf("api server failed: %w", err)
 			return
 		}

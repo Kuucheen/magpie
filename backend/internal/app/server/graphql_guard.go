@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	ast "github.com/graphql-go/graphql/language/ast"
+	"github.com/graphql-go/graphql/language/ast"
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"
 	gqlhandler "github.com/graphql-go/handler"

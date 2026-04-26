@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"math/bits"
 	"net"
 	"net/netip"
 	"sort"
@@ -321,58 +320,6 @@ func dedupeRanges(ranges []domain.BlacklistedRange) []domain.BlacklistedRange {
 	return result
 }
 
-// BackfillProxyIPHashes fills missing proxy IP hashes for legacy records.
-func BackfillProxyIPHashes(ctx context.Context) (int64, error) {
-	if DB == nil {
-		return 0, errors.New("database not initialised")
-	}
-
-	db := DB
-	if ctx != nil {
-		db = db.WithContext(ctx)
-	}
-
-	var (
-		updated int64
-		batch   []domain.Proxy
-	)
-
-	result := db.
-		Where("COALESCE(octet_length(ip_hash), 0) = 0").
-		FindInBatches(&batch, maxParamsPerBatch, func(tx *gorm.DB, _ int) error {
-			if len(batch) == 0 {
-				return nil
-			}
-
-			for i := range batch {
-				// AfterFind already decrypted IP; ensure hash exists for persistence.
-				batch[i].GenerateHash()
-			}
-
-			for i := range batch {
-				if len(batch[i].IPHash) == 0 {
-					continue
-				}
-				if err := tx.Model(&domain.Proxy{}).
-					Where("id = ?", batch[i].ID).
-					Update("ip_hash", batch[i].IPHash).Error; err != nil {
-					return err
-				}
-				updated++
-			}
-
-			// Clear slice for next batch
-			batch = batch[:0]
-			return nil
-		})
-
-	if result.Error != nil {
-		return updated, result.Error
-	}
-
-	return updated, nil
-}
-
 // BackfillProxyIPMetadata fills missing IP hashes and IP ints for legacy rows.
 func BackfillProxyIPMetadata(ctx context.Context) (int64, int64, error) {
 	if DB == nil {
@@ -539,65 +486,6 @@ func uint32ToIP(val uint32) net.IP {
 		byte(val>>8),
 		byte(val),
 	).To4()
-}
-
-func mergeSpans(spans []cidrSpan) []cidrSpan {
-	if len(spans) == 0 {
-		return spans
-	}
-
-	sort.Slice(spans, func(i, j int) bool {
-		if spans[i].start == spans[j].start {
-			return spans[i].end < spans[j].end
-		}
-		return spans[i].start < spans[j].start
-	})
-
-	merged := make([]cidrSpan, 0, len(spans))
-
-	for _, s := range spans {
-		if len(merged) == 0 {
-			merged = append(merged, s)
-			continue
-		}
-		last := &merged[len(merged)-1]
-		if s.start <= last.end+1 {
-			if s.end > last.end {
-				last.end = s.end
-			}
-			continue
-		}
-		merged = append(merged, s)
-	}
-
-	return merged
-}
-
-func rangeToCIDRs(start, end uint32) []string {
-	var cidrs []string
-
-	s := uint64(start)
-	e := uint64(end)
-
-	for s <= e {
-		maxSize := uint64(bits.TrailingZeros32(uint32(s)))
-		remaining := e - s + 1
-		maxAllowed := uint64(bits.Len64(remaining) - 1)
-
-		hostBits := maxAllowed
-		if maxSize < hostBits {
-			hostBits = maxSize
-		}
-
-		prefixLen := 32 - hostBits
-
-		cidr := fmt.Sprintf("%s/%d", uint32ToIP(uint32(s)).String(), prefixLen)
-		cidrs = append(cidrs, cidr)
-
-		s += 1 << hostBits
-	}
-
-	return cidrs
 }
 
 func normalizeIPList(ips []string) []string {

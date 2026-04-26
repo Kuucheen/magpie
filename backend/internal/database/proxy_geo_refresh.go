@@ -7,9 +7,10 @@ import (
 	"strings"
 	"sync"
 
+	"magpie/internal/domain"
+
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
-	"magpie/internal/domain"
 )
 
 const (

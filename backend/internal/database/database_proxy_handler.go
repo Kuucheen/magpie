@@ -1148,8 +1148,7 @@ func nullFloat32Pointer(value sql.NullFloat64) *float32 {
 		return nil
 	}
 
-	asFloat32 := float32(value.Float64)
-	return &asFloat32
+	return new(float32(value.Float64))
 }
 
 func buildHealthSummary(row dto.ProxyInfoRow) *dto.ProxyHealthSummary {
@@ -1333,8 +1332,7 @@ func mapReputationsToSummary(rows []domain.ProxyReputation) *dto.ProxyReputation
 		}
 
 		if row.Kind == domain.ProxyReputationKindOverall {
-			overall := rep
-			summary.Overall = &overall
+			summary.Overall = new(rep)
 		} else {
 			summary.Protocols[row.Kind] = rep
 		}
@@ -1366,8 +1364,7 @@ func mapReputationsToBreakdown(rows []domain.ProxyReputation) *dto.ProxyReputati
 		}
 
 		if row.Kind == domain.ProxyReputationKindOverall {
-			overall := rep
-			breakdown.Overall = &overall
+			breakdown.Overall = new(rep)
 		} else {
 			breakdown.Protocols[row.Kind] = rep
 		}
@@ -1440,8 +1437,7 @@ func GetProxyDetail(userId uint, proxyId uint64) (*dto.ProxyDetail, error) {
 	var latestStat *dto.ProxyStatistic
 	var latestCheck *time.Time
 	if len(proxy.Statistics) > 0 {
-		mapped := mapProxyStatistic(&proxy.Statistics[0])
-		latestStat = &mapped
+		latestStat = new(mapProxyStatistic(&proxy.Statistics[0]))
 		latestCheck = &proxy.Statistics[0].CreatedAt
 	}
 

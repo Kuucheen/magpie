@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"golang.org/x/net/proxy"
 	"io"
 	"magpie/internal/config"
 	"magpie/internal/domain"
@@ -13,6 +12,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 func CreateTransport(proxyToCheck domain.Proxy, judge *domain.Judge, protocol string, transportProtocol string) (http.RoundTripper, func(), error) {

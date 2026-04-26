@@ -415,8 +415,7 @@ func processJudgeAssignments(proxy domain.Proxy, assignments map[string]*request
 			CreatedAt:    createdAt,
 		}
 		if statAlive {
-			lvl := support.GetProxyLevel(html)
-			statistic.LevelID = &lvl
+			statistic.LevelID = new(support.GetProxyLevel(html))
 		}
 
 		tenantUserIDs := collectCheckUserIDs(item.checks)

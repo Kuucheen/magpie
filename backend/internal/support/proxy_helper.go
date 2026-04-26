@@ -57,7 +57,7 @@ func parseTextToProxiesWithStats(text string, allowColonAuth bool) ([]domain.Pro
 		var (
 			username string
 			password string
-			hostPart string = line
+			hostPart = line
 		)
 
 		if at := strings.LastIndex(line, "@"); at != -1 {

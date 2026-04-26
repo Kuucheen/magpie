@@ -404,7 +404,7 @@ func calcRequiredPages(cfg config.Config) int32 {
 		activeInstances = n
 	}
 
-	interval := uint64(config.CalculateMillisecondsOfCheckingPeriod(cfg.Scraper.ScraperTimer))
+	interval := config.CalculateMillisecondsOfCheckingPeriod(cfg.Scraper.ScraperTimer)
 	minPages, maxPages := resolveScraperPagePoolCaps()
 
 	required := calculateRequiredPages(

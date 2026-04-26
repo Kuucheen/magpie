@@ -212,7 +212,7 @@ func (ps *proxyServer) startHTTPServer() error {
 	ps.httpServer = server
 
 	go func() {
-		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("rotating proxy server: serve error", "rotator_id", ps.rotator.ID, "error", err)
 		}
 	}()

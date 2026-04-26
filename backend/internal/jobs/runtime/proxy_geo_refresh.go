@@ -6,10 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/charmbracelet/log"
 	"magpie/internal/config"
 	"magpie/internal/database"
 	"magpie/internal/support"
+
+	"github.com/charmbracelet/log"
 )
 
 const (

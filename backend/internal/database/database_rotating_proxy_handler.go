@@ -632,8 +632,7 @@ func validateRotatorUptimeFilter(rawType string, rawPercentage *float64) (string
 		return "", nil, ErrRotatingProxyUptimeOutOfRange
 	}
 
-	rounded := math.Round(value*10) / 10
-	return filterType, &rounded, nil
+	return filterType, new(math.Round(value*10) / 10), nil
 }
 
 func normalizeRotatorUptimeFilter(rawType string, rawPercentage *float64) (string, *float64) {
@@ -650,8 +649,7 @@ func normalizeRotatorUptimeFilter(rawType string, rawPercentage *float64) (strin
 		return "", nil
 	}
 
-	rounded := math.Round(value*10) / 10
-	return filterType, &rounded
+	return filterType, new(math.Round(value*10) / 10)
 }
 
 func buildAliveProxyCacheKey(protocolID int, labels []string, uptimeFilterType string, uptimePercentage *float64) string {
@@ -673,8 +671,7 @@ func cloneFloat64Ptr(value *float64) *float64 {
 	if value == nil {
 		return nil
 	}
-	v := *value
-	return &v
+	return new(*value)
 }
 
 func GetAllRotatingProxies() ([]domain.RotatingProxy, error) {

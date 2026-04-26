@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -385,7 +386,7 @@ func (l *fixedWindowLimiter) currentRedis(key string) (int64, time.Duration, boo
 
 	count, err := client.Get(ctx, l.redisKey(key)).Int64()
 	if err != nil {
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			markAuthRedisSuccess()
 			return 0, 0, true
 		}

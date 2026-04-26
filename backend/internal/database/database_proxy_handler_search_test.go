@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	dto "magpie/internal/api/dto"
+	"magpie/internal/api/dto"
 )
 
 func TestProxyMatchesSearch(t *testing.T) {

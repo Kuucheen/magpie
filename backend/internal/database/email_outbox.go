@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -182,12 +181,4 @@ func DeleteSentEmailOutbox(ctx context.Context, olderThan time.Time, limit int) 
 	}
 	result := DB.WithContext(ctx).Where("id IN ?", ids).Delete(&domain.EmailOutbox{})
 	return result.RowsAffected, result.Error
-}
-
-func DebugEmailOutboxStatus() string {
-	var total int64
-	if err := DB.Model(&domain.EmailOutbox{}).Count(&total).Error; err != nil {
-		return fmt.Sprintf("unavailable(error=%v)", err)
-	}
-	return fmt.Sprintf("rows=%d", total)
 }

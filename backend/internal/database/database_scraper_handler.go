@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/log"
 	"magpie/internal/api/dto"
 	"magpie/internal/config"
 	"magpie/internal/support"
+
+	"github.com/charmbracelet/log"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -334,20 +335,17 @@ func GetScrapeSiteDetail(userId uint, scrapeSiteId uint64) (*dto.ScrapeSiteDetai
 
 	var avgReputation *float32
 	if stats.AvgReputation.Valid {
-		value := float32(stats.AvgReputation.Float64)
-		avgReputation = &value
+		avgReputation = new(float32(stats.AvgReputation.Float64))
 	}
 
 	var lastProxyAddedAt *time.Time
 	if stats.LastProxyAddedAt.Valid {
-		value := stats.LastProxyAddedAt.Time
-		lastProxyAddedAt = &value
+		lastProxyAddedAt = new(stats.LastProxyAddedAt.Time)
 	}
 
 	var lastCheckedAt *time.Time
 	if stats.LastCheckedAt.Valid {
-		value := stats.LastCheckedAt.Time
-		lastCheckedAt = &value
+		lastCheckedAt = new(stats.LastCheckedAt.Time)
 	}
 
 	detail := &dto.ScrapeSiteDetail{

@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"magpie/internal/config"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/golang-jwt/jwt/v5"
-	"magpie/internal/config"
 
 	"magpie/internal/support"
 )

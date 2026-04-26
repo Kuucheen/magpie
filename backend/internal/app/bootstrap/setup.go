@@ -16,7 +16,7 @@ import (
 	"magpie/internal/geolite"
 	"magpie/internal/jobs/checker"
 	"magpie/internal/jobs/checker/judges"
-	maintenance "magpie/internal/jobs/maintenance"
+	"magpie/internal/jobs/maintenance"
 	proxyqueue "magpie/internal/jobs/queue/proxy"
 	sitequeue "magpie/internal/jobs/queue/sites"
 	jobruntime "magpie/internal/jobs/runtime"

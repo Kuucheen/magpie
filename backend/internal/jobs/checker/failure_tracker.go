@@ -432,7 +432,7 @@ func execIncrementChunkFallback(db *gorm.DB, entries []failureIncrementEntry) (m
 			Update("consecutive_failures", newVal).Error; err != nil {
 			return nil, err
 		}
-		result[failureKey{userID: entry.userID, proxyID: entry.proxyID}] = uint16(newVal)
+		result[failureKey{userID: entry.userID, proxyID: entry.proxyID}] = newVal
 	}
 	return result, nil
 }

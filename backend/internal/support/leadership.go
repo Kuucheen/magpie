@@ -119,9 +119,9 @@ func RunLeaderTaskOnce(ctx context.Context, key string, ttl time.Duration, run f
 	}
 
 	value := generateLeaderID()
-	ok, err := client.SetNX(ctx, key, value, ttl).Result()
+	ok, err := acquireLeaderLock(ctx, client, key, value, ttl)
 	if err != nil {
-		return fmt.Errorf("support: leader lock setnx: %w", err)
+		return fmt.Errorf("support: leader lock set nx: %w", err)
 	}
 	if !ok {
 		return ErrLeaderLockNotAcquired
@@ -158,12 +158,12 @@ func acquireLeaderSession(ctx context.Context, client *redis.Client, key string,
 	value := generateLeaderID()
 
 	for {
-		ok, err := client.SetNX(ctx, key, value, ttl).Result()
+		ok, err := acquireLeaderLock(ctx, client, key, value, ttl)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
-			log.Warn("leader lock: setnx failed", "key", key, "error", err)
+			log.Warn("leader lock: set nx failed", "key", key, "error", err)
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -193,6 +193,20 @@ func acquireLeaderSession(ctx context.Context, client *redis.Client, key string,
 		case <-time.After(leadershipRetryDelay):
 		}
 	}
+}
+
+func acquireLeaderLock(ctx context.Context, client *redis.Client, key, value string, ttl time.Duration) (bool, error) {
+	_, err := client.SetArgs(ctx, key, value, redis.SetArgs{
+		Mode: "NX",
+		TTL:  ttl,
+	}).Result()
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, redis.Nil) {
+		return false, nil
+	}
+	return false, err
 }
 
 func (ls *leaderSession) Close() {

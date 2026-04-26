@@ -120,21 +120,6 @@ func PublishGeoLiteDatabases(ctx context.Context, filenames []string) error {
 	return nil
 }
 
-// SyncGeoLiteFromRedis downloads the GeoLite databases from Redis if available.
-func SyncGeoLiteFromRedis(ctx context.Context) (bool, error) {
-	client, baseCtx := geoLiteRedisClient()
-	if client == nil {
-		var err error
-		client, err = support.GetRedisClient()
-		if err != nil {
-			return false, fmt.Errorf("geolite redis sync: redis client unavailable: %w", err)
-		}
-		baseCtx = context.Background()
-	}
-
-	return fetchGeoLiteFromRedis(mergedContext(ctx, baseCtx), client, nil)
-}
-
 func subscribeToGeoLiteUpdates(ctx context.Context, client *redis.Client) {
 	pubsub := client.Subscribe(ctx, geoLiteRedisChannel)
 	defer pubsub.Close()

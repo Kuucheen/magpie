@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -272,7 +273,7 @@ func TestCreateRotatingProxy_UptimeFilterValidation(t *testing.T) {
 			UptimePercentage: tc.pct,
 		}
 		_, err := CreateRotatingProxy(user.ID, payload)
-		if err != tc.wantErr {
+		if !errors.Is(err, tc.wantErr) {
 			t.Fatalf("%s: expected %v, got %v", tc.name, tc.wantErr, err)
 		}
 	}
@@ -475,7 +476,7 @@ func TestGetNextRotatingProxy_NoAliveProxies(t *testing.T) {
 		t.Fatalf("create rotating proxy: %v", err)
 	}
 
-	if _, err := GetNextRotatingProxy(user.ID, rotator.ID); err != ErrRotatingProxyNoAliveProxies {
+	if _, err := GetNextRotatingProxy(user.ID, rotator.ID); !errors.Is(err, ErrRotatingProxyNoAliveProxies) {
 		t.Fatalf("expected ErrRotatingProxyNoAliveProxies, got %v", err)
 	}
 }
@@ -883,6 +884,5 @@ func isSQLiteLocked(err error) bool {
 }
 
 func float64Ptr(value float64) *float64 {
-	v := value
-	return &v
+	return new(value)
 }

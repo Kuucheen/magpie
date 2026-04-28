@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -20,6 +21,8 @@ import (
 )
 
 const scrapeSitesPerPage = 20
+
+var ErrNoScrapeSourcesSelected = errors.New("no scraping sources selected for deletion")
 
 // GetScrapingSourcesOfUsers returns all URLs associated with the given user.
 func GetScrapingSourcesOfUsers(userID uint) []string {
@@ -600,6 +603,39 @@ func DeleteScrapeSiteRelation(userId uint, scrapeSite []int) (int64, []domain.Sc
 	}
 
 	return totalDeleted, orphans, nil
+}
+
+func DeleteScrapeSitesWithSettings(userID uint, settings dto.ScrapeSourceDeleteSettings) (int64, []domain.ScrapeSite, error) {
+	if settings.Scope == "selected" && len(settings.ScrapeSources) == 0 {
+		return 0, nil, ErrNoScrapeSourcesSelected
+	}
+
+	exportSettings := dto.ScrapeSourceExportSettings{
+		ScrapeSources:      settings.ScrapeSources,
+		Filter:             settings.Filter,
+		Http:               settings.Http,
+		Https:              settings.Https,
+		ProxyCountOperator: settings.ProxyCountOperator,
+		ProxyCount:         settings.ProxyCount,
+		AliveCountOperator: settings.AliveCountOperator,
+		AliveCount:         settings.AliveCount,
+	}
+
+	sources, err := GetScrapeSiteInfoForExport(userID, exportSettings)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	if len(sources) == 0 {
+		return 0, nil, nil
+	}
+
+	sourceIDs := make([]int, 0, len(sources))
+	for _, source := range sources {
+		sourceIDs = append(sourceIDs, int(source.Id))
+	}
+
+	return DeleteScrapeSiteRelation(userID, sourceIDs)
 }
 
 func collectOrphanScrapeSiteIDs(candidateIDs []int) ([]uint64, error) {

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -246,12 +247,54 @@ func deleteScrapingSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var scrapingSource []int
+	var body json.RawMessage
+	if !decodeJSONBodyLimited(w, r, &body, resolveJSONMaxBodyBytes()) {
+		return
+	}
+	body = bytes.TrimSpace(body)
 
-	if !decodeJSONBodyLimited(w, r, &scrapingSource, resolveJSONMaxBodyBytes()) {
+	if len(body) == 0 {
+		writeError(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
+	if body[0] == '[' {
+		var scrapingSource []int
+		if err := json.Unmarshal(body, &scrapingSource); err != nil {
+			writeError(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		deleteScrapingSourcesByIDs(w, userID, scrapingSource)
+		return
+	}
+
+	var settings dto.ScrapeSourceDeleteSettings
+	if err := json.Unmarshal(body, &settings); err != nil {
+		writeError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if settings.Scope != "all" && settings.Scope != "selected" {
+		settings.Scope = "all"
+	}
+
+	deleted, orphaned, deleteErr := database.DeleteScrapeSitesWithSettings(userID, settings)
+	if deleteErr != nil {
+		if errors.Is(deleteErr, database.ErrNoScrapeSourcesSelected) {
+			writeError(w, "No scraping sources selected for deletion", http.StatusBadRequest)
+			return
+		}
+
+		log.Error("could not delete scrape sites with filters", "error", deleteErr.Error())
+		writeError(w, "Could not delete scraping sources", http.StatusInternalServerError)
+		return
+	}
+
+	writeScrapeSourceDeleteResponse(w, deleted, orphaned)
+}
+
+func deleteScrapingSourcesByIDs(w http.ResponseWriter, userID uint, scrapingSource []int) {
 	deleted, orphaned, deleteErr := database.DeleteScrapeSiteRelation(userID, scrapingSource)
 	if deleteErr != nil {
 		log.Error("could not delete scrape sites", "error", deleteErr.Error())
@@ -259,6 +302,10 @@ func deleteScrapingSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeScrapeSourceDeleteResponse(w, deleted, orphaned)
+}
+
+func writeScrapeSourceDeleteResponse(w http.ResponseWriter, deleted int64, orphaned []domain.ScrapeSite) {
 	if len(orphaned) > 0 {
 		if err := sitequeue.PublicScrapeSiteQueue.RemoveFromQueue(orphaned); err != nil {
 			log.Error("failed to remove scrape sites from queue", "error", err, "count", len(orphaned))

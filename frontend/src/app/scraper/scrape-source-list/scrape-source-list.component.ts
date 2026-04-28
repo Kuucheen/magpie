@@ -68,6 +68,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   totalItems = 0;
   hasLoaded = false;
   loading = false;
+  searchTerm = '';
   checkingRobots: Record<number, boolean> = {};
   scrapingSources: Record<number, boolean> = {};
   respectRobotsEnabled = false;
@@ -84,6 +85,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   private subscriptions = new Subscription();
   private suppressOutsideCloseUntil = 0;
+  private searchDebounceHandle?: ReturnType<typeof setTimeout>;
 
   constructor(
     private http: HttpService,
@@ -121,6 +123,9 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+    if (this.searchDebounceHandle) {
+      clearTimeout(this.searchDebounceHandle);
+    }
   }
 
   @HostListener('document:click', ['$event'])
@@ -157,7 +162,10 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   getAndSetScrapeSourcesList() {
     this.loading = true;
-    this.http.getScrapingSourcePage(this.page + 1).subscribe({
+    const trimmedSearch = this.searchTerm.trim();
+    this.http.getScrapingSourcePage(this.page + 1, {
+      search: trimmedSearch.length > 0 ? trimmedSearch : undefined,
+    }).subscribe({
       next: res => {
         const sources = Array.isArray(res) ? res : [];
         this.scrapeSources = this.applySort(
@@ -181,7 +189,10 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   }
 
   getAndSetScrapeSourceCount() {
-    this.http.getScrapingSourcesCount().subscribe({
+    const trimmedSearch = this.searchTerm.trim();
+    this.http.getScrapingSourcesCount({
+      search: trimmedSearch.length > 0 ? trimmedSearch : undefined,
+    }).subscribe({
       next: res => {
         this.totalItems = res ?? 0;
         const shouldShowEmptyState = this.totalItems === 0 && this.hasLoaded && this.scrapeSources.length === 0;
@@ -250,6 +261,18 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     this.selectedScrapeSources = [];
     this.getAndSetScrapeSourceCount();
     this.getAndSetScrapeSourcesList();
+  }
+
+  onSearchTermChange(value: string): void {
+    if (this.searchDebounceHandle) {
+      clearTimeout(this.searchDebounceHandle);
+    }
+
+    this.searchTerm = value;
+    this.searchDebounceHandle = setTimeout(() => {
+      this.page = 0;
+      this.refreshList();
+    }, 300);
   }
 
   openColumnPanel(event?: Event | { originalEvent?: Event }): void {

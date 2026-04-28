@@ -37,6 +37,15 @@
           ></p-button>
         </div>
 
+        <input
+          type="search"
+          class="proxy-search-input"
+          placeholder="Search sources"
+          [ngModel]="searchTerm"
+          (ngModelChange)="onSearchTermChange($event)"
+          aria-label="Search scrape sources"
+        />
+
         <app-add-scrape-source
           (showAddScrapeSourcesMessage)="onShowAddScrapeSourcesMessage($event)"
           (scrapeSourcesAdded)="onScrapeSourcesAdded()"

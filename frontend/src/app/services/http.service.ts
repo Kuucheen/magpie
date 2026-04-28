@@ -221,12 +221,22 @@ export class HttpService {
     return this.http.post<{sourceCount: number}>(this.apiUrl + '/scrapingSources', formData);
   }
 
-  getScrapingSourcesCount() {
-    return this.http.get<number>(this.apiUrl + '/getScrapingSourcesCount');
+  getScrapingSourcesCount(options?: { search?: string }) {
+    let params = new HttpParams();
+    if (options?.search && options.search.trim().length > 0) {
+      params = params.set('search', options.search.trim());
+    }
+
+    return this.http.get<number>(this.apiUrl + '/getScrapingSourcesCount', { params });
   }
 
-  getScrapingSourcePage(pageNumber: number) {
-    return this.http.get<ScrapeSourceInfo[]>(this.apiUrl + '/getScrapingSourcesPage/' + pageNumber);
+  getScrapingSourcePage(pageNumber: number, options?: { search?: string }) {
+    let params = new HttpParams();
+    if (options?.search && options.search.trim().length > 0) {
+      params = params.set('search', options.search.trim());
+    }
+
+    return this.http.get<ScrapeSourceInfo[]>(this.apiUrl + '/getScrapingSourcesPage/' + pageNumber, { params });
   }
 
   getScrapeSourceDetail(sourceId: number) {

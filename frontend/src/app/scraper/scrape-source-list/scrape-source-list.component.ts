@@ -6,6 +6,7 @@ import {Router} from '@angular/router';
 import {HttpService} from '../../services/http.service';
 import {ScrapeSourceInfo} from '../../models/ScrapeSourceInfo';
 import {AddScrapeSourceComponent} from '../add-scrape-source/add-scrape-source.component';
+import {ExportSourcesComponent} from './export-sources/export-sources.component';
 
 // PrimeNG imports
 import {TableLazyLoadEvent, TableModule} from 'primeng/table';
@@ -47,6 +48,7 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
     ConfirmDialogModule,
     SkeletonModule,
     AddScrapeSourceComponent,
+    ExportSourcesComponent,
     HealthBarCellComponent,
     ColumnPickerPanelComponent,
   ],

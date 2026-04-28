@@ -7,6 +7,7 @@ import {ProxyPage} from '../models/ProxyInfo';
 import {GlobalSettings} from '../models/GlobalSettings';
 import {UserSettings} from '../models/UserSettings';
 import {ExportSettings} from '../models/ExportSettings';
+import {ScrapeSourceExportSettings} from '../models/ScrapeSourceExportSettings';
 import {ScrapeSourceInfo} from '../models/ScrapeSourceInfo';
 import {ScrapeSourceDetail} from '../models/ScrapeSourceDetail';
 import {DashboardInfo} from '../models/DashboardInfo';
@@ -205,6 +206,12 @@ export class HttpService {
 
   exportProxies(settings: ExportSettings) {
     return this.http.post(this.apiUrl + '/user/export', settings, {
+      responseType: 'text',
+    });
+  }
+
+  exportScrapeSources(settings: ScrapeSourceExportSettings) {
+    return this.http.post(this.apiUrl + '/scrapingSources/export', settings, {
       responseType: 'text',
     });
   }

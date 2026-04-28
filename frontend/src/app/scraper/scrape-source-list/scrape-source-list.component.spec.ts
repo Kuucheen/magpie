@@ -16,6 +16,7 @@ describe('ScrapeSourceListComponent', () => {
       getRespectRobotsSetting: jasmine.createSpy('getRespectRobotsSetting').and.returnValue(of({respect_robots_txt: false})),
       getScrapingSourcesCount: jasmine.createSpy('getScrapingSourcesCount').and.returnValue(of(0)),
       getScrapingSourcePage: jasmine.createSpy('getScrapingSourcePage').and.returnValue(of([])),
+      exportScrapeSources: jasmine.createSpy('exportScrapeSources').and.returnValue(of('')),
       requeueScrapeSource: jasmine.createSpy('requeueScrapeSource').and.returnValue(of({message: 'Scrape source queued successfully', source_id: 1})),
     } satisfies Partial<HttpService>;
     const settingsServiceStub = {

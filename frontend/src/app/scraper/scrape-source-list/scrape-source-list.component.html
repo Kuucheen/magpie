@@ -2,6 +2,11 @@
   <div class="actions-wrapper">
     <div class="actions mb-4 flex flex-wrap items-center justify-between gap-4">
       <div class="flex flex-wrap items-center gap-4">
+        <app-export-sources
+          [allSources]="scrapeSources"
+          [selectedSources]="selectedScrapeSources"
+        ></app-export-sources>
+
         <p-button
           label="Delete Selected"
           icon="pi pi-trash"

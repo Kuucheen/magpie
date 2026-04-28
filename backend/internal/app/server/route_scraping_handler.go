@@ -31,7 +31,8 @@ func getScrapeSourcesCount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(database.GetAllScrapeSiteCountOfUser(userID))
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	json.NewEncoder(w).Encode(database.GetAllScrapeSiteCountOfUserWithSearch(userID, search))
 }
 
 func getScrapeSourcePage(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +49,8 @@ func getScrapeSourcePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scrapeSiteInfoPages := database.GetScrapeSiteInfoPage(userID, page)
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	scrapeSiteInfoPages := database.GetScrapeSiteInfoPageWithSearch(userID, page, search)
 
 	json.NewEncoder(w).Encode(scrapeSiteInfoPages)
 }

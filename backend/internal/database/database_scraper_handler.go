@@ -184,17 +184,26 @@ func AssociateProxiesToScrapeSite(siteID uint64, proxies []domain.Proxy) error {
 }
 
 func GetAllScrapeSiteCountOfUser(userId uint) int64 {
+	return GetAllScrapeSiteCountOfUserWithSearch(userId, "")
+}
+
+func GetAllScrapeSiteCountOfUserWithSearch(userId uint, search string) int64 {
 	var count int64
-	DB.Model(&domain.ScrapeSite{}).
+	query := DB.Model(&domain.ScrapeSite{}).
 		Joins(
 			"JOIN user_scrape_site uss ON uss.scrape_site_id = scrape_sites.id AND uss.user_id = ?",
 			userId,
-		).
-		Count(&count)
+		)
+	query = applyScrapeSiteSearch(query, search)
+	query.Count(&count)
 	return count
 }
 
 func GetScrapeSiteInfoPage(userId uint, page int) []dto.ScrapeSiteInfo {
+	return GetScrapeSiteInfoPageWithSearch(userId, page, "")
+}
+
+func GetScrapeSiteInfoPageWithSearch(userId uint, page int, search string) []dto.ScrapeSiteInfo {
 	offset := (page - 1) * scrapeSitesPerPage
 
 	var results []dto.ScrapeSiteInfo
@@ -208,6 +217,8 @@ func GetScrapeSiteInfoPage(userId uint, page int) []dto.ScrapeSiteInfo {
 			"COALESCE(ps.unknown_count, 0) AS unknown_count, " +
 			"uss.created_at          AS added_at",
 	)
+
+	query = applyScrapeSiteSearch(query, search)
 
 	query.Order("uss.created_at DESC").
 		Offset(offset).
@@ -281,6 +292,15 @@ func scrapeSourceProtocolsForExport(settings dto.ScrapeSourceExportSettings) []s
 	}
 
 	return protocols
+}
+
+func applyScrapeSiteSearch(query *gorm.DB, search string) *gorm.DB {
+	normalized := strings.TrimSpace(search)
+	if normalized == "" {
+		return query
+	}
+
+	return query.Where("scrape_sites.url ILIKE ?", "%"+normalized+"%")
 }
 
 func exportCountOperator(operator string, legacyMode string) string {

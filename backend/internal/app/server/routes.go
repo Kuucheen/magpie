@@ -106,6 +106,7 @@ func OpenRoutes(ctx context.Context, port int) error {
 	apiMux.Handle("GET /getScrapingSourcesCount", auth.RequireAuth(http.HandlerFunc(getScrapeSourcesCount)))
 	apiMux.Handle("GET /getScrapingSourcesPage/{page}", auth.RequireAuth(http.HandlerFunc(getScrapeSourcePage)))
 	apiMux.Handle("POST /scrapingSources", auth.RequireAuth(http.HandlerFunc(saveScrapingSources)))
+	apiMux.Handle("POST /scrapingSources/export", auth.RequireAuth(http.HandlerFunc(exportScrapeSources)))
 	apiMux.Handle("DELETE /scrapingSources", auth.RequireAuth(http.HandlerFunc(deleteScrapingSources)))
 	apiMux.Handle("GET /scrapingSources/check", auth.RequireAuth(http.HandlerFunc(checkScrapeSourceRobots)))
 	apiMux.Handle("GET /scrapingSources/respectRobots", auth.RequireAuth(http.HandlerFunc(getRobotsRespectSetting)))

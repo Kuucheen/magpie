@@ -214,6 +214,83 @@ func GetScrapeSiteInfoPage(userId uint, page int) []dto.ScrapeSiteInfo {
 	return results
 }
 
+func GetScrapeSiteInfoForExport(userId uint, settings dto.ScrapeSourceExportSettings) ([]dto.ScrapeSiteInfo, error) {
+	var results []dto.ScrapeSiteInfo
+
+	query := buildScrapeSiteInfoQuery(userId).Select(
+		"scrape_sites.id         AS id, " +
+			"scrape_sites.url        AS url, " +
+			"COALESCE(pc.proxy_count, 0) AS proxy_count, " +
+			"COALESCE(ps.alive_count, 0) AS alive_count, " +
+			"COALESCE(ps.dead_count, 0) AS dead_count, " +
+			"COALESCE(ps.unknown_count, 0) AS unknown_count, " +
+			"uss.created_at          AS added_at",
+	)
+
+	if len(settings.ScrapeSources) > 0 {
+		query = query.Where("scrape_sites.id IN ?", settings.ScrapeSources)
+	}
+
+	if settings.Filter {
+		protocols := scrapeSourceProtocolsForExport(settings)
+		if len(protocols) > 0 {
+			query = query.Where("LOWER(split_part(scrape_sites.url, '://', 1)) IN ?", protocols)
+		}
+		proxyCount := settings.ProxyCount
+		if proxyCount == 0 {
+			proxyCount = settings.MinProxyCount
+		}
+		if proxyCount > 0 {
+			if exportCountOperator(settings.ProxyCountOperator, settings.ProxyCountMode) == "<" {
+				query = query.Where("COALESCE(pc.proxy_count, 0) < ?", proxyCount)
+			} else {
+				query = query.Where("COALESCE(pc.proxy_count, 0) > ?", proxyCount)
+			}
+		}
+		aliveCount := settings.AliveCount
+		if aliveCount == 0 {
+			aliveCount = settings.MinAliveCount
+		}
+		if aliveCount > 0 {
+			if exportCountOperator(settings.AliveCountOperator, "") == "<" {
+				query = query.Where("COALESCE(ps.alive_count, 0) < ?", aliveCount)
+			} else {
+				query = query.Where("COALESCE(ps.alive_count, 0) > ?", aliveCount)
+			}
+		}
+	}
+
+	err := query.Order("uss.created_at DESC").Scan(&results).Error
+	return results, err
+}
+
+func scrapeSourceProtocolsForExport(settings dto.ScrapeSourceExportSettings) []string {
+	if !settings.Filter {
+		return nil
+	}
+
+	protocols := make([]string, 0, 2)
+	if settings.Http {
+		protocols = append(protocols, "http")
+	}
+	if settings.Https {
+		protocols = append(protocols, "https")
+	}
+
+	return protocols
+}
+
+func exportCountOperator(operator string, legacyMode string) string {
+	trimmed := strings.TrimSpace(operator)
+	if trimmed == "<" || trimmed == ">" {
+		return trimmed
+	}
+	if strings.EqualFold(legacyMode, "max") {
+		return "<"
+	}
+	return ">"
+}
+
 func buildScrapeSiteInfoQuery(userId uint) *gorm.DB {
 	// subquery: for each scrape_site_id, count only the proxies that this user has
 	subQuery := DB.

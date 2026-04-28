@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,6 +50,44 @@ func getScrapeSourcePage(w http.ResponseWriter, r *http.Request) {
 	scrapeSiteInfoPages := database.GetScrapeSiteInfoPage(userID, page)
 
 	json.NewEncoder(w).Encode(scrapeSiteInfoPages)
+}
+
+func exportScrapeSources(w http.ResponseWriter, r *http.Request) {
+	userID, userErr := auth.GetUserIDFromRequest(r)
+	if userErr != nil {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var settings dto.ScrapeSourceExportSettings
+	if !decodeJSONBodyLimited(w, r, &settings, resolveJSONMaxBodyBytes()) {
+		return
+	}
+
+	sources, dbErr := database.GetScrapeSiteInfoForExport(userID, settings)
+	if dbErr != nil {
+		log.Error("error exporting scrape sources", "error", dbErr.Error())
+		writeError(w, "Could not export scrape sources", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Disposition", "attachment; filename=scrape-sources.txt")
+	writer := bufio.NewWriterSize(w, 64*1024)
+	for _, source := range sources {
+		line := support.FormatScrapeSource(source, settings.OutputFormat)
+		if _, err := writer.WriteString(line); err != nil {
+			log.Error("export scrape sources write failed", "error", err)
+			return
+		}
+		if err := writer.WriteByte('\n'); err != nil {
+			log.Error("export scrape sources newline write failed", "error", err)
+			return
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		log.Warn("export scrape sources flush failed", "error", err)
+	}
 }
 
 func getScrapeSourceProxies(w http.ResponseWriter, r *http.Request) {

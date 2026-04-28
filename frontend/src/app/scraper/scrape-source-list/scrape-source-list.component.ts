@@ -1,13 +1,15 @@
 import {Component, ElementRef, EventEmitter, HostListener, OnDestroy, OnInit, Output, ViewChild, signal} from '@angular/core';
 import {CommonModule} from '@angular/common';
-import {FormsModule} from '@angular/forms';
+import {FormBuilder, FormGroup, FormsModule} from '@angular/forms';
 import {SelectionModel} from '@angular/cdk/collections';
 import {Router} from '@angular/router';
 import {HttpService} from '../../services/http.service';
 import {ScrapeSourceInfo} from '../../models/ScrapeSourceInfo';
+import {ScrapeSourceListFilters} from '../../models/ScrapeSourceListFilters';
 import {AddScrapeSourceComponent} from '../add-scrape-source/add-scrape-source.component';
 import {ExportSourcesComponent} from './export-sources/export-sources.component';
 import {DeleteSourcesComponent} from './delete-sources/delete-sources.component';
+import {ScrapeSourceFilterPanelComponent} from './scrape-source-filter-panel/scrape-source-filter-panel.component';
 
 // PrimeNG imports
 import {TableLazyLoadEvent, TableModule} from 'primeng/table';
@@ -36,6 +38,23 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
   urlTail: string;
 }
 
+type ScrapeSourceFilterFormValues = {
+  http: boolean;
+  https: boolean;
+  proxyCountOperator: '<' | '>';
+  proxyCount: number;
+  aliveCountOperator: '<' | '>';
+  aliveCount: number;
+};
+
+type ScrapeSourceAppliedFilters = {
+  protocols: string[];
+  proxyCountOperator: '<' | '>';
+  proxyCount: number;
+  aliveCountOperator: '<' | '>';
+  aliveCount: number;
+};
+
 @Component({
   selector: 'app-scrape-source-list',
   imports: [
@@ -48,6 +67,7 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
     AddScrapeSourceComponent,
     ExportSourcesComponent,
     DeleteSourcesComponent,
+    ScrapeSourceFilterPanelComponent,
     HealthBarCellComponent,
     ColumnPickerPanelComponent,
   ],
@@ -57,6 +77,8 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
 })
 export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   @Output() showAddScrapeSourceMessage = new EventEmitter<boolean>();
+  @ViewChild('filterToggleAnchor') private filterToggleAnchor?: ElementRef<HTMLElement>;
+  @ViewChild('filterPanelRef') private filterPanelRef?: ElementRef<HTMLElement>;
   @ViewChild('columnToggleAnchor') private columnToggleAnchor?: ElementRef<HTMLElement>;
   @ViewChild('columnPanelRef', { read: ElementRef }) private columnPanelRef?: ElementRef<HTMLElement>;
 
@@ -72,6 +94,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   checkingRobots: Record<number, boolean> = {};
   scrapingSources: Record<number, boolean> = {};
   respectRobotsEnabled = false;
+  filterPanelOpen = false;
   columnPanelOpen = false;
   sortField: string | null = null;
   sortOrder: number | null = null;
@@ -82,10 +105,13 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   readonly defaultScrapeSourceColumns = DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS;
   readonly scrapeSourceColumnDefinitions = SCRAPE_SOURCE_LIST_COLUMN_DEFINITIONS;
   columnPickerColumns: readonly ScrapeSourceListColumnDefinition[] = this.resolveColumnPickerColumns();
+  filterForm: FormGroup;
+  appliedFilters: ScrapeSourceAppliedFilters = this.createDefaultAppliedFilters();
 
   private subscriptions = new Subscription();
   private suppressOutsideCloseUntil = 0;
   private searchDebounceHandle?: ReturnType<typeof setTimeout>;
+  private readonly defaultFilterValues: ScrapeSourceFilterFormValues = this.createDefaultFilterValues();
 
   constructor(
     private http: HttpService,
@@ -93,7 +119,17 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     private notification: NotificationService,
     private settingsService: SettingsService,
     private userService: UserService,
-  ) { }
+    private fb: FormBuilder,
+  ) {
+    this.filterForm = this.fb.group({
+      http: [this.defaultFilterValues.http],
+      https: [this.defaultFilterValues.https],
+      proxyCountOperator: [this.defaultFilterValues.proxyCountOperator],
+      proxyCount: [this.defaultFilterValues.proxyCount],
+      aliveCountOperator: [this.defaultFilterValues.aliveCountOperator],
+      aliveCount: [this.defaultFilterValues.aliveCount],
+    });
+  }
 
   ngOnInit(): void {
     this.columnPickerColumns = this.resolveColumnPickerColumns();
@@ -134,16 +170,20 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (!this.columnPanelOpen) {
-      return;
-    }
-
     const target = event.target as Node | null;
     if (!target) {
       return;
     }
 
-    if (!this.isTargetWithin(target, this.columnToggleAnchor, this.columnPanelRef)) {
+    if (
+      this.filterPanelOpen &&
+      !this.isTargetWithin(target, this.filterToggleAnchor, this.filterPanelRef) &&
+      !this.isTargetWithinScrapeSourceFilterOverlay(target)
+    ) {
+      this.filterPanelOpen = false;
+    }
+
+    if (this.columnPanelOpen && !this.isTargetWithin(target, this.columnToggleAnchor, this.columnPanelRef)) {
       this.columnPanelOpen = false;
     }
   }
@@ -165,6 +205,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     const trimmedSearch = this.searchTerm.trim();
     this.http.getScrapingSourcePage(this.page + 1, {
       search: trimmedSearch.length > 0 ? trimmedSearch : undefined,
+      filters: this.buildFilterPayload(this.appliedFilters),
     }).subscribe({
       next: res => {
         const sources = Array.isArray(res) ? res : [];
@@ -192,6 +233,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     const trimmedSearch = this.searchTerm.trim();
     this.http.getScrapingSourcesCount({
       search: trimmedSearch.length > 0 ? trimmedSearch : undefined,
+      filters: this.buildFilterPayload(this.appliedFilters),
     }).subscribe({
       next: res => {
         this.totalItems = res ?? 0;
@@ -282,11 +324,52 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       return;
     }
     this.suppressOutsideCloseUntil = Date.now() + 180;
+    this.filterPanelOpen = false;
     this.columnPanelOpen = true;
   }
 
   closeColumnPanel(): void {
     this.columnPanelOpen = false;
+  }
+
+  toggleFilterPanel(event?: Event | { originalEvent?: Event }): void {
+    this.stopTriggerEvent(event);
+    const nextState = !this.filterPanelOpen;
+    if (nextState) {
+      this.syncFilterFormWithApplied();
+      this.suppressOutsideCloseUntil = Date.now() + 180;
+      this.columnPanelOpen = false;
+    }
+    this.filterPanelOpen = nextState;
+  }
+
+  applyFilters(): void {
+    this.appliedFilters = this.buildFiltersFromForm();
+    this.page = 0;
+    this.refreshList();
+    this.filterPanelOpen = false;
+  }
+
+  clearFilters(): void {
+    this.filterForm.reset(this.defaultFilterValues);
+    this.appliedFilters = this.createDefaultAppliedFilters();
+    this.page = 0;
+    this.refreshList();
+  }
+
+  hasActiveFilters(): boolean {
+    return this.activeFilterCount() > 0;
+  }
+
+  filterButtonLabel(): string {
+    const count = this.activeFilterCount();
+    return count > 0 ? `Filters (${count})` : 'Filters';
+  }
+
+  filterToggleClass(): string {
+    return this.hasActiveFilters()
+      ? 'p-button-outlined filter-toggle filter-toggle--active'
+      : 'p-button-outlined filter-toggle';
   }
 
   onColumnEditorDragStart(): void {
@@ -419,6 +502,98 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       urlHead: head,
       urlTail: tail,
     };
+  }
+
+  private createDefaultFilterValues(): ScrapeSourceFilterFormValues {
+    return {
+      http: false,
+      https: false,
+      proxyCountOperator: '>',
+      proxyCount: 0,
+      aliveCountOperator: '>',
+      aliveCount: 0,
+    };
+  }
+
+  private createDefaultAppliedFilters(): ScrapeSourceAppliedFilters {
+    return {
+      protocols: [],
+      proxyCountOperator: '>',
+      proxyCount: 0,
+      aliveCountOperator: '>',
+      aliveCount: 0,
+    };
+  }
+
+  private syncFilterFormWithApplied(): void {
+    this.filterForm.patchValue({
+      http: this.appliedFilters.protocols.includes('http'),
+      https: this.appliedFilters.protocols.includes('https'),
+      proxyCountOperator: this.appliedFilters.proxyCountOperator,
+      proxyCount: this.appliedFilters.proxyCount,
+      aliveCountOperator: this.appliedFilters.aliveCountOperator,
+      aliveCount: this.appliedFilters.aliveCount,
+    }, { emitEvent: false });
+  }
+
+  private buildFiltersFromForm(): ScrapeSourceAppliedFilters {
+    const formValue = this.filterForm.getRawValue() as ScrapeSourceFilterFormValues;
+    const protocols: string[] = [];
+    if (formValue.http) {
+      protocols.push('http');
+    }
+    if (formValue.https) {
+      protocols.push('https');
+    }
+
+    return {
+      protocols,
+      proxyCountOperator: formValue.proxyCountOperator === '<' ? '<' : '>',
+      proxyCount: this.normalizeFilterNumber(formValue.proxyCount),
+      aliveCountOperator: formValue.aliveCountOperator === '<' ? '<' : '>',
+      aliveCount: this.normalizeFilterNumber(formValue.aliveCount),
+    };
+  }
+
+  private buildFilterPayload(filters: ScrapeSourceAppliedFilters): ScrapeSourceListFilters | undefined {
+    const payload: ScrapeSourceListFilters = {};
+    if (filters.protocols.length > 0) {
+      payload.protocols = filters.protocols;
+    }
+    if (filters.proxyCount > 0) {
+      payload.proxyCountOperator = filters.proxyCountOperator;
+      payload.proxyCount = filters.proxyCount;
+    }
+    if (filters.aliveCount > 0) {
+      payload.aliveCountOperator = filters.aliveCountOperator;
+      payload.aliveCount = filters.aliveCount;
+    }
+    return Object.keys(payload).length > 0 ? payload : undefined;
+  }
+
+  private activeFilterCount(): number {
+    let count = 0;
+    if (this.appliedFilters.protocols.length > 0) {
+      count += 1;
+    }
+    if (this.appliedFilters.proxyCount > 0) {
+      count += 1;
+    }
+    if (this.appliedFilters.aliveCount > 0) {
+      count += 1;
+    }
+    return count;
+  }
+
+  private normalizeFilterNumber(value: number | string | null | undefined): number {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    const parsed = typeof value === 'string' ? Number(value) : value;
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+    return Math.max(0, Math.floor(parsed));
   }
 
   private applySort(
@@ -574,6 +749,11 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       }
     }
     return false;
+  }
+
+  private isTargetWithinScrapeSourceFilterOverlay(target: Node): boolean {
+    const element = target instanceof Element ? target : target.parentElement;
+    return !!element?.closest('.scrape-source-filter-panel__overlay');
   }
 
   private stopTriggerEvent(event?: Event | { originalEvent?: Event }): void {

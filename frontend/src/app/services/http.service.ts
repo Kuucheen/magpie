@@ -22,6 +22,7 @@ import {DeleteSettings} from '../models/DeleteSettings';
 import {ScrapeSourceDeleteSettings} from '../models/ScrapeSourceDeleteSettings';
 import {AddProxiesResponse} from '../models/AddProxiesResponse';
 import {ProxyListFilters} from '../models/ProxyListFilters';
+import {ScrapeSourceListFilters} from '../models/ScrapeSourceListFilters';
 import {ProxyFilterOptions} from '../models/ProxyFilterOptions';
 
 @Injectable({
@@ -221,20 +222,22 @@ export class HttpService {
     return this.http.post<{sourceCount: number}>(this.apiUrl + '/scrapingSources', formData);
   }
 
-  getScrapingSourcesCount(options?: { search?: string }) {
+  getScrapingSourcesCount(options?: { search?: string; filters?: ScrapeSourceListFilters }) {
     let params = new HttpParams();
     if (options?.search && options.search.trim().length > 0) {
       params = params.set('search', options.search.trim());
     }
+    params = this.appendScrapeSourceFilterParams(params, options?.filters);
 
     return this.http.get<number>(this.apiUrl + '/getScrapingSourcesCount', { params });
   }
 
-  getScrapingSourcePage(pageNumber: number, options?: { search?: string }) {
+  getScrapingSourcePage(pageNumber: number, options?: { search?: string; filters?: ScrapeSourceListFilters }) {
     let params = new HttpParams();
     if (options?.search && options.search.trim().length > 0) {
       params = params.set('search', options.search.trim());
     }
+    params = this.appendScrapeSourceFilterParams(params, options?.filters);
 
     return this.http.get<ScrapeSourceInfo[]>(this.apiUrl + '/getScrapingSourcesPage/' + pageNumber, { params });
   }
@@ -346,6 +349,30 @@ export class HttpService {
 
     if (filters.maxRetries && filters.maxRetries > 0) {
       params = params.set('maxRetries', filters.maxRetries.toString());
+    }
+
+    return params;
+  }
+
+  private appendScrapeSourceFilterParams(params: HttpParams, filters?: ScrapeSourceListFilters): HttpParams {
+    if (!filters) {
+      return params;
+    }
+
+    if (filters.protocols?.length) {
+      filters.protocols.forEach(protocol => {
+        params = params.append('protocol', protocol);
+      });
+    }
+
+    if (filters.proxyCount && filters.proxyCount > 0) {
+      params = params.set('proxyCount', filters.proxyCount.toString());
+      params = params.set('proxyCountOperator', filters.proxyCountOperator === '<' ? '<' : '>');
+    }
+
+    if (filters.aliveCount && filters.aliveCount > 0) {
+      params = params.set('aliveCount', filters.aliveCount.toString());
+      params = params.set('aliveCountOperator', filters.aliveCountOperator === '<' ? '<' : '>');
     }
 
     return params;

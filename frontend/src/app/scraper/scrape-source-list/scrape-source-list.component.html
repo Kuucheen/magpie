@@ -27,6 +27,15 @@
           [disabled]="loading"
         ></p-button>
 
+        <div #filterToggleAnchor>
+          <p-button
+            [label]="filterButtonLabel()"
+            icon="pi pi-filter"
+            [styleClass]="filterToggleClass()"
+            (onClick)="toggleFilterPanel($event)"
+          ></p-button>
+        </div>
+
         <div #columnToggleAnchor>
           <p-button
             label="Columns"
@@ -52,6 +61,17 @@
         ></app-add-scrape-source>
       </div>
     </div>
+
+    @if (filterPanelOpen) {
+      <div #filterPanelRef>
+        <app-scrape-source-filter-panel
+          [form]="filterForm"
+          [floating]="true"
+          (clear)="clearFilters()"
+          (apply)="applyFilters()"
+        ></app-scrape-source-filter-panel>
+      </div>
+    }
 
     @if (columnPanelOpen) {
       <app-column-picker-panel

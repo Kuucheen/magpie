@@ -178,6 +178,20 @@ $border-color: rgba(255, 255, 255, 0.1);
   margin-bottom: 1rem;
 }
 
+:host ::ng-deep .filter-toggle {
+  position: relative;
+}
+
+:host ::ng-deep .filter-toggle.filter-toggle--active {
+  border-color: $accent-color;
+  color: $accent-color;
+  box-shadow: 0 0 0 1px rgba($accent-color, 0.35);
+}
+
+:host ::ng-deep .filter-toggle.filter-toggle--active .p-button-icon {
+  color: $accent-color;
+}
+
 .proxy-search-input {
   background-color: rgba(255, 255, 255, 0.05);
   color: $text-color;

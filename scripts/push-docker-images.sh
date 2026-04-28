@@ -12,6 +12,11 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "Docker Buildx is required but is not available." >&2
+  exit 1
+fi
+
 tag="${1:-}"
 if [[ -z "${tag}" ]]; then
   if git -C "${REPO_ROOT}" rev-parse --short HEAD >/dev/null 2>&1; then
@@ -23,33 +28,51 @@ fi
 
 build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 push_latest="${PUSH_LATEST:-1}"
+platforms="${DOCKER_PLATFORMS:-linux/amd64,linux/arm64}"
+builder="${BUILDX_BUILDER:-magpie-multiarch}"
 
 echo "Using tag: ${tag}"
-echo "Building backend image ${IMAGE_BACKEND}:${tag}"
-docker build -f "${REPO_ROOT}/Dockerfile" \
-  --build-arg BUILD_VERSION="${tag}" \
-  --build-arg BUILD_TIME="${build_time}" \
-  -t "${IMAGE_BACKEND}:${tag}" \
-  "${REPO_ROOT}"
+echo "Using platforms: ${platforms}"
+echo "Using Buildx builder: ${builder}"
 
-echo "Building frontend image ${IMAGE_FRONTEND}:${tag}"
-docker build -f "${REPO_ROOT}/frontend/Dockerfile" \
-  --build-arg BUILD_COMMIT="${tag}" \
-  -t "${IMAGE_FRONTEND}:${tag}" \
-  "${REPO_ROOT}/frontend"
-
-echo "Pushing ${IMAGE_BACKEND}:${tag}"
-docker push "${IMAGE_BACKEND}:${tag}"
-
-echo "Pushing ${IMAGE_FRONTEND}:${tag}"
-docker push "${IMAGE_FRONTEND}:${tag}"
-
-if [[ "${push_latest}" == "1" ]]; then
-  for image in "${IMAGE_BACKEND}" "${IMAGE_FRONTEND}"; do
-    echo "Tagging and pushing ${image}:latest"
-    docker tag "${image}:${tag}" "${image}:latest"
-    docker push "${image}:latest"
-  done
+if ! docker buildx inspect "${builder}" >/dev/null 2>&1; then
+  echo "Creating Buildx builder ${builder}"
+  docker buildx create --name "${builder}" --driver docker-container --use >/dev/null
+else
+  docker buildx use "${builder}" >/dev/null
 fi
 
-echo "Done. Pushed images with tag ${tag}${push_latest:+ and latest}."
+docker buildx inspect "${builder}" --bootstrap >/dev/null
+
+backend_tags=(-t "${IMAGE_BACKEND}:${tag}")
+frontend_tags=(-t "${IMAGE_FRONTEND}:${tag}")
+
+if [[ "${push_latest}" == "1" ]]; then
+  backend_tags+=(-t "${IMAGE_BACKEND}:latest")
+  frontend_tags+=(-t "${IMAGE_FRONTEND}:latest")
+fi
+
+echo "Building and pushing backend image ${IMAGE_BACKEND}:${tag}"
+docker buildx build -f "${REPO_ROOT}/Dockerfile" \
+  --builder "${builder}" \
+  --platform "${platforms}" \
+  --build-arg BUILD_VERSION="${tag}" \
+  --build-arg BUILD_TIME="${build_time}" \
+  "${backend_tags[@]}" \
+  --push \
+  "${REPO_ROOT}"
+
+echo "Building and pushing frontend image ${IMAGE_FRONTEND}:${tag}"
+docker buildx build -f "${REPO_ROOT}/frontend/Dockerfile" \
+  --builder "${builder}" \
+  --platform "${platforms}" \
+  --build-arg BUILD_COMMIT="${tag}" \
+  "${frontend_tags[@]}" \
+  --push \
+  "${REPO_ROOT}/frontend"
+
+if [[ "${push_latest}" == "1" ]]; then
+  echo "Done. Pushed multi-arch images with tag ${tag} and latest."
+else
+  echo "Done. Pushed multi-arch images with tag ${tag}."
+fi

@@ -188,13 +188,14 @@ func GetAllScrapeSiteCountOfUser(userId uint) int64 {
 }
 
 func GetAllScrapeSiteCountOfUserWithSearch(userId uint, search string) int64 {
+	return GetAllScrapeSiteCountOfUserWithSearchAndFilters(userId, search, dto.ScrapeSourceListFilters{})
+}
+
+func GetAllScrapeSiteCountOfUserWithSearchAndFilters(userId uint, search string, filters dto.ScrapeSourceListFilters) int64 {
 	var count int64
-	query := DB.Model(&domain.ScrapeSite{}).
-		Joins(
-			"JOIN user_scrape_site uss ON uss.scrape_site_id = scrape_sites.id AND uss.user_id = ?",
-			userId,
-		)
+	query := buildScrapeSiteInfoQuery(userId)
 	query = applyScrapeSiteSearch(query, search)
+	query = applyScrapeSiteListFilters(query, filters)
 	query.Count(&count)
 	return count
 }
@@ -204,6 +205,10 @@ func GetScrapeSiteInfoPage(userId uint, page int) []dto.ScrapeSiteInfo {
 }
 
 func GetScrapeSiteInfoPageWithSearch(userId uint, page int, search string) []dto.ScrapeSiteInfo {
+	return GetScrapeSiteInfoPageWithSearchAndFilters(userId, page, search, dto.ScrapeSourceListFilters{})
+}
+
+func GetScrapeSiteInfoPageWithSearchAndFilters(userId uint, page int, search string, filters dto.ScrapeSourceListFilters) []dto.ScrapeSiteInfo {
 	offset := (page - 1) * scrapeSitesPerPage
 
 	var results []dto.ScrapeSiteInfo
@@ -219,6 +224,7 @@ func GetScrapeSiteInfoPageWithSearch(userId uint, page int, search string) []dto
 	)
 
 	query = applyScrapeSiteSearch(query, search)
+	query = applyScrapeSiteListFilters(query, filters)
 
 	query.Order("uss.created_at DESC").
 		Offset(offset).
@@ -301,6 +307,52 @@ func applyScrapeSiteSearch(query *gorm.DB, search string) *gorm.DB {
 	}
 
 	return query.Where("scrape_sites.url ILIKE ?", "%"+normalized+"%")
+}
+
+func applyScrapeSiteListFilters(query *gorm.DB, filters dto.ScrapeSourceListFilters) *gorm.DB {
+	protocols := normalizeScrapeSourceProtocolFilters(filters.Protocols)
+	if len(protocols) > 0 {
+		query = query.Where("LOWER(split_part(scrape_sites.url, '://', 1)) IN ?", protocols)
+	}
+
+	if filters.ProxyCount > 0 {
+		if exportCountOperator(filters.ProxyCountOperator, "") == "<" {
+			query = query.Where("COALESCE(pc.proxy_count, 0) < ?", filters.ProxyCount)
+		} else {
+			query = query.Where("COALESCE(pc.proxy_count, 0) > ?", filters.ProxyCount)
+		}
+	}
+
+	if filters.AliveCount > 0 {
+		if exportCountOperator(filters.AliveCountOperator, "") == "<" {
+			query = query.Where("COALESCE(ps.alive_count, 0) < ?", filters.AliveCount)
+		} else {
+			query = query.Where("COALESCE(ps.alive_count, 0) > ?", filters.AliveCount)
+		}
+	}
+
+	return query
+}
+
+func normalizeScrapeSourceProtocolFilters(protocols []string) []string {
+	if len(protocols) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(protocols))
+	out := make([]string, 0, len(protocols))
+	for _, protocol := range protocols {
+		trimmed := strings.ToLower(strings.TrimSpace(protocol))
+		if trimmed != "http" && trimmed != "https" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 func exportCountOperator(operator string, legacyMode string) string {

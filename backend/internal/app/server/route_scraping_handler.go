@@ -32,7 +32,8 @@ func getScrapeSourcesCount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
-	json.NewEncoder(w).Encode(database.GetAllScrapeSiteCountOfUserWithSearch(userID, search))
+	filters := parseScrapeSourceListFilters(r)
+	json.NewEncoder(w).Encode(database.GetAllScrapeSiteCountOfUserWithSearchAndFilters(userID, search, filters))
 }
 
 func getScrapeSourcePage(w http.ResponseWriter, r *http.Request) {
@@ -50,9 +51,27 @@ func getScrapeSourcePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
-	scrapeSiteInfoPages := database.GetScrapeSiteInfoPageWithSearch(userID, page, search)
+	filters := parseScrapeSourceListFilters(r)
+	scrapeSiteInfoPages := database.GetScrapeSiteInfoPageWithSearchAndFilters(userID, page, search, filters)
 
 	json.NewEncoder(w).Encode(scrapeSiteInfoPages)
+}
+
+func parseScrapeSourceListFilters(r *http.Request) dto.ScrapeSourceListFilters {
+	return dto.ScrapeSourceListFilters{
+		Protocols:          normalizeQueryList(r.URL.Query()["protocol"]),
+		ProxyCountOperator: normalizeCountOperator(r.URL.Query().Get("proxyCountOperator")),
+		ProxyCount:         uint(parsePositiveIntParam(r.URL.Query().Get("proxyCount"))),
+		AliveCountOperator: normalizeCountOperator(r.URL.Query().Get("aliveCountOperator")),
+		AliveCount:         uint(parsePositiveIntParam(r.URL.Query().Get("aliveCount"))),
+	}
+}
+
+func normalizeCountOperator(operator string) string {
+	if strings.TrimSpace(operator) == "<" {
+		return "<"
+	}
+	return ">"
 }
 
 func exportScrapeSources(w http.ResponseWriter, r *http.Request) {

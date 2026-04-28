@@ -17,6 +17,7 @@ describe('ScrapeSourceListComponent', () => {
       getScrapingSourcesCount: jasmine.createSpy('getScrapingSourcesCount').and.returnValue(of(0)),
       getScrapingSourcePage: jasmine.createSpy('getScrapingSourcePage').and.returnValue(of([])),
       exportScrapeSources: jasmine.createSpy('exportScrapeSources').and.returnValue(of('')),
+      deleteScrapingSource: jasmine.createSpy('deleteScrapingSource').and.returnValue(of('')),
       requeueScrapeSource: jasmine.createSpy('requeueScrapeSource').and.returnValue(of({message: 'Scrape source queued successfully', source_id: 1})),
     } satisfies Partial<HttpService>;
     const settingsServiceStub = {

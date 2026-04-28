@@ -7,13 +7,11 @@
           [selectedSources]="selectedScrapeSources"
         ></app-export-sources>
 
-        <p-button
-          label="Delete Selected"
-          icon="pi pi-trash"
-          styleClass="p-button-danger"
-          [disabled]="getSelectionCount() === 0"
-          (onClick)="deleteSelectedSources()"
-        ></p-button>
+        <app-delete-sources
+          [allSources]="scrapeSources"
+          [selectedSources]="selectedScrapeSources"
+          (sourcesDeleted)="onScrapeSourcesDeleted()"
+        ></app-delete-sources>
 
         <span class="text-sm text-gray-400">
           Total: {{ totalItems }} sources
@@ -232,9 +230,3 @@
   </p-table>
 
 </div>
-
-<p-confirmDialog
-  [style]="{width: '450px'}"
-  [baseZIndex]="10000"
-  rejectButtonStyleClass="p-button-outlined"
-></p-confirmDialog>

@@ -19,6 +19,7 @@ import {ProxyStatisticResponseDetail} from '../models/ProxyStatisticResponseDeta
 import {RotatingProxy, CreateRotatingProxy, RotatingProxyNext, RotatingProxyInstance} from '../models/RotatingProxy';
 import {map} from 'rxjs/operators';
 import {DeleteSettings} from '../models/DeleteSettings';
+import {ScrapeSourceDeleteSettings} from '../models/ScrapeSourceDeleteSettings';
 import {AddProxiesResponse} from '../models/AddProxiesResponse';
 import {ProxyListFilters} from '../models/ProxyListFilters';
 import {ProxyFilterOptions} from '../models/ProxyFilterOptions';
@@ -251,7 +252,7 @@ export class HttpService {
     return this.http.get<ProxyPage>(`${this.apiUrl}/scrapingSources/${sourceId}/proxies`, { params });
   }
 
-  deleteScrapingSource(proxies: number[]) {
+  deleteScrapingSource(proxies: number[] | ScrapeSourceDeleteSettings) {
     return this.http.request<string>('delete', this.apiUrl + '/scrapingSources', {
       body: proxies,
     });

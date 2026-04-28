@@ -7,14 +7,13 @@ import {HttpService} from '../../services/http.service';
 import {ScrapeSourceInfo} from '../../models/ScrapeSourceInfo';
 import {AddScrapeSourceComponent} from '../add-scrape-source/add-scrape-source.component';
 import {ExportSourcesComponent} from './export-sources/export-sources.component';
+import {DeleteSourcesComponent} from './delete-sources/delete-sources.component';
 
 // PrimeNG imports
 import {TableLazyLoadEvent, TableModule} from 'primeng/table';
 import {ButtonModule} from 'primeng/button';
 import {CheckboxModule} from 'primeng/checkbox';
-import {ConfirmDialogModule} from 'primeng/confirmdialog';
 import {SkeletonModule} from 'primeng/skeleton';
-import {ConfirmationService} from 'primeng/api';
 import {NotificationService} from '../../services/notification-service.service';
 import {SettingsService} from '../../services/settings.service';
 import {UserSettings} from '../../models/UserSettings';
@@ -45,14 +44,13 @@ interface ScrapeSourceView extends ScrapeSourceInfo {
     TableModule,
     ButtonModule,
     CheckboxModule,
-    ConfirmDialogModule,
     SkeletonModule,
     AddScrapeSourceComponent,
     ExportSourcesComponent,
+    DeleteSourcesComponent,
     HealthBarCellComponent,
     ColumnPickerPanelComponent,
   ],
-  providers: [ConfirmationService],
   templateUrl: './scrape-source-list.component.html',
   styleUrl: './scrape-source-list.component.scss',
   standalone: true
@@ -89,7 +87,6 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   constructor(
     private http: HttpService,
-    private confirmationService: ConfirmationService,
     private router: Router,
     private notification: NotificationService,
     private settingsService: SettingsService,
@@ -220,34 +217,6 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     }
   }
 
-  deleteSelectedSources(): void {
-    const selected = [...this.selection.selected];
-    if (selected.length === 0) {
-      return;
-    }
-
-    this.confirmationService.confirm({
-      message: `Are you sure you want to delete ${selected.length} selected scrape source(s)?`,
-      header: 'Confirm Deletion',
-      icon: 'pi pi-exclamation-triangle',
-      acceptButtonStyleClass: 'p-button-danger',
-      accept: () => {
-        const selectedIds = selected.map(source => source.id);
-
-        this.http.deleteScrapingSource(selectedIds).subscribe({
-          next: res => {
-            this.notification.showSuccess(res);
-            this.totalItems -= selected.length;
-            this.selection.clear();
-            this.selectedScrapeSources = [];
-            this.getAndSetScrapeSourcesList();
-          },
-          error: err => this.notification.showError("Could not delete scraping source " + err.error.message)
-        });
-      }
-    });
-  }
-
   // Helper method to get selection count
   getSelectionCount(): number {
     return this.selection.selected.length;
@@ -340,6 +309,11 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   }
 
   onScrapeSourcesAdded(): void {
+    this.page = 0;
+    this.refreshList();
+  }
+
+  onScrapeSourcesDeleted(): void {
     this.page = 0;
     this.refreshList();
   }

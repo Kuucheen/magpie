@@ -2,6 +2,8 @@ services:
   backend:
     image: kuuchen/magpie-backend:${MAGPIE_IMAGE_TAG:-latest}
     container_name: magpie_backend
+    command:
+      - -rod=bin=/usr/lib/chromium/chromium
     ports:
       - "5656:5656"
       - "20000-20100:20000-20100"
@@ -35,6 +37,9 @@ services:
     depends_on:
       - postgres
       - redis
+    volumes:
+      - backend_data:/app/data
+      - backend_browser_cache:/home/nonroot/.cache/rod
     deploy:
       resources:
         limits:
@@ -113,3 +118,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  backend_data:
+  backend_browser_cache:

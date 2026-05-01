@@ -3,7 +3,6 @@ import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators} from '@angular/forms';
 import {Button} from 'primeng/button';
 import {RadioButtonModule} from 'primeng/radiobutton';
-import {InputNumberModule} from 'primeng/inputnumber';
 import {InputTextModule} from 'primeng/inputtext';
 import {CheckboxComponent} from '../../../checkbox/checkbox.component';
 import {SettingsService} from '../../../services/settings.service';
@@ -11,23 +10,26 @@ import {HttpService} from '../../../services/http.service';
 import {ProxyInfo} from '../../../models/ProxyInfo';
 import {ExportSettings} from '../../../models/ExportSettings';
 import {DialogModule} from 'primeng/dialog';
-import {Select} from 'primeng/select';
-import {MultiSelectModule} from 'primeng/multiselect';
 import {NotificationService} from '../../../services/notification-service.service';
 import {TooltipComponent} from '../../../tooltip/tooltip.component';
+import {ProxyFilterPanelComponent} from '../../../shared/proxy-filter-panel/proxy-filter-panel.component';
+import {
+  PROXY_REPUTATION_OPTIONS,
+  PROXY_STATUS_OPTIONS,
+  ProxyFilterOption,
+  ProxyListFilterFormValues,
+  buildFilterOptionList,
+  createDefaultProxyFilterValues,
+  normalizeFilterOptions,
+  normalizeNumber,
+  normalizePercentage,
+  normalizeSelection,
+} from '../../../shared/proxy-filters';
 
 type ExportFormDefaults = {
   output: string;
   filter: boolean;
-  HTTPProtocol: boolean;
-  HTTPSProtocol: boolean;
-  SOCKS4Protocol: boolean;
-  SOCKS5Protocol: boolean;
-  Retries: number;
-  Timeout: number;
-  proxyStatus: 'all' | 'alive' | 'dead';
-  proxyReputations: string[];
-};
+} & ProxyListFilterFormValues;
 
 @Component({
   selector: 'app-export-proxies',
@@ -37,14 +39,12 @@ type ExportFormDefaults = {
     ReactiveFormsModule,
     Button,
     RadioButtonModule,
-    InputNumberModule,
     InputTextModule,
     CheckboxComponent,
     DialogModule,
-    Select,
-    MultiSelectModule,
-    TooltipComponent
-],
+    TooltipComponent,
+    ProxyFilterPanelComponent
+  ],
   templateUrl: './export-proxies.component.html',
   styleUrls: ['./export-proxies.component.scss'],
 })
@@ -57,19 +57,14 @@ export class ExportProxiesComponent implements OnChanges {
   exportForm: FormGroup;
 
   readonly predefinedFilters: string[] = ['protocol', 'ip', 'port', 'username', 'password', 'country', 'alive', 'type', 'time', 'reputation_label', 'reputation_score'];
-  readonly proxyStatusOptions = [
-    {label: 'All Proxies', value: 'all'},
-    {label: 'Only Alive Proxies', value: 'alive'},
-    {label: 'Only Dead Proxies', value: 'dead'},
-  ];
-  readonly proxyReputationOptions = [
-    {label: 'Good', value: 'good'},
-    {label: 'Neutral', value: 'neutral'},
-    {label: 'Poor', value: 'poor'},
-    {label: 'Unknown', value: 'unknown'},
-  ];
+  readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
+  readonly proxyReputationOptions = PROXY_REPUTATION_OPTIONS;
+  countryOptions: ProxyFilterOption[] = [];
+  typeOptions: ProxyFilterOption[] = [];
+  anonymityOptions: ProxyFilterOption[] = [];
 
   private defaultFormValues: ExportFormDefaults;
+  private filterOptionsLoaded = false;
 
   constructor(
     private fb: FormBuilder,
@@ -79,30 +74,60 @@ export class ExportProxiesComponent implements OnChanges {
   ) {
     const settings = this.settingsService.getUserSettings();
 
+    const defaultFilterValues = createDefaultProxyFilterValues();
+
     this.defaultFormValues = {
+      ...defaultFilterValues,
       output: 'protocol://ip:port',
       filter: false,
-      HTTPProtocol: settings?.http_protocol ?? false,
-      HTTPSProtocol: settings?.https_protocol ?? false,
-      SOCKS4Protocol: settings?.socks4_protocol ?? false,
-      SOCKS5Protocol: settings?.socks5_protocol ?? false,
-      Retries: settings?.retries ?? 0,
-      Timeout: settings?.timeout ?? 0,
-      proxyStatus: 'all',
-      proxyReputations: [],
+      http: settings?.http_protocol ?? false,
+      https: settings?.https_protocol ?? false,
+      socks4: settings?.socks4_protocol ?? false,
+      socks5: settings?.socks5_protocol ?? false,
+      maxRetries: settings?.retries ?? 0,
+      maxTimeout: settings?.timeout ?? 0,
     };
 
     this.exportForm = this.fb.group({
       output: [this.defaultFormValues.output, Validators.required],
       filter: [this.defaultFormValues.filter],
-      HTTPProtocol: [this.defaultFormValues.HTTPProtocol],
-      HTTPSProtocol: [this.defaultFormValues.HTTPSProtocol],
-      SOCKS4Protocol: [this.defaultFormValues.SOCKS4Protocol],
-      SOCKS5Protocol: [this.defaultFormValues.SOCKS5Protocol],
-      Retries: [this.defaultFormValues.Retries, Validators.required],
-      Timeout: [this.defaultFormValues.Timeout, Validators.required],
       proxyStatus: [this.defaultFormValues.proxyStatus],
-      proxyReputations: [this.defaultFormValues.proxyReputations],
+      http: [this.defaultFormValues.http],
+      https: [this.defaultFormValues.https],
+      socks4: [this.defaultFormValues.socks4],
+      socks5: [this.defaultFormValues.socks5],
+      minHealthOverall: [this.defaultFormValues.minHealthOverall],
+      minHealthHttp: [this.defaultFormValues.minHealthHttp],
+      minHealthHttps: [this.defaultFormValues.minHealthHttps],
+      minHealthSocks4: [this.defaultFormValues.minHealthSocks4],
+      minHealthSocks5: [this.defaultFormValues.minHealthSocks5],
+      maxTimeout: [this.defaultFormValues.maxTimeout, Validators.required],
+      maxRetries: [this.defaultFormValues.maxRetries, Validators.required],
+      countries: [this.defaultFormValues.countries],
+      types: [this.defaultFormValues.types],
+      anonymityLevels: [this.defaultFormValues.anonymityLevels],
+      reputationLabels: [this.defaultFormValues.reputationLabels],
+    });
+  }
+
+  clearExportFilters(): void {
+    this.exportForm.patchValue({
+      proxyStatus: this.defaultFormValues.proxyStatus,
+      http: false,
+      https: false,
+      socks4: false,
+      socks5: false,
+      minHealthOverall: 0,
+      minHealthHttp: 0,
+      minHealthHttps: 0,
+      minHealthSocks4: 0,
+      minHealthSocks5: 0,
+      maxTimeout: 0,
+      maxRetries: 0,
+      countries: [],
+      types: [],
+      anonymityLevels: [],
+      reputationLabels: [],
     });
   }
 
@@ -118,6 +143,7 @@ export class ExportProxiesComponent implements OnChanges {
       return;
     }
     this.syncDefaultsWithUserSettings();
+    this.ensureFilterOptionsLoaded();
     this.exportOption = this.canExportSelected() ? 'selected' : 'all';
     this.dialogVisible = true;
   }
@@ -183,12 +209,12 @@ export class ExportProxiesComponent implements OnChanges {
     }
 
     const updatedDefaults: Partial<ExportFormDefaults> = {
-      HTTPProtocol: settings.http_protocol,
-      HTTPSProtocol: settings.https_protocol,
-      SOCKS4Protocol: settings.socks4_protocol,
-      SOCKS5Protocol: settings.socks5_protocol,
-      Retries: settings.retries,
-      Timeout: settings.timeout,
+      http: settings.http_protocol,
+      https: settings.https_protocol,
+      socks4: settings.socks4_protocol,
+      socks5: settings.socks5_protocol,
+      maxRetries: settings.retries,
+      maxTimeout: settings.timeout,
     };
 
     this.defaultFormValues = {
@@ -202,21 +228,50 @@ export class ExportProxiesComponent implements OnChanges {
   private transformFormToExport(exportForm: FormGroup, proxies: ProxyInfo[], scope: 'all' | 'selected'): ExportSettings {
     const formValue = exportForm.getRawValue();
     const proxyIds = scope === 'selected' ? proxies.map(proxy => proxy.id) : [];
-    const reputationSelection = this.normalizeReputationSelection(formValue.proxyReputations);
+    const filtersEnabled = Boolean(formValue.filter);
+    const reputationSelection = filtersEnabled ? normalizeSelection(formValue.reputationLabels) : [];
 
     return {
       proxies: proxyIds,
-      filter: formValue.filter,
-      http: formValue.HTTPProtocol,
-      https: formValue.HTTPSProtocol,
-      socks4: formValue.SOCKS4Protocol,
-      socks5: formValue.SOCKS5Protocol,
-      maxRetries: formValue.Retries,
-      maxTimeout: formValue.Timeout,
-      proxyStatus: formValue.proxyStatus,
+      filter: filtersEnabled,
+      http: filtersEnabled ? Boolean(formValue.http) : false,
+      https: filtersEnabled ? Boolean(formValue.https) : false,
+      socks4: filtersEnabled ? Boolean(formValue.socks4) : false,
+      socks5: filtersEnabled ? Boolean(formValue.socks5) : false,
+      minHealthOverall: filtersEnabled ? normalizePercentage(formValue.minHealthOverall) : 0,
+      minHealthHttp: filtersEnabled ? normalizePercentage(formValue.minHealthHttp) : 0,
+      minHealthHttps: filtersEnabled ? normalizePercentage(formValue.minHealthHttps) : 0,
+      minHealthSocks4: filtersEnabled ? normalizePercentage(formValue.minHealthSocks4) : 0,
+      minHealthSocks5: filtersEnabled ? normalizePercentage(formValue.minHealthSocks5) : 0,
+      maxRetries: filtersEnabled ? normalizeNumber(formValue.maxRetries) : 0,
+      maxTimeout: filtersEnabled ? normalizeNumber(formValue.maxTimeout) : 0,
+      countries: filtersEnabled ? normalizeSelection(formValue.countries) : [],
+      types: filtersEnabled ? normalizeSelection(formValue.types) : [],
+      anonymityLevels: filtersEnabled ? normalizeSelection(formValue.anonymityLevels) : [],
+      proxyStatus: filtersEnabled ? (formValue.proxyStatus ?? 'all') : 'all',
       reputationLabels: reputationSelection,
       outputFormat: formValue.output
     };
+  }
+
+  private ensureFilterOptionsLoaded(): void {
+    if (this.filterOptionsLoaded) {
+      return;
+    }
+
+    this.http.getProxyFilterOptions().subscribe({
+      next: options => {
+        const normalized = normalizeFilterOptions(options);
+        this.countryOptions = buildFilterOptionList(normalized.countries);
+        this.typeOptions = buildFilterOptionList(normalized.types);
+        this.anonymityOptions = buildFilterOptionList(normalized.anonymityLevels);
+        this.filterOptionsLoaded = true;
+      },
+      error: err => {
+        const message = err?.error?.message ?? err?.message ?? 'Unknown error';
+        this.notification.showError('Could not load filter options: ' + message);
+      }
+    });
   }
 
   private buildFileName(): string {
@@ -247,16 +302,6 @@ export class ExportProxiesComponent implements OnChanges {
     anchor.click();
     document.body.removeChild(anchor);
     window.URL.revokeObjectURL(url);
-  }
-
-  private normalizeReputationSelection(rawValue: unknown): string[] {
-    if (Array.isArray(rawValue)) {
-      return rawValue.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
-    }
-    if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
-      return [rawValue.trim()];
-    }
-    return [];
   }
 
   private extractExportErrorMessage(error: unknown): string {

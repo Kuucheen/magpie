@@ -1,24 +1,26 @@
 <div class="filter-panel" [ngClass]="{'filter-panel--floating': floating}">
-  <div class="filter-panel__header">
-    <div>
-      <div class="filter-panel__title">Filters</div>
-      <div class="filter-panel__subtitle">Narrow the list by status, protocol health, or metadata.</div>
+  @if (showHeader) {
+    <div class="filter-panel__header">
+      <div>
+        <div class="filter-panel__title">Filters</div>
+        <div class="filter-panel__subtitle">Narrow the list by status, protocol health, or metadata.</div>
+      </div>
+      <div class="filter-panel__actions">
+        <p-button
+          label="Clear"
+          styleClass="p-button-text p-button-sm"
+          (onClick)="clear.emit()"
+        ></p-button>
+        <p-button
+          label="Apply"
+          styleClass="p-button-success p-button-sm"
+          (onClick)="apply.emit()"
+        ></p-button>
+      </div>
     </div>
-    <div class="filter-panel__actions">
-      <p-button
-        label="Clear"
-        styleClass="p-button-text p-button-sm"
-        (onClick)="clear.emit()"
-      ></p-button>
-      <p-button
-        label="Apply"
-        styleClass="p-button-success p-button-sm"
-        (onClick)="apply.emit()"
-      ></p-button>
-    </div>
-  </div>
 
-  <div class="filter-panel__divider" aria-hidden="true"></div>
+    <div class="filter-panel__divider" aria-hidden="true"></div>
+  }
 
   <form [formGroup]="form" class="filter-panel__body">
     <div class="filter-panel__body-main">

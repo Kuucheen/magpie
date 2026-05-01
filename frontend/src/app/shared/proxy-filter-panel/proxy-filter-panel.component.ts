@@ -32,6 +32,7 @@ export class ProxyFilterPanelComponent {
   @Input() proxyStatusOptions: ProxyFilterOption[] = [];
   @Input() proxyReputationOptions: ProxyFilterOption[] = [];
   @Input() floating = true;
+  @Input() showHeader = true;
 
   @Output() apply = new EventEmitter<void>();
   @Output() clear = new EventEmitter<void>();

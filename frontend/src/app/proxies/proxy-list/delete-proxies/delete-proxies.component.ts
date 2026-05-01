@@ -3,29 +3,31 @@ import {Component, EventEmitter, Input, OnChanges, Output, SimpleChanges} from '
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {Button} from 'primeng/button';
 import {RadioButtonModule} from 'primeng/radiobutton';
-import {InputNumberModule} from 'primeng/inputnumber';
 import {CheckboxComponent} from '../../../checkbox/checkbox.component';
 import {SettingsService} from '../../../services/settings.service';
 import {HttpService} from '../../../services/http.service';
 import {ProxyInfo} from '../../../models/ProxyInfo';
 import {DialogModule} from 'primeng/dialog';
-import {Select} from 'primeng/select';
-import {MultiSelectModule} from 'primeng/multiselect';
 import {NotificationService} from '../../../services/notification-service.service';
 import {DeleteSettings} from '../../../models/DeleteSettings';
 import {TooltipComponent} from '../../../tooltip/tooltip.component';
+import {ProxyFilterPanelComponent} from '../../../shared/proxy-filter-panel/proxy-filter-panel.component';
+import {
+  PROXY_REPUTATION_OPTIONS,
+  PROXY_STATUS_OPTIONS,
+  ProxyFilterOption,
+  ProxyListFilterFormValues,
+  buildFilterOptionList,
+  createDefaultProxyFilterValues,
+  normalizeFilterOptions,
+  normalizeNumber,
+  normalizePercentage,
+  normalizeSelection,
+} from '../../../shared/proxy-filters';
 
 type DeleteFormDefaults = {
   filter: boolean;
-  HTTPProtocol: boolean;
-  HTTPSProtocol: boolean;
-  SOCKS4Protocol: boolean;
-  SOCKS5Protocol: boolean;
-  Retries: number;
-  Timeout: number;
-  proxyStatus: 'all' | 'alive' | 'dead';
-  proxyReputations: string[];
-};
+} & ProxyListFilterFormValues;
 
 @Component({
   selector: 'app-delete-proxies',
@@ -35,13 +37,11 @@ type DeleteFormDefaults = {
     ReactiveFormsModule,
     Button,
     RadioButtonModule,
-    InputNumberModule,
     CheckboxComponent,
     DialogModule,
-    Select,
-    MultiSelectModule,
-    TooltipComponent
-],
+    TooltipComponent,
+    ProxyFilterPanelComponent,
+  ],
   templateUrl: './delete-proxies.component.html',
   styleUrls: ['./delete-proxies.component.scss'],
 })
@@ -55,19 +55,14 @@ export class DeleteProxiesComponent implements OnChanges {
   deleteOption: 'all' | 'selected' = 'all';
   deleteForm: FormGroup;
 
-  readonly proxyStatusOptions = [
-    {label: 'All Proxies', value: 'all'},
-    {label: 'Only Alive Proxies', value: 'alive'},
-    {label: 'Only Dead Proxies', value: 'dead'},
-  ];
-  readonly proxyReputationOptions = [
-    {label: 'Good', value: 'good'},
-    {label: 'Neutral', value: 'neutral'},
-    {label: 'Poor', value: 'poor'},
-    {label: 'Unknown', value: 'unknown'},
-  ];
+  readonly proxyStatusOptions = PROXY_STATUS_OPTIONS;
+  readonly proxyReputationOptions = PROXY_REPUTATION_OPTIONS;
+  countryOptions: ProxyFilterOption[] = [];
+  typeOptions: ProxyFilterOption[] = [];
+  anonymityOptions: ProxyFilterOption[] = [];
 
   private defaultFormValues: DeleteFormDefaults;
+  private filterOptionsLoaded = false;
 
   constructor(
     private fb: FormBuilder,
@@ -77,28 +72,58 @@ export class DeleteProxiesComponent implements OnChanges {
   ) {
     const settings = this.settingsService.getUserSettings();
 
+    const defaultFilterValues = createDefaultProxyFilterValues();
+
     this.defaultFormValues = {
+      ...defaultFilterValues,
       filter: false,
-      HTTPProtocol: settings?.http_protocol ?? false,
-      HTTPSProtocol: settings?.https_protocol ?? false,
-      SOCKS4Protocol: settings?.socks4_protocol ?? false,
-      SOCKS5Protocol: settings?.socks5_protocol ?? false,
-      Retries: settings?.retries ?? 0,
-      Timeout: settings?.timeout ?? 0,
-      proxyStatus: 'all',
-      proxyReputations: [],
+      http: settings?.http_protocol ?? false,
+      https: settings?.https_protocol ?? false,
+      socks4: settings?.socks4_protocol ?? false,
+      socks5: settings?.socks5_protocol ?? false,
+      maxRetries: settings?.retries ?? 0,
+      maxTimeout: settings?.timeout ?? 0,
     };
 
     this.deleteForm = this.fb.group({
       filter: [this.defaultFormValues.filter],
-      HTTPProtocol: [this.defaultFormValues.HTTPProtocol],
-      HTTPSProtocol: [this.defaultFormValues.HTTPSProtocol],
-      SOCKS4Protocol: [this.defaultFormValues.SOCKS4Protocol],
-      SOCKS5Protocol: [this.defaultFormValues.SOCKS5Protocol],
-      Retries: [this.defaultFormValues.Retries],
-      Timeout: [this.defaultFormValues.Timeout],
       proxyStatus: [this.defaultFormValues.proxyStatus],
-      proxyReputations: [this.defaultFormValues.proxyReputations],
+      http: [this.defaultFormValues.http],
+      https: [this.defaultFormValues.https],
+      socks4: [this.defaultFormValues.socks4],
+      socks5: [this.defaultFormValues.socks5],
+      minHealthOverall: [this.defaultFormValues.minHealthOverall],
+      minHealthHttp: [this.defaultFormValues.minHealthHttp],
+      minHealthHttps: [this.defaultFormValues.minHealthHttps],
+      minHealthSocks4: [this.defaultFormValues.minHealthSocks4],
+      minHealthSocks5: [this.defaultFormValues.minHealthSocks5],
+      maxTimeout: [this.defaultFormValues.maxTimeout],
+      maxRetries: [this.defaultFormValues.maxRetries],
+      countries: [this.defaultFormValues.countries],
+      types: [this.defaultFormValues.types],
+      anonymityLevels: [this.defaultFormValues.anonymityLevels],
+      reputationLabels: [this.defaultFormValues.reputationLabels],
+    });
+  }
+
+  clearDeleteFilters(): void {
+    this.deleteForm.patchValue({
+      proxyStatus: this.defaultFormValues.proxyStatus,
+      http: false,
+      https: false,
+      socks4: false,
+      socks5: false,
+      minHealthOverall: 0,
+      minHealthHttp: 0,
+      minHealthHttps: 0,
+      minHealthSocks4: 0,
+      minHealthSocks5: 0,
+      maxTimeout: 0,
+      maxRetries: 0,
+      countries: [],
+      types: [],
+      anonymityLevels: [],
+      reputationLabels: [],
     });
   }
 
@@ -115,6 +140,7 @@ export class DeleteProxiesComponent implements OnChanges {
     }
 
     this.syncDefaultsWithUserSettings();
+    this.ensureFilterOptionsLoaded();
     this.deleteOption = this.canDeleteSelected() ? 'selected' : 'all';
     this.dialogVisible = true;
   }
@@ -185,12 +211,12 @@ export class DeleteProxiesComponent implements OnChanges {
     }
 
     const updatedDefaults: Partial<DeleteFormDefaults> = {
-      HTTPProtocol: settings.http_protocol,
-      HTTPSProtocol: settings.https_protocol,
-      SOCKS4Protocol: settings.socks4_protocol,
-      SOCKS5Protocol: settings.socks5_protocol,
-      Retries: settings.retries,
-      Timeout: settings.timeout,
+      http: settings.http_protocol,
+      https: settings.https_protocol,
+      socks4: settings.socks4_protocol,
+      socks5: settings.socks5_protocol,
+      maxRetries: settings.retries,
+      maxTimeout: settings.timeout,
     };
 
     this.defaultFormValues = {
@@ -202,32 +228,51 @@ export class DeleteProxiesComponent implements OnChanges {
   }
 
   private transformFormToDelete(form: FormGroup, scope: 'all' | 'selected'): DeleteSettings {
-    const formValue = form.value;
+    const formValue = form.getRawValue();
     const proxies = scope === 'selected' ? this.selectedProxies : [];
-    const reputationSelection = this.normalizeReputationSelection(formValue.proxyReputations);
+    const filtersEnabled = Boolean(formValue.filter);
+    const reputationSelection = filtersEnabled ? normalizeSelection(formValue.reputationLabels) : [];
 
     return {
       proxies: proxies.map(proxy => proxy.id),
-      filter: formValue.filter,
-      http: formValue.HTTPProtocol,
-      https: formValue.HTTPSProtocol,
-      socks4: formValue.SOCKS4Protocol,
-      socks5: formValue.SOCKS5Protocol,
-      maxRetries: formValue.Retries,
-      maxTimeout: formValue.Timeout,
-      proxyStatus: formValue.proxyStatus,
+      filter: filtersEnabled,
+      http: filtersEnabled ? Boolean(formValue.http) : false,
+      https: filtersEnabled ? Boolean(formValue.https) : false,
+      socks4: filtersEnabled ? Boolean(formValue.socks4) : false,
+      socks5: filtersEnabled ? Boolean(formValue.socks5) : false,
+      minHealthOverall: filtersEnabled ? normalizePercentage(formValue.minHealthOverall) : 0,
+      minHealthHttp: filtersEnabled ? normalizePercentage(formValue.minHealthHttp) : 0,
+      minHealthHttps: filtersEnabled ? normalizePercentage(formValue.minHealthHttps) : 0,
+      minHealthSocks4: filtersEnabled ? normalizePercentage(formValue.minHealthSocks4) : 0,
+      minHealthSocks5: filtersEnabled ? normalizePercentage(formValue.minHealthSocks5) : 0,
+      maxRetries: filtersEnabled ? normalizeNumber(formValue.maxRetries) : 0,
+      maxTimeout: filtersEnabled ? normalizeNumber(formValue.maxTimeout) : 0,
+      countries: filtersEnabled ? normalizeSelection(formValue.countries) : [],
+      types: filtersEnabled ? normalizeSelection(formValue.types) : [],
+      anonymityLevels: filtersEnabled ? normalizeSelection(formValue.anonymityLevels) : [],
+      proxyStatus: filtersEnabled ? (formValue.proxyStatus ?? 'all') : 'all',
       reputationLabels: reputationSelection,
       scope,
     };
   }
 
-  private normalizeReputationSelection(rawValue: unknown): string[] {
-    if (Array.isArray(rawValue)) {
-      return rawValue.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  private ensureFilterOptionsLoaded(): void {
+    if (this.filterOptionsLoaded) {
+      return;
     }
-    if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
-      return [rawValue.trim()];
-    }
-    return [];
+
+    this.http.getProxyFilterOptions().subscribe({
+      next: options => {
+        const normalized = normalizeFilterOptions(options);
+        this.countryOptions = buildFilterOptionList(normalized.countries);
+        this.typeOptions = buildFilterOptionList(normalized.types);
+        this.anonymityOptions = buildFilterOptionList(normalized.anonymityLevels);
+        this.filterOptionsLoaded = true;
+      },
+      error: err => {
+        const message = err?.error?.message ?? err?.message ?? 'Unknown error';
+        this.notification.showError('Could not load filter options: ' + message);
+      }
+    });
   }
 }

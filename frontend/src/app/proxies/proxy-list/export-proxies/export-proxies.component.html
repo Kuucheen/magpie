@@ -32,45 +32,17 @@
   <div class="export-dialog__body text-gray-200 p-6 space-y-6">
     <section class="space-y-3">
       <p class="text-sm text-gray-400">Choose how you want to format and filter your export file.</p>
-      <div class="flex flex-col sm:flex-row gap-4">
-        <label
-          for="exportAll"
-          class="export-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
-          [class.theme-card--active]="exportOption === 'all'"
-        >
-          <p-radioButton
-            name="exportOption"
-            value="all"
-            [(ngModel)]="exportOption"
-            inputId="exportAll"
-          ></p-radioButton>
-          <div class="space-y-1">
-            <span class="font-semibold text-white">All Proxies</span>
-            <p class="text-sm text-gray-400">Export every proxy currently available.</p>
-          </div>
-        </label>
-
-        <label
-          for="exportSelected"
-          class="export-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
-          [class.opacity-60]="!canExportSelected()"
-          [class.cursor-not-allowed]="!canExportSelected()"
-          [class.theme-card--active]="exportOption === 'selected'"
-          [class.theme-card--disabled]="!canExportSelected()"
-        >
-          <p-radioButton
-            name="exportOption"
-            value="selected"
-            [(ngModel)]="exportOption"
-            inputId="exportSelected"
-            [disabled]="!canExportSelected()"
-          ></p-radioButton>
-          <div class="space-y-1">
-            <span class="font-semibold text-white">Selected Proxies</span>
-            <p class="text-sm text-gray-400">Export only the proxies you highlighted in the table.</p>
-          </div>
-        </label>
-      </div>
+      <app-bulk-scope-selector
+        [(scope)]="exportOption"
+        radioName="exportOption"
+        allInputId="exportAll"
+        selectedInputId="exportSelected"
+        allTitle="All Proxies"
+        allDescription="Export every proxy currently available."
+        selectedTitle="Selected Proxies"
+        selectedDescription="Export only the proxies you highlighted in the table."
+        [selectedDisabled]="!canExportSelected()"
+      ></app-bulk-scope-selector>
     </section>
 
     <div [formGroup]="exportForm" class="space-y-6">

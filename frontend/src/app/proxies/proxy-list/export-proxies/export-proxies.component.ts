@@ -2,7 +2,6 @@
 import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators} from '@angular/forms';
 import {Button} from 'primeng/button';
-import {RadioButtonModule} from 'primeng/radiobutton';
 import {InputTextModule} from 'primeng/inputtext';
 import {CheckboxComponent} from '../../../checkbox/checkbox.component';
 import {SettingsService} from '../../../services/settings.service';
@@ -25,6 +24,8 @@ import {
   normalizePercentage,
   normalizeSelection,
 } from '../../../shared/proxy-filters';
+import {BulkScopeSelectorComponent} from '../../../shared/bulk-scope-selector/bulk-scope-selector.component';
+import {buildDatedExportFileName, downloadTextFile, extractHttpErrorMessage} from '../../../shared/export-file-utils';
 
 type ExportFormDefaults = {
   output: string;
@@ -38,12 +39,12 @@ type ExportFormDefaults = {
     FormsModule,
     ReactiveFormsModule,
     Button,
-    RadioButtonModule,
     InputTextModule,
     CheckboxComponent,
     DialogModule,
     TooltipComponent,
-    ProxyFilterPanelComponent
+    ProxyFilterPanelComponent,
+    BulkScopeSelectorComponent,
   ],
   templateUrl: './export-proxies.component.html',
   styleUrls: ['./export-proxies.component.scss'],
@@ -184,13 +185,13 @@ export class ExportProxiesComponent implements OnChanges {
 
     this.http.exportProxies(exportSettings).subscribe({
       next: res => {
-        this.downloadFile(res, fileName);
+        downloadTextFile(res, fileName);
         this.isExporting = false;
         this.closeDialog();
       },
       error: err => {
         this.isExporting = false;
-        const message = this.extractExportErrorMessage(err);
+        const message = extractHttpErrorMessage(err);
         this.notification.showError('Error while exporting proxies: ' + message);
       }
     });
@@ -275,71 +276,6 @@ export class ExportProxiesComponent implements OnChanges {
   }
 
   private buildFileName(): string {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const randomCode = this.generateRandomCode(4);
-    return `${year}-${month}-${day}-${randomCode}-magpie.txt`;
-  }
-
-  private generateRandomCode(length: number = 4): string {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-      result += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    return result;
-  }
-
-  private downloadFile(data: BlobPart, fileName: string): void {
-    const blob = new Blob([data], {type: 'text/plain'});
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    window.URL.revokeObjectURL(url);
-  }
-
-  private extractExportErrorMessage(error: unknown): string {
-    if (typeof error === 'object' && error !== null) {
-      const httpError = error as {
-        error?: unknown;
-        message?: unknown;
-      };
-
-      if (typeof httpError.error === 'string' && httpError.error.trim().length > 0) {
-        try {
-          const parsed = JSON.parse(httpError.error) as {error?: unknown; message?: unknown};
-          if (typeof parsed.error === 'string' && parsed.error.trim().length > 0) {
-            return parsed.error;
-          }
-          if (typeof parsed.message === 'string' && parsed.message.trim().length > 0) {
-            return parsed.message;
-          }
-        } catch {
-          return httpError.error;
-        }
-      }
-
-      if (typeof httpError.error === 'object' && httpError.error !== null) {
-        const payload = httpError.error as {error?: unknown; message?: unknown};
-        if (typeof payload.error === 'string' && payload.error.trim().length > 0) {
-          return payload.error;
-        }
-        if (typeof payload.message === 'string' && payload.message.trim().length > 0) {
-          return payload.message;
-        }
-      }
-
-      if (typeof httpError.message === 'string' && httpError.message.trim().length > 0) {
-        return httpError.message;
-      }
-    }
-
-    return 'Unknown error';
+    return buildDatedExportFileName('magpie.txt');
   }
 }

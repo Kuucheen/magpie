@@ -39,47 +39,18 @@
 
     <section class="space-y-3">
       <p class="text-sm text-gray-400">Choose which scrape sources should be considered for deletion.</p>
-      <div class="flex flex-col sm:flex-row gap-4">
-        <label
-          for="deleteAllSources"
-          class="delete-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
-          [class.theme-card--active]="deleteOption === 'all'"
-        >
-          <p-radioButton
-            name="deleteSourceOption"
-            value="all"
-            [(ngModel)]="deleteOption"
-            inputId="deleteAllSources"
-          ></p-radioButton>
-          <div class="space-y-1">
-            <span class="font-semibold text-white">All Sources</span>
-            <p class="text-sm text-gray-400">
-              Delete every scrape source you own that matches the filters below.
-            </p>
-          </div>
-        </label>
-
-        <label
-          for="deleteSelectedSources"
-          class="delete-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
-          [class.opacity-60]="!canDeleteSelected()"
-          [class.cursor-not-allowed]="!canDeleteSelected()"
-          [class.theme-card--active]="deleteOption === 'selected'"
-          [class.theme-card--disabled]="!canDeleteSelected()"
-        >
-          <p-radioButton
-            name="deleteSourceOption"
-            value="selected"
-            [(ngModel)]="deleteOption"
-            inputId="deleteSelectedSources"
-            [disabled]="!canDeleteSelected()"
-          ></p-radioButton>
-          <div class="space-y-1">
-            <span class="font-semibold text-white">Selected Sources</span>
-            <p class="text-sm text-gray-400">Delete only the sources highlighted in the table on this page.</p>
-          </div>
-        </label>
-      </div>
+      <app-bulk-scope-selector
+        [(scope)]="deleteOption"
+        radioName="deleteSourceOption"
+        allInputId="deleteAllSources"
+        selectedInputId="deleteSelectedSources"
+        allTitle="All Sources"
+        allDescription="Delete every scrape source you own that matches the filters below."
+        selectedTitle="Selected Sources"
+        selectedDescription="Delete only the sources highlighted in the table on this page."
+        [selectedDisabled]="!canDeleteSelected()"
+        accentColor="#f87171"
+      ></app-bulk-scope-selector>
     </section>
 
     <div [formGroup]="deleteForm" class="space-y-6">

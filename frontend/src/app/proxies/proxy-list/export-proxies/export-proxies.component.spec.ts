@@ -11,11 +11,15 @@ describe('ExportProxiesComponent', () => {
   let fixture: ComponentFixture<ExportProxiesComponent>;
   let exportProxiesSpy: jasmine.Spy;
   let showErrorSpy: jasmine.Spy;
-  let downloadFileSpy: jasmine.Spy;
+  let createObjectUrlSpy: jasmine.Spy;
+  let anchorClickSpy: jasmine.Spy;
 
   beforeEach(async () => {
     exportProxiesSpy = jasmine.createSpy('exportProxies');
     showErrorSpy = jasmine.createSpy('showError');
+    createObjectUrlSpy = spyOn(window.URL, 'createObjectURL').and.returnValue('blob:export-proxies');
+    spyOn(window.URL, 'revokeObjectURL');
+    anchorClickSpy = spyOn(HTMLAnchorElement.prototype, 'click');
 
     await TestBed.configureTestingModule({
       imports: [ExportProxiesComponent],
@@ -30,7 +34,6 @@ describe('ExportProxiesComponent', () => {
     fixture = TestBed.createComponent(ExportProxiesComponent);
     component = fixture.componentInstance;
     component.allProxies = [{id: 1} as never];
-    downloadFileSpy = spyOn<any>(component, 'downloadFile');
     fixture.detectChanges();
   });
 
@@ -44,7 +47,8 @@ describe('ExportProxiesComponent', () => {
     component.submitExport();
 
     expect(exportProxiesSpy).toHaveBeenCalled();
-    expect(downloadFileSpy).toHaveBeenCalledWith('http://127.0.0.1:8080', jasmine.any(String));
+    expect(createObjectUrlSpy).toHaveBeenCalledWith(jasmine.any(Blob));
+    expect(anchorClickSpy).toHaveBeenCalled();
   });
 
   it('shows backend JSON error messages returned as text', () => {

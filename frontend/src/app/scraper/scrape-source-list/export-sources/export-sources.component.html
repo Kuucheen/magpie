@@ -32,45 +32,17 @@
   <div class="export-dialog__body text-gray-200 p-6 space-y-6">
     <section class="space-y-3">
       <p class="text-sm text-gray-400">Choose which scrape sources to include and how each line should be written.</p>
-      <div class="flex flex-col sm:flex-row gap-4">
-        <label
-          for="exportAllSources"
-          class="export-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
-          [class.theme-card--active]="exportOption === 'all'"
-        >
-          <p-radioButton
-            name="exportSourceOption"
-            value="all"
-            [(ngModel)]="exportOption"
-            inputId="exportAllSources"
-          ></p-radioButton>
-          <div class="space-y-1">
-            <span class="font-semibold text-white">All Sources</span>
-            <p class="text-sm text-gray-400">Export every scrape source in your account.</p>
-          </div>
-        </label>
-
-        <label
-          for="exportSelectedSources"
-          class="export-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
-          [class.opacity-60]="!canExportSelected()"
-          [class.cursor-not-allowed]="!canExportSelected()"
-          [class.theme-card--active]="exportOption === 'selected'"
-          [class.theme-card--disabled]="!canExportSelected()"
-        >
-          <p-radioButton
-            name="exportSourceOption"
-            value="selected"
-            [(ngModel)]="exportOption"
-            inputId="exportSelectedSources"
-            [disabled]="!canExportSelected()"
-          ></p-radioButton>
-          <div class="space-y-1">
-            <span class="font-semibold text-white">Selected Sources</span>
-            <p class="text-sm text-gray-400">Export only the sources you highlighted in the table.</p>
-          </div>
-        </label>
-      </div>
+      <app-bulk-scope-selector
+        [(scope)]="exportOption"
+        radioName="exportSourceOption"
+        allInputId="exportAllSources"
+        selectedInputId="exportSelectedSources"
+        allTitle="All Sources"
+        allDescription="Export every scrape source in your account."
+        selectedTitle="Selected Sources"
+        selectedDescription="Export only the sources you highlighted in the table."
+        [selectedDisabled]="!canExportSelected()"
+      ></app-bulk-scope-selector>
     </section>
 
     <div [formGroup]="exportForm" class="space-y-6">

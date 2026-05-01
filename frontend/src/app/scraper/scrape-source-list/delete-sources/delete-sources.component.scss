@@ -27,25 +27,6 @@ $control-border: rgba(148, 163, 184, 0.25);
   box-shadow: 0 16px 28px rgba(0, 0, 0, 0.35);
 }
 
-.delete-option {
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
-}
-
-.delete-option:hover {
-  border-color: rgba(148, 163, 184, 0.45);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
-  transform: translateY(-1px);
-}
-
-.delete-option.theme-card--active {
-  border-color: $danger-color;
-  box-shadow: 0 0 0 1px rgba($danger-color, 0.35), 0 14px 24px rgba(0, 0, 0, 0.4);
-}
-
-.delete-option.theme-card--disabled {
-  box-shadow: none;
-}
-
 .delete-filter-grid {
   display: grid;
   grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);

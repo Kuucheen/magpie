@@ -10,11 +10,15 @@ describe('ExportSourcesComponent', () => {
   let fixture: ComponentFixture<ExportSourcesComponent>;
   let exportScrapeSourcesSpy: jasmine.Spy;
   let showErrorSpy: jasmine.Spy;
-  let downloadFileSpy: jasmine.Spy;
+  let createObjectUrlSpy: jasmine.Spy;
+  let anchorClickSpy: jasmine.Spy;
 
   beforeEach(async () => {
     exportScrapeSourcesSpy = jasmine.createSpy('exportScrapeSources');
     showErrorSpy = jasmine.createSpy('showError');
+    createObjectUrlSpy = spyOn(window.URL, 'createObjectURL').and.returnValue('blob:export-sources');
+    spyOn(window.URL, 'revokeObjectURL');
+    anchorClickSpy = spyOn(HTMLAnchorElement.prototype, 'click');
 
     await TestBed.configureTestingModule({
       imports: [ExportSourcesComponent],
@@ -28,7 +32,6 @@ describe('ExportSourcesComponent', () => {
     fixture = TestBed.createComponent(ExportSourcesComponent);
     component = fixture.componentInstance;
     component.allSources = [{id: 1} as never];
-    downloadFileSpy = spyOn<any>(component, 'downloadFile');
     fixture.detectChanges();
   });
 
@@ -42,7 +45,8 @@ describe('ExportSourcesComponent', () => {
     component.submitExport();
 
     expect(exportScrapeSourcesSpy).toHaveBeenCalled();
-    expect(downloadFileSpy).toHaveBeenCalledWith('https://example.com;10;5', jasmine.any(String));
+    expect(createObjectUrlSpy).toHaveBeenCalledWith(jasmine.any(Blob));
+    expect(anchorClickSpy).toHaveBeenCalled();
   });
 
   it('uses protocol url as the default output format', () => {

@@ -22,32 +22,6 @@ $control-border: rgba(148, 163, 184, 0.25);
   box-shadow: 0 16px 28px rgba(0, 0, 0, 0.35);
 }
 
-.export-option {
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
-}
-
-.export-option:hover {
-  border-color: rgba(148, 163, 184, 0.45);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
-  transform: translateY(-1px);
-}
-
-.export-option.theme-card--active {
-  border-color: $accent-color;
-  box-shadow: 0 0 0 1px rgba($accent-color, 0.35), 0 14px 24px rgba(0, 0, 0, 0.4);
-}
-
-.export-option.theme-card--disabled {
-  box-shadow: none;
-}
-
-.export-number-field {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
 .export-filter-grid {
   display: grid;
   grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
@@ -107,11 +81,6 @@ $control-border: rgba(148, 163, 184, 0.25);
   .export-count-input {
     grid-column: 1 / -1;
   }
-}
-
-::ng-deep .export-dialog .export-number-control {
-  width: min(9.5rem, 100%);
-  margin: 0 auto;
 }
 
 ::ng-deep .export-dialog .export-number-input {

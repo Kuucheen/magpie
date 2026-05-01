@@ -1,6 +1,9 @@
 import { FormGroup } from '@angular/forms';
 import { ProxyFilterOptions } from '../models/ProxyFilterOptions';
 import { ProxyListFilters } from '../models/ProxyListFilters';
+import {normalizeNumber} from './number-utils';
+
+export {normalizeNumber} from './number-utils';
 
 export type ProxyFilterOption = {
   label: string;
@@ -278,17 +281,6 @@ export function normalizeSelection(values: string[] | null | undefined): string[
     normalized.push(trimmed);
   }
   return normalized;
-}
-
-export function normalizeNumber(value: number | string | null | undefined): number {
-  if (value === null || value === undefined) {
-    return 0;
-  }
-  const parsed = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.max(0, Math.floor(parsed));
 }
 
 export function normalizePercentage(value: number | string | null | undefined): number {

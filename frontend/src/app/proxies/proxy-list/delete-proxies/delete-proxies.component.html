@@ -39,47 +39,18 @@
 
     <section class="space-y-3">
       <p class="text-sm text-gray-400">Choose which proxies should be considered for deletion.</p>
-      <div class="flex flex-col sm:flex-row gap-4">
-        <label
-          for="deleteAll"
-          class="delete-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
-          [class.theme-card--active]="deleteOption === 'all'"
-        >
-          <p-radioButton
-            name="deleteOption"
-            value="all"
-            [(ngModel)]="deleteOption"
-            inputId="deleteAll"
-          ></p-radioButton>
-          <div class="space-y-1">
-            <span class="font-semibold text-white">All Proxies</span>
-            <p class="text-sm text-gray-400">
-              Delete every proxy you own that matches the filters below.
-            </p>
-          </div>
-        </label>
-
-        <label
-          for="deleteSelected"
-          class="delete-option flex-1 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer transition-colors theme-card"
-          [class.opacity-60]="!canDeleteSelected()"
-          [class.cursor-not-allowed]="!canDeleteSelected()"
-          [class.theme-card--active]="deleteOption === 'selected'"
-          [class.theme-card--disabled]="!canDeleteSelected()"
-        >
-          <p-radioButton
-            name="deleteOption"
-            value="selected"
-            [(ngModel)]="deleteOption"
-            inputId="deleteSelected"
-            [disabled]="!canDeleteSelected()"
-          ></p-radioButton>
-          <div class="space-y-1">
-            <span class="font-semibold text-white">Selected Proxies</span>
-            <p class="text-sm text-gray-400">Delete only the proxies highlighted in the table on this page.</p>
-          </div>
-        </label>
-      </div>
+      <app-bulk-scope-selector
+        [(scope)]="deleteOption"
+        radioName="deleteOption"
+        allInputId="deleteAll"
+        selectedInputId="deleteSelected"
+        allTitle="All Proxies"
+        allDescription="Delete every proxy you own that matches the filters below."
+        selectedTitle="Selected Proxies"
+        selectedDescription="Delete only the proxies highlighted in the table on this page."
+        [selectedDisabled]="!canDeleteSelected()"
+        accentColor="#f87171"
+      ></app-bulk-scope-selector>
     </section>
 
     <div [formGroup]="deleteForm" class="space-y-6">

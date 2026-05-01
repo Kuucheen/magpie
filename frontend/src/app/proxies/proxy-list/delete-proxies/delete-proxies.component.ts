@@ -2,7 +2,6 @@
 import {Component, EventEmitter, Input, OnChanges, Output, SimpleChanges} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {Button} from 'primeng/button';
-import {RadioButtonModule} from 'primeng/radiobutton';
 import {CheckboxComponent} from '../../../checkbox/checkbox.component';
 import {SettingsService} from '../../../services/settings.service';
 import {HttpService} from '../../../services/http.service';
@@ -24,6 +23,7 @@ import {
   normalizePercentage,
   normalizeSelection,
 } from '../../../shared/proxy-filters';
+import {BulkScopeSelectorComponent} from '../../../shared/bulk-scope-selector/bulk-scope-selector.component';
 
 type DeleteFormDefaults = {
   filter: boolean;
@@ -36,11 +36,11 @@ type DeleteFormDefaults = {
     FormsModule,
     ReactiveFormsModule,
     Button,
-    RadioButtonModule,
     CheckboxComponent,
     DialogModule,
     TooltipComponent,
     ProxyFilterPanelComponent,
+    BulkScopeSelectorComponent,
   ],
   templateUrl: './delete-proxies.component.html',
   styleUrls: ['./delete-proxies.component.scss'],

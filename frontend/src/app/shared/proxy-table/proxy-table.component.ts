@@ -7,6 +7,7 @@ import {
   Input,
   OnChanges,
   OnDestroy,
+  OnInit,
   Output,
   SimpleChanges,
   ViewChild
@@ -57,7 +58,7 @@ type PageScrollTarget = 'top' | 'bottom';
   styleUrls: ['./proxy-table.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ProxyTableComponent implements OnChanges, OnDestroy {
+export class ProxyTableComponent implements OnInit, OnChanges, OnDestroy {
   @ViewChild('tableRoot', { read: ElementRef }) private tableRoot?: ElementRef<HTMLElement>;
 
   private _proxies: ProxyRow[] = [];
@@ -106,6 +107,7 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
   @Input() virtualScroll = false;
   @Input() virtualScrollItemSize = 46;
   @Input() scrollHeight: string | null = null;
+  @Input() pageScrollTargetStorageKey: string | null = null;
 
   @Output() lazyLoad = new EventEmitter<TableLazyLoadEvent>();
   @Output() selectionChange = new EventEmitter<ProxyInfo[]>();
@@ -117,7 +119,7 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
 
   copiedValueKey: string | null = null;
   pageJumpValue = this.page;
-  pageScrollTarget: PageScrollTarget = 'bottom';
+  pageScrollTarget: PageScrollTarget = 'top';
   readonly pageJumpInputId = `proxy-table-page-jump-${ProxyTableComponent.nextPageJumpInputId++}`;
   readonly pageJumpTotalId = `${this.pageJumpInputId}-total`;
   private copyFeedbackTimeout?: ReturnType<typeof setTimeout>;
@@ -127,6 +129,13 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
     private cdr: ChangeDetectorRef,
     private clipboardService: ClipboardService,
   ) {}
+
+  ngOnInit(): void {
+    const storedPageScrollTarget = this.getStoredPageScrollTarget();
+    if (storedPageScrollTarget) {
+      this.pageScrollTarget = storedPageScrollTarget;
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['page']) {
@@ -139,7 +148,7 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
       }
     }
 
-    if (changes['loading'] && changes['loading'].previousValue === true && this.loading === false) {
+    if (changes['loading'] && changes['loading'].previousValue === true && !this.loading) {
       this.applyPendingPageScroll();
     }
 
@@ -224,13 +233,14 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
     this.sort.emit(event);
   }
 
-  togglePageScrollTarget(): void {
-    this.pageScrollTarget = this.pageScrollTarget === 'top' ? 'bottom' : 'top';
-  }
-
   onPageJumpSubmit(event: Event): void {
     event.preventDefault();
     this.commitPageJump();
+  }
+
+  togglePageScrollTarget(): void {
+    this.pageScrollTarget = this.pageScrollTarget === 'top' ? 'bottom' : 'top';
+    this.persistPageScrollTarget(this.pageScrollTarget);
   }
 
   commitPageJump(): void {
@@ -426,6 +436,45 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
 
     this.pendingPageScroll = false;
     setTimeout(() => this.scrollToPageTarget(), 0);
+  }
+
+  private getStoredPageScrollTarget(): PageScrollTarget | null {
+    try {
+      const storage = this.getStorage();
+      if (!storage || !this.pageScrollTargetStorageKey) {
+        return null;
+      }
+
+      const raw = storage.getItem(this.pageScrollTargetStorageKey);
+      return this.isPageScrollTarget(raw) ? raw : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistPageScrollTarget(target: PageScrollTarget): void {
+    try {
+      const storage = this.getStorage();
+      if (!storage || !this.pageScrollTargetStorageKey) {
+        return;
+      }
+
+      storage.setItem(this.pageScrollTargetStorageKey, target);
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private isPageScrollTarget(value: string | null): value is PageScrollTarget {
+    return value === 'top' || value === 'bottom';
+  }
+
+  private getStorage(): Storage | null {
+    if (typeof window === 'undefined' || !window?.localStorage) {
+      return null;
+    }
+
+    return window.localStorage;
   }
 
   private scrollToPageTarget(): void {

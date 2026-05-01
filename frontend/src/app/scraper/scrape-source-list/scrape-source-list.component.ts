@@ -1,4 +1,14 @@
-import {Component, ElementRef, EventEmitter, HostListener, OnDestroy, OnInit, Output, ViewChild, signal} from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  EventEmitter,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  Output,
+  signal,
+  ViewChild
+} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormBuilder, FormGroup, FormsModule} from '@angular/forms';
 import {SelectionModel} from '@angular/cdk/collections';
@@ -55,7 +65,6 @@ type ScrapeSourceAppliedFilters = {
   aliveCountOperator: '<' | '>';
   aliveCount: number;
 };
-
 type PageScrollTarget = 'top' | 'bottom';
 
 @Component({
@@ -81,6 +90,7 @@ type PageScrollTarget = 'top' | 'bottom';
 })
 export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   private static nextPageJumpInputId = 0;
+  private readonly pageScrollTargetStorageKey = 'magpie-scrape-source-list-page-scroll-target';
 
   @Output() showAddScrapeSourceMessage = new EventEmitter<boolean>();
   @ViewChild('filterToggleAnchor') private filterToggleAnchor?: ElementRef<HTMLElement>;
@@ -94,7 +104,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   selectedScrapeSources: ScrapeSourceView[] = [];
   page = 0; // PrimeNG uses 0-based pagination
   pageJumpValue = 1;
-  pageScrollTarget: PageScrollTarget = 'bottom';
+  pageScrollTarget: PageScrollTarget = 'top';
   pageSize = 40;
   totalItems = 0;
   hasLoaded = false;
@@ -145,6 +155,11 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    const storedPageScrollTarget = this.getStoredPageScrollTarget();
+    if (storedPageScrollTarget) {
+      this.pageScrollTarget = storedPageScrollTarget;
+    }
+
     this.columnPickerColumns = this.resolveColumnPickerColumns();
     this.syncColumnsFromSettings(this.settingsService.getUserSettings());
     const settingsSub = this.settingsService.userSettings$
@@ -204,7 +219,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   private loadRespectRobotsSetting(): void {
     this.http.getRespectRobotsSetting().subscribe({
       next: res => {
-        this.respectRobotsEnabled = !!res?.respect_robots_txt;
+        this.respectRobotsEnabled = res?.respect_robots_txt;
       },
       error: err => {
         this.notification.showWarn('Could not load robots.txt setting: ' + (err?.error?.error ?? err?.message ?? 'Unknown error'));
@@ -306,13 +321,14 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       : 'Page changes stay at bottom';
   }
 
-  togglePageScrollTarget(): void {
-    this.pageScrollTarget = this.pageScrollTarget === 'top' ? 'bottom' : 'top';
-  }
-
   onPageJumpSubmit(event: Event): void {
     event.preventDefault();
     this.commitPageJump();
+  }
+
+  togglePageScrollTarget(): void {
+    this.pageScrollTarget = this.pageScrollTarget === 'top' ? 'bottom' : 'top';
+    this.persistPageScrollTarget(this.pageScrollTarget);
   }
 
   commitPageJump(): void {
@@ -583,6 +599,45 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
     this.pendingPageScroll = false;
     setTimeout(() => this.scrollToPageTarget(), 0);
+  }
+
+  private getStoredPageScrollTarget(): PageScrollTarget | null {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return null;
+      }
+
+      const raw = storage.getItem(this.pageScrollTargetStorageKey);
+      return this.isPageScrollTarget(raw) ? raw : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistPageScrollTarget(target: PageScrollTarget): void {
+    try {
+      const storage = this.getStorage();
+      if (!storage) {
+        return;
+      }
+
+      storage.setItem(this.pageScrollTargetStorageKey, target);
+    } catch {
+      // ignore persistence errors (private browsing, SSR)
+    }
+  }
+
+  private isPageScrollTarget(value: string | null): value is PageScrollTarget {
+    return value === 'top' || value === 'bottom';
+  }
+
+  private getStorage(): Storage | null {
+    if (typeof window === 'undefined' || !window?.localStorage) {
+      return null;
+    }
+
+    return window.localStorage;
   }
 
   private scrollToPageTarget(): void {
@@ -864,8 +919,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   }
 
   private syncColumnsFromSettings(settings: UserSettings | undefined): void {
-    const normalized = normalizeScrapeSourceListColumns(settings?.scrape_source_list_columns ?? DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS);
-    this.displayedColumns = normalized;
+    this.displayedColumns = normalizeScrapeSourceListColumns(settings?.scrape_source_list_columns ?? DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS);
   }
 
   private resolveColumnPickerColumns(): readonly ScrapeSourceListColumnDefinition[] {

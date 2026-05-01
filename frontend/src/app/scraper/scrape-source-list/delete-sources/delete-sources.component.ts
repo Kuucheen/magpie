@@ -2,20 +2,19 @@ import {Component, EventEmitter, Input, OnChanges, Output, SimpleChanges} from '
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {Button} from 'primeng/button';
 import {RadioButtonModule} from 'primeng/radiobutton';
-import {InputNumberModule} from 'primeng/inputnumber';
 import {DialogModule} from 'primeng/dialog';
-import {Select} from 'primeng/select';
 import {CheckboxComponent} from '../../../checkbox/checkbox.component';
 import {HttpService} from '../../../services/http.service';
 import {NotificationService} from '../../../services/notification-service.service';
 import {ScrapeSourceInfo} from '../../../models/ScrapeSourceInfo';
 import {ScrapeSourceDeleteSettings} from '../../../models/ScrapeSourceDeleteSettings';
 import {TooltipComponent} from '../../../tooltip/tooltip.component';
+import {ScrapeSourceFilterPanelComponent} from '../scrape-source-filter-panel/scrape-source-filter-panel.component';
 
 type DeleteSourcesFormDefaults = {
   filter: boolean;
-  HTTPProtocol: boolean;
-  HTTPSProtocol: boolean;
+  http: boolean;
+  https: boolean;
   proxyCountOperator: '<' | '>';
   proxyCount: number;
   aliveCountOperator: '<' | '>';
@@ -30,11 +29,10 @@ type DeleteSourcesFormDefaults = {
     ReactiveFormsModule,
     Button,
     RadioButtonModule,
-    InputNumberModule,
     DialogModule,
-    Select,
     CheckboxComponent,
     TooltipComponent,
+    ScrapeSourceFilterPanelComponent,
   ],
   templateUrl: './delete-sources.component.html',
   styleUrls: ['./delete-sources.component.scss'],
@@ -49,15 +47,10 @@ export class DeleteSourcesComponent implements OnChanges {
   deleteOption: 'all' | 'selected' = 'all';
   deleteForm: FormGroup;
 
-  readonly countOperatorOptions = [
-    {label: '>', value: '>'},
-    {label: '<', value: '<'},
-  ];
-
   private readonly defaultFormValues: DeleteSourcesFormDefaults = {
     filter: false,
-    HTTPProtocol: true,
-    HTTPSProtocol: true,
+    http: true,
+    https: true,
     proxyCountOperator: '>',
     proxyCount: 0,
     aliveCountOperator: '>',
@@ -71,12 +64,23 @@ export class DeleteSourcesComponent implements OnChanges {
   ) {
     this.deleteForm = this.fb.group({
       filter: [this.defaultFormValues.filter],
-      HTTPProtocol: [this.defaultFormValues.HTTPProtocol],
-      HTTPSProtocol: [this.defaultFormValues.HTTPSProtocol],
+      http: [this.defaultFormValues.http],
+      https: [this.defaultFormValues.https],
       proxyCountOperator: [this.defaultFormValues.proxyCountOperator],
       proxyCount: [this.defaultFormValues.proxyCount],
       aliveCountOperator: [this.defaultFormValues.aliveCountOperator],
       aliveCount: [this.defaultFormValues.aliveCount],
+    });
+  }
+
+  clearDeleteFilters(): void {
+    this.deleteForm.patchValue({
+      http: false,
+      https: false,
+      proxyCountOperator: this.defaultFormValues.proxyCountOperator,
+      proxyCount: 0,
+      aliveCountOperator: this.defaultFormValues.aliveCountOperator,
+      aliveCount: 0,
     });
   }
 
@@ -158,17 +162,29 @@ export class DeleteSourcesComponent implements OnChanges {
   private transformFormToDelete(form: FormGroup, scope: 'all' | 'selected'): ScrapeSourceDeleteSettings {
     const formValue = form.getRawValue();
     const sources = scope === 'selected' ? this.selectedSources : [];
+    const filtersEnabled = Boolean(formValue.filter);
 
     return {
       scrapeSources: sources.map(source => source.id),
-      filter: formValue.filter,
-      http: formValue.HTTPProtocol,
-      https: formValue.HTTPSProtocol,
+      filter: filtersEnabled,
+      http: filtersEnabled ? Boolean(formValue.http) : false,
+      https: filtersEnabled ? Boolean(formValue.https) : false,
       proxyCountOperator: formValue.proxyCountOperator === '<' ? '<' : '>',
-      proxyCount: formValue.proxyCount,
+      proxyCount: filtersEnabled ? this.normalizeCount(formValue.proxyCount) : 0,
       aliveCountOperator: formValue.aliveCountOperator === '<' ? '<' : '>',
-      aliveCount: formValue.aliveCount,
+      aliveCount: filtersEnabled ? this.normalizeCount(formValue.aliveCount) : 0,
       scope,
     };
+  }
+
+  private normalizeCount(value: number | string | null | undefined): number {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    const parsed = typeof value === 'string' ? Number(value) : value;
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+    return Math.max(0, Math.floor(parsed));
   }
 }

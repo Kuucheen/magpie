@@ -23,6 +23,7 @@ import {Select} from 'primeng/select';
 export class ScrapeSourceFilterPanelComponent {
   @Input({required: true}) form!: FormGroup;
   @Input() floating = true;
+  @Input() showHeader = true;
 
   @Output() apply = new EventEmitter<void>();
   @Output() clear = new EventEmitter<void>();

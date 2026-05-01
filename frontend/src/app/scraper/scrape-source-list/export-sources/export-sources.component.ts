@@ -2,22 +2,21 @@ import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
 import {FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators} from '@angular/forms';
 import {Button} from 'primeng/button';
 import {RadioButtonModule} from 'primeng/radiobutton';
-import {InputNumberModule} from 'primeng/inputnumber';
 import {InputTextModule} from 'primeng/inputtext';
 import {DialogModule} from 'primeng/dialog';
-import {Select} from 'primeng/select';
 import {CheckboxComponent} from '../../../checkbox/checkbox.component';
 import {HttpService} from '../../../services/http.service';
 import {NotificationService} from '../../../services/notification-service.service';
 import {ScrapeSourceInfo} from '../../../models/ScrapeSourceInfo';
 import {ScrapeSourceExportSettings} from '../../../models/ScrapeSourceExportSettings';
 import {TooltipComponent} from '../../../tooltip/tooltip.component';
+import {ScrapeSourceFilterPanelComponent} from '../scrape-source-filter-panel/scrape-source-filter-panel.component';
 
 type ExportSourcesFormDefaults = {
   output: string;
   filter: boolean;
-  HTTPProtocol: boolean;
-  HTTPSProtocol: boolean;
+  http: boolean;
+  https: boolean;
   proxyCountOperator: '<' | '>';
   proxyCount: number;
   aliveCountOperator: '<' | '>';
@@ -32,12 +31,11 @@ type ExportSourcesFormDefaults = {
     ReactiveFormsModule,
     Button,
     RadioButtonModule,
-    InputNumberModule,
     InputTextModule,
     DialogModule,
-    Select,
     CheckboxComponent,
     TooltipComponent,
+    ScrapeSourceFilterPanelComponent,
   ],
   templateUrl: './export-sources.component.html',
   styleUrls: ['./export-sources.component.scss'],
@@ -52,16 +50,11 @@ export class ExportSourcesComponent implements OnChanges {
   exportForm: FormGroup;
 
   readonly predefinedFilters: string[] = ['protocol', 'url', 'proxy_count', 'alive_proxy_count'];
-  readonly countOperatorOptions = [
-    {label: '>', value: '>'},
-    {label: '<', value: '<'},
-  ];
-
   private readonly defaultFormValues: ExportSourcesFormDefaults = {
     output: 'protocol://url',
     filter: false,
-    HTTPProtocol: true,
-    HTTPSProtocol: true,
+    http: true,
+    https: true,
     proxyCountOperator: '>',
     proxyCount: 0,
     aliveCountOperator: '>',
@@ -76,12 +69,23 @@ export class ExportSourcesComponent implements OnChanges {
     this.exportForm = this.fb.group({
       output: [this.defaultFormValues.output, Validators.required],
       filter: [this.defaultFormValues.filter],
-      HTTPProtocol: [this.defaultFormValues.HTTPProtocol],
-      HTTPSProtocol: [this.defaultFormValues.HTTPSProtocol],
+      http: [this.defaultFormValues.http],
+      https: [this.defaultFormValues.https],
       proxyCountOperator: [this.defaultFormValues.proxyCountOperator, Validators.required],
       proxyCount: [this.defaultFormValues.proxyCount, Validators.required],
       aliveCountOperator: [this.defaultFormValues.aliveCountOperator, Validators.required],
       aliveCount: [this.defaultFormValues.aliveCount, Validators.required],
+    });
+  }
+
+  clearExportFilters(): void {
+    this.exportForm.patchValue({
+      http: false,
+      https: false,
+      proxyCountOperator: this.defaultFormValues.proxyCountOperator,
+      proxyCount: 0,
+      aliveCountOperator: this.defaultFormValues.aliveCountOperator,
+      aliveCount: 0,
     });
   }
 
@@ -157,18 +161,30 @@ export class ExportSourcesComponent implements OnChanges {
   private transformFormToExport(exportForm: FormGroup, sources: ScrapeSourceInfo[], scope: 'all' | 'selected'): ScrapeSourceExportSettings {
     const formValue = exportForm.getRawValue();
     const sourceIds = scope === 'selected' ? sources.map(source => source.id) : [];
+    const filtersEnabled = Boolean(formValue.filter);
 
     return {
       scrapeSources: sourceIds,
-      filter: formValue.filter,
-      http: formValue.HTTPProtocol,
-      https: formValue.HTTPSProtocol,
+      filter: filtersEnabled,
+      http: filtersEnabled ? Boolean(formValue.http) : false,
+      https: filtersEnabled ? Boolean(formValue.https) : false,
       proxyCountOperator: formValue.proxyCountOperator === '<' ? '<' : '>',
-      proxyCount: formValue.proxyCount,
+      proxyCount: filtersEnabled ? this.normalizeCount(formValue.proxyCount) : 0,
       aliveCountOperator: formValue.aliveCountOperator === '<' ? '<' : '>',
-      aliveCount: formValue.aliveCount,
+      aliveCount: filtersEnabled ? this.normalizeCount(formValue.aliveCount) : 0,
       outputFormat: formValue.output,
     };
+  }
+
+  private normalizeCount(value: number | string | null | undefined): number {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    const parsed = typeof value === 'string' ? Number(value) : value;
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+    return Math.max(0, Math.floor(parsed));
   }
 
   private buildFileName(): string {

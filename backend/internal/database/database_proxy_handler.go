@@ -1938,20 +1938,15 @@ func StreamProxiesForExport(userID uint, settings dto.ExportSettings, batchSize 
 		Joins("JOIN user_proxies ON user_proxies.proxy_id = proxies.id").
 		Where("user_proxies.user_id = ?", userID)
 
-	idQuery = applyExportReputationFilters(idQuery, settings)
-
-	if settings.ProxyStatus == "alive" || settings.ProxyStatus == "dead" {
-		isAlive := settings.ProxyStatus == "alive"
-		idQuery = idQuery.Joins("JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
-			Where("pos.overall_alive = ?", isAlive)
-	}
-
 	if len(settings.Proxies) > 0 {
 		idQuery = idQuery.Where("proxies.id IN ?", settings.Proxies)
 	}
 
 	if settings.Filter {
-		idQuery = applyAdditionalExportFilters(idQuery, settings)
+		filterQuery := buildProxyListFilterQuery(userID, proxyListFiltersForExport(settings))
+		if filterQuery != nil {
+			idQuery = idQuery.Where("proxies.id IN (?)", filterQuery)
+		}
 	}
 
 	var lastID uint64
@@ -1990,30 +1985,58 @@ func StreamProxiesForExport(userID uint, settings dto.ExportSettings, batchSize 
 	return nil
 }
 
-func applyAdditionalExportFilters(query *gorm.DB, settings dto.ExportSettings) *gorm.DB {
-	needsProxyStatistics := settings.Http || settings.Https || settings.Socks4 || settings.Socks5 || settings.MaxTimeout > 0 || settings.MaxRetries > 0
-	if needsProxyStatistics {
-		query = query.
-			Joins("JOIN proxy_latest_statistics pls ON pls.proxy_id = proxies.id").
-			Joins("JOIN proxy_statistics ps ON ps.id = pls.statistic_id")
+func proxyListFiltersForExport(settings dto.ExportSettings) dto.ProxyListFilters {
+	protocols := make([]string, 0, 4)
+	if settings.Http {
+		protocols = append(protocols, "http")
+	}
+	if settings.Https {
+		protocols = append(protocols, "https")
+	}
+	if settings.Socks4 {
+		protocols = append(protocols, "socks4")
+	}
+	if settings.Socks5 {
+		protocols = append(protocols, "socks5")
 	}
 
-	protocols := protocolsForExport(settings)
-	if len(protocols) > 0 {
-		query = query.
-			Joins("JOIN protocols proto ON proto.id = ps.protocol_id").
-			Where("LOWER(proto.name) IN ?", protocols)
+	return dto.ProxyListFilters{
+		Status:           settings.ProxyStatus,
+		Protocols:        protocols,
+		MinHealthOverall: int(settings.MinHealthOverall),
+		MinHealthHTTP:    int(settings.MinHealthHTTP),
+		MinHealthHTTPS:   int(settings.MinHealthHTTPS),
+		MinHealthSOCKS4:  int(settings.MinHealthSOCKS4),
+		MinHealthSOCKS5:  int(settings.MinHealthSOCKS5),
+		Countries:        normalizeFilterValues(settings.Countries),
+		Types:            normalizeFilterValues(settings.Types),
+		AnonymityLevels:  normalizeFilterValues(settings.AnonymityLevels),
+		MaxTimeout:       int(settings.MaxTimeout),
+		MaxRetries:       int(settings.MaxRetries),
+		ReputationLabels: settings.ReputationLabels,
+	}
+}
+
+func normalizeFilterValues(values []string) []string {
+	if len(values) == 0 {
+		return nil
 	}
 
-	if settings.MaxTimeout > 0 {
-		query = query.Where("ps.response_time <= ?", settings.MaxTimeout)
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		item := strings.ToLower(strings.TrimSpace(value))
+		if item == "" {
+			continue
+		}
+		if _, exists := seen[item]; exists {
+			continue
+		}
+		seen[item] = struct{}{}
+		normalized = append(normalized, item)
 	}
 
-	if settings.MaxRetries > 0 {
-		query = query.Where("ps.attempt <= ?", settings.MaxRetries)
-	}
-
-	return query
+	return normalized
 }
 
 func loadExportProxyBatch(tx *gorm.DB, ids []uint64) ([]domain.Proxy, error) {
@@ -2164,54 +2187,6 @@ func protocolsForExport(settings dto.ExportSettings) []string {
 	}
 
 	return protocols
-}
-
-func targetReputationKinds(settings dto.ExportSettings) []string {
-	protocols := protocolsForExport(settings)
-	if len(protocols) > 0 {
-		out := make([]string, 0, len(protocols))
-		for _, proto := range protocols {
-			if trimmed := strings.ToLower(strings.TrimSpace(proto)); trimmed != "" {
-				out = append(out, trimmed)
-			}
-		}
-		if len(out) > 0 {
-			return out
-		}
-	}
-
-	return []string{domain.ProxyReputationKindOverall}
-}
-
-func applyExportReputationFilters(query *gorm.DB, settings dto.ExportSettings) *gorm.DB {
-	allowedSet, includeUnknown := normalizeReputationLabels(settings.ReputationLabels)
-	if len(allowedSet) == 0 && !includeUnknown {
-		return query
-	}
-
-	targetKinds := targetReputationKinds(settings)
-	if len(targetKinds) == 0 {
-		return query
-	}
-
-	keys := setToSlice(allowedSet)
-	labelExpr := "LOWER(COALESCE(NULLIF(pr.label, ''), 'unknown'))"
-
-	if includeUnknown {
-		query = query.Joins("LEFT JOIN proxy_reputations pr ON pr.proxy_id = proxies.id AND LOWER(pr.kind) IN ?", targetKinds)
-		if len(keys) > 0 {
-			query = query.Where(labelExpr+" IN ? OR pr.id IS NULL OR "+labelExpr+" = 'unknown'", keys)
-		} else {
-			query = query.Where("pr.id IS NULL OR " + labelExpr + " = 'unknown'")
-		}
-	} else {
-		query = query.Joins("JOIN proxy_reputations pr ON pr.proxy_id = proxies.id AND LOWER(pr.kind) IN ?", targetKinds)
-		if len(keys) > 0 {
-			query = query.Where(labelExpr+" IN ?", keys)
-		}
-	}
-
-	return query
 }
 
 func applyListReputationFilters(query *gorm.DB, labels []string, protocols []string) *gorm.DB {

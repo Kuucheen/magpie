@@ -3,8 +3,6 @@ package database
 import (
 	"magpie/internal/api/dto"
 	"magpie/internal/domain"
-
-	"gorm.io/gorm"
 )
 
 func collectProxyIDsForDeletion(userID uint, settings dto.DeleteSettings) ([]uint, error) {
@@ -17,18 +15,21 @@ func collectProxyIDsForDeletion(userID uint, settings dto.DeleteSettings) ([]uin
 		query = query.Where("proxies.id IN ?", settings.Proxies)
 	}
 
-	if settings.ProxyStatus == "alive" || settings.ProxyStatus == "dead" {
+	if settings.Filter {
+		filterQuery := buildProxyListFilterQuery(userID, proxyListFiltersForDelete(settings))
+		if filterQuery != nil {
+			query = query.Where("proxies.id IN (?)", filterQuery)
+		}
+	}
+
+	if !settings.Filter && (settings.ProxyStatus == "alive" || settings.ProxyStatus == "dead") {
 		isAlive := settings.ProxyStatus == "alive"
 		query = query.Joins("JOIN proxy_overall_statuses pos ON pos.proxy_id = proxies.id").
 			Where("pos.overall_alive = ?", isAlive)
 	}
 
-	if len(settings.ReputationLabels) > 0 {
+	if !settings.Filter && len(settings.ReputationLabels) > 0 {
 		query = applyReputationFilters(query, settings.ReputationLabels)
-	}
-
-	if settings.Filter {
-		query = applyDeleteFilterConditions(query, settings)
 	}
 
 	var ids []uint
@@ -39,38 +40,34 @@ func collectProxyIDsForDeletion(userID uint, settings dto.DeleteSettings) ([]uin
 	return ids, nil
 }
 
-func applyDeleteFilterConditions(query *gorm.DB, settings dto.DeleteSettings) *gorm.DB {
-	needsProxyStatistics := settings.Http || settings.Https || settings.Socks4 || settings.Socks5 || settings.MaxTimeout > 0 || settings.MaxRetries > 0
-	if needsProxyStatistics {
-		query = query.Joins("JOIN proxy_statistics ON proxy_statistics.proxy_id = proxies.id")
+func proxyListFiltersForDelete(settings dto.DeleteSettings) dto.ProxyListFilters {
+	protocols := make([]string, 0, 4)
+	if settings.Http {
+		protocols = append(protocols, "http")
+	}
+	if settings.Https {
+		protocols = append(protocols, "https")
+	}
+	if settings.Socks4 {
+		protocols = append(protocols, "socks4")
+	}
+	if settings.Socks5 {
+		protocols = append(protocols, "socks5")
 	}
 
-	if settings.Http || settings.Https || settings.Socks4 || settings.Socks5 {
-		protocols := make([]string, 0, 4)
-		if settings.Http {
-			protocols = append(protocols, "http")
-		}
-		if settings.Https {
-			protocols = append(protocols, "https")
-		}
-		if settings.Socks4 {
-			protocols = append(protocols, "socks4")
-		}
-		if settings.Socks5 {
-			protocols = append(protocols, "socks5")
-		}
-
-		query = query.Joins("JOIN protocols ON proxy_statistics.protocol_id = protocols.id").
-			Where("protocols.name IN ?", protocols)
+	return dto.ProxyListFilters{
+		Status:           settings.ProxyStatus,
+		Protocols:        protocols,
+		MinHealthOverall: int(settings.MinHealthOverall),
+		MinHealthHTTP:    int(settings.MinHealthHTTP),
+		MinHealthHTTPS:   int(settings.MinHealthHTTPS),
+		MinHealthSOCKS4:  int(settings.MinHealthSOCKS4),
+		MinHealthSOCKS5:  int(settings.MinHealthSOCKS5),
+		Countries:        normalizeFilterValues(settings.Countries),
+		Types:            normalizeFilterValues(settings.Types),
+		AnonymityLevels:  normalizeFilterValues(settings.AnonymityLevels),
+		MaxTimeout:       int(settings.MaxTimeout),
+		MaxRetries:       int(settings.MaxRetries),
+		ReputationLabels: settings.ReputationLabels,
 	}
-
-	if settings.MaxTimeout > 0 {
-		query = query.Where("proxy_statistics.response_time <= ?", settings.MaxTimeout)
-	}
-
-	if settings.MaxRetries > 0 {
-		query = query.Where("proxy_statistics.attempt <= ?", settings.MaxRetries)
-	}
-
-	return query
 }

@@ -232,8 +232,11 @@ export class HttpService {
     return this.http.get<number>(this.apiUrl + '/getScrapingSourcesCount', { params });
   }
 
-  getScrapingSourcePage(pageNumber: number, options?: { search?: string; filters?: ScrapeSourceListFilters }) {
+  getScrapingSourcePage(pageNumber: number, options?: { rows?: number; search?: string; filters?: ScrapeSourceListFilters }) {
     let params = new HttpParams();
+    if (options?.rows && options.rows > 0) {
+      params = params.set('pageSize', options.rows.toString());
+    }
     if (options?.search && options.search.trim().length > 0) {
       params = params.set('search', options.search.trim());
     }

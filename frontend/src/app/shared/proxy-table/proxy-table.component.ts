@@ -2,12 +2,14 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnChanges,
   OnDestroy,
   Output,
-  SimpleChanges
+  SimpleChanges,
+  ViewChild
 } from '@angular/core';
 import {NgClass} from '@angular/common';
 import {SelectionModel} from '@angular/cdk/collections';
@@ -37,6 +39,7 @@ interface ProxyRowMeta {
 }
 
 type ProxyRow = ProxyInfo & { __meta?: ProxyRowMeta };
+type PageScrollTarget = 'top' | 'bottom';
 
 @Component({
   selector: 'app-proxy-table',
@@ -55,8 +58,11 @@ type ProxyRow = ProxyInfo & { __meta?: ProxyRowMeta };
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProxyTableComponent implements OnChanges, OnDestroy {
+  @ViewChild('tableRoot', { read: ElementRef }) private tableRoot?: ElementRef<HTMLElement>;
+
   private _proxies: ProxyRow[] = [];
   private _columns: ProxyTableColumnId[] = [...DEFAULT_PROXY_TABLE_COLUMNS];
+  private static nextPageJumpInputId = 0;
   private readonly dateFormatter = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'short',
     timeStyle: 'short',
@@ -110,7 +116,12 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
   @Output() viewProxy = new EventEmitter<ProxyInfo>();
 
   copiedValueKey: string | null = null;
+  pageJumpValue = this.page;
+  pageScrollTarget: PageScrollTarget = 'bottom';
+  readonly pageJumpInputId = `proxy-table-page-jump-${ProxyTableComponent.nextPageJumpInputId++}`;
+  readonly pageJumpTotalId = `${this.pageJumpInputId}-total`;
   private copyFeedbackTimeout?: ReturnType<typeof setTimeout>;
+  private pendingPageScroll = false;
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -118,6 +129,20 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['page']) {
+      this.pageJumpValue = this.page;
+      if (!changes['page'].firstChange) {
+        this.pendingPageScroll = true;
+        if (!this.loading) {
+          this.applyPendingPageScroll();
+        }
+      }
+    }
+
+    if (changes['loading'] && changes['loading'].previousValue === true && this.loading === false) {
+      this.applyPendingPageScroll();
+    }
+
     if (changes['emptyReputationLabel'] || changes['missingReputationScoreLabel']) {
       this.decorateProxies();
     }
@@ -139,6 +164,24 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
 
   get scoreFallback(): string {
     return this.missingReputationScoreLabel ?? this.emptyReputationLabel;
+  }
+
+  get totalPages(): number {
+    if (!Number.isFinite(this.totalRecords) || !Number.isFinite(this.pageSize) || this.pageSize <= 0) {
+      return 1;
+    }
+
+    return Math.max(1, Math.ceil(this.totalRecords / this.pageSize));
+  }
+
+  get pageScrollTargetIcon(): string {
+    return this.pageScrollTarget === 'top' ? 'pi-arrow-up' : 'pi-arrow-down';
+  }
+
+  get pageScrollTargetLabel(): string {
+    return this.pageScrollTarget === 'top'
+      ? 'Page changes scroll to top'
+      : 'Page changes stay at bottom';
   }
 
   trackByProxy(_index: number, proxy: ProxyRow): number {
@@ -179,6 +222,37 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
       return;
     }
     this.sort.emit(event);
+  }
+
+  togglePageScrollTarget(): void {
+    this.pageScrollTarget = this.pageScrollTarget === 'top' ? 'bottom' : 'top';
+  }
+
+  onPageJumpSubmit(event: Event): void {
+    event.preventDefault();
+    this.commitPageJump();
+  }
+
+  commitPageJump(): void {
+    const rawPage = Number(this.pageJumpValue);
+    if (!Number.isFinite(rawPage)) {
+      this.pageJumpValue = this.page;
+      return;
+    }
+
+    const nextPage = Math.min(this.totalPages, Math.max(1, Math.floor(rawPage)));
+    this.pageJumpValue = nextPage;
+
+    if (nextPage === this.page) {
+      return;
+    }
+
+    this.lazyLoad.emit({
+      first: (nextPage - 1) * this.pageSize,
+      rows: this.pageSize,
+      sortField: this.sortField,
+      sortOrder: this.sortOrder,
+    });
   }
 
   isCheckingProxy(proxyId: number): boolean {
@@ -343,6 +417,68 @@ export class ProxyTableComponent implements OnChanges, OnDestroy {
       }
     }, 1400);
     this.cdr.markForCheck();
+  }
+
+  private applyPendingPageScroll(): void {
+    if (!this.pendingPageScroll) {
+      return;
+    }
+
+    this.pendingPageScroll = false;
+    setTimeout(() => this.scrollToPageTarget(), 0);
+  }
+
+  private scrollToPageTarget(): void {
+    const root = this.tableRoot?.nativeElement;
+    if (!root || typeof window === 'undefined') {
+      return;
+    }
+
+    const innerScroller = root.querySelector<HTMLElement>('.p-datatable-wrapper');
+    if (innerScroller && innerScroller.scrollHeight > innerScroller.clientHeight) {
+      innerScroller.scrollTo({
+        top: this.pageScrollTarget === 'top' ? 0 : innerScroller.scrollHeight,
+        behavior: 'auto',
+      });
+    }
+
+    const scrollContainer = this.getScrollContainer(root);
+    if (!scrollContainer) {
+      window.scrollTo({
+        top: this.pageScrollTarget === 'top'
+          ? root.getBoundingClientRect().top + window.scrollY
+          : root.getBoundingClientRect().bottom + window.scrollY - window.innerHeight,
+        left: 0,
+        behavior: 'auto',
+      });
+      return;
+    }
+
+    const rootRect = root.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const currentTop = scrollContainer.scrollTop;
+    const targetTop = this.pageScrollTarget === 'top'
+      ? currentTop + rootRect.top - containerRect.top
+      : currentTop + rootRect.bottom - containerRect.bottom;
+
+    scrollContainer.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: 'auto',
+    });
+  }
+
+  private getScrollContainer(start: HTMLElement): HTMLElement | null {
+    let parent = start.parentElement;
+    while (parent) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      const canScroll = /(auto|scroll)/.test(overflowY) && parent.scrollHeight > parent.clientHeight;
+      if (canScroll) {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+    return null;
   }
 
 }

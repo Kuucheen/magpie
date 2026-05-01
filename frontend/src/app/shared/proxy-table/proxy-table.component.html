@@ -1,4 +1,5 @@
 <p-table
+  #tableRoot
   [value]="proxies"
   [paginator]="true"
   [rows]="pageSize"
@@ -22,6 +23,37 @@
   [virtualScroll]="virtualScroll"
   [virtualScrollItemSize]="virtualScroll ? virtualScrollItemSize : undefined"
 >
+  <ng-template pTemplate="paginatorright">
+    <form class="proxy-page-jump" (submit)="onPageJumpSubmit($event)">
+      <button
+        type="button"
+        class="proxy-page-jump__scroll-toggle"
+        [attr.aria-label]="pageScrollTargetLabel"
+        [attr.aria-pressed]="pageScrollTarget === 'top'"
+        [pTooltip]="pageScrollTargetLabel"
+        tooltipPosition="top"
+        (click)="togglePageScrollTarget()"
+      >
+        <i class="pi" [ngClass]="pageScrollTargetIcon" aria-hidden="true"></i>
+      </button>
+      <label class="proxy-page-jump__label" [attr.for]="pageJumpInputId">Page</label>
+      <input
+        class="proxy-page-jump__input"
+        type="number"
+        inputmode="numeric"
+        name="pageJump"
+        [id]="pageJumpInputId"
+        [min]="1"
+        [max]="totalPages"
+        [disabled]="loading || totalPages <= 1"
+        [(ngModel)]="pageJumpValue"
+        (blur)="commitPageJump()"
+        [attr.aria-describedby]="pageJumpTotalId"
+      />
+      <span class="proxy-page-jump__total" [id]="pageJumpTotalId">of {{ totalPages }}</span>
+    </form>
+  </ng-template>
+
   <ng-template pTemplate="header">
     <tr>
       @if (selectionEnabled) {

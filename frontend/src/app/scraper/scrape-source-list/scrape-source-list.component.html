@@ -86,14 +86,16 @@
   </div>
 
   <p-table
+    #scrapeSourceTableRoot
     [value]="scrapeSources"
     [loading]="loading"
     [paginator]="true"
     [rows]="pageSize"
+    [first]="page * pageSize"
     [totalRecords]="totalItems"
     [lazy]="true"
     (onLazyLoad)="onLazyLoad($event)"
-    [rowsPerPageOptions]="[20]"
+    [rowsPerPageOptions]="rowsPerPageOptions"
     dataKey="id"
     [selection]="selection.selected"
     [(selection)]="selectedScrapeSources"
@@ -101,6 +103,37 @@
     [rowHover]="true"
     [showLoader]="hasLoaded"
   >
+    <ng-template pTemplate="paginatorright">
+      <form class="scrape-page-jump" (submit)="onPageJumpSubmit($event)">
+        <button
+          type="button"
+          class="scrape-page-jump__scroll-toggle"
+          [attr.aria-label]="pageScrollTargetLabel"
+          [attr.aria-pressed]="pageScrollTarget === 'top'"
+          [pTooltip]="pageScrollTargetLabel"
+          tooltipPosition="top"
+          (click)="togglePageScrollTarget()"
+        >
+          <i class="pi" [ngClass]="pageScrollTargetIcon" aria-hidden="true"></i>
+        </button>
+        <label class="scrape-page-jump__label" [attr.for]="pageJumpInputId">Page</label>
+        <input
+          class="scrape-page-jump__input"
+          type="number"
+          inputmode="numeric"
+          name="scrapeSourcePageJump"
+          [id]="pageJumpInputId"
+          [min]="1"
+          [max]="totalPages"
+          [disabled]="loading || totalPages <= 1"
+          [(ngModel)]="pageJumpValue"
+          (blur)="commitPageJump()"
+          [attr.aria-describedby]="pageJumpTotalId"
+        />
+        <span class="scrape-page-jump__total" [id]="pageJumpTotalId">of {{ totalPages }}</span>
+      </form>
+    </ng-template>
+
     <ng-template pTemplate="header">
       <tr>
         <th style="width: 3rem">

@@ -16,6 +16,7 @@ import {TableLazyLoadEvent, TableModule} from 'primeng/table';
 import {ButtonModule} from 'primeng/button';
 import {CheckboxModule} from 'primeng/checkbox';
 import {SkeletonModule} from 'primeng/skeleton';
+import {Tooltip} from 'primeng/tooltip';
 import {NotificationService} from '../../services/notification-service.service';
 import {SettingsService} from '../../services/settings.service';
 import {UserSettings} from '../../models/UserSettings';
@@ -55,6 +56,8 @@ type ScrapeSourceAppliedFilters = {
   aliveCount: number;
 };
 
+type PageScrollTarget = 'top' | 'bottom';
+
 @Component({
   selector: 'app-scrape-source-list',
   imports: [
@@ -64,6 +67,7 @@ type ScrapeSourceAppliedFilters = {
     ButtonModule,
     CheckboxModule,
     SkeletonModule,
+    Tooltip,
     AddScrapeSourceComponent,
     ExportSourcesComponent,
     DeleteSourcesComponent,
@@ -76,17 +80,22 @@ type ScrapeSourceAppliedFilters = {
   standalone: true
 })
 export class ScrapeSourceListComponent implements OnInit, OnDestroy {
+  private static nextPageJumpInputId = 0;
+
   @Output() showAddScrapeSourceMessage = new EventEmitter<boolean>();
   @ViewChild('filterToggleAnchor') private filterToggleAnchor?: ElementRef<HTMLElement>;
   @ViewChild('filterPanelRef') private filterPanelRef?: ElementRef<HTMLElement>;
   @ViewChild('columnToggleAnchor') private columnToggleAnchor?: ElementRef<HTMLElement>;
   @ViewChild('columnPanelRef', { read: ElementRef }) private columnPanelRef?: ElementRef<HTMLElement>;
+  @ViewChild('scrapeSourceTableRoot', { read: ElementRef }) private scrapeSourceTableRoot?: ElementRef<HTMLElement>;
 
   scrapeSources: ScrapeSourceView[] = [];
   selection = new SelectionModel<ScrapeSourceView>(true, []);
   selectedScrapeSources: ScrapeSourceView[] = [];
   page = 0; // PrimeNG uses 0-based pagination
-  pageSize = 20;
+  pageJumpValue = 1;
+  pageScrollTarget: PageScrollTarget = 'bottom';
+  pageSize = 40;
   totalItems = 0;
   hasLoaded = false;
   loading = false;
@@ -102,8 +111,11 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   isSavingColumnPreferences = signal(false);
   displayedColumns: ScrapeSourceListColumnId[] = [...DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS];
   readonly skeletonRows = Array.from({ length: 6 });
+  readonly rowsPerPageOptions = [20, 40, 60, 100];
   readonly defaultScrapeSourceColumns = DEFAULT_SCRAPE_SOURCE_LIST_COLUMNS;
   readonly scrapeSourceColumnDefinitions = SCRAPE_SOURCE_LIST_COLUMN_DEFINITIONS;
+  readonly pageJumpInputId = `scrape-source-page-jump-${ScrapeSourceListComponent.nextPageJumpInputId++}`;
+  readonly pageJumpTotalId = `${this.pageJumpInputId}-total`;
   columnPickerColumns: readonly ScrapeSourceListColumnDefinition[] = this.resolveColumnPickerColumns();
   filterForm: FormGroup;
   appliedFilters: ScrapeSourceAppliedFilters = this.createDefaultAppliedFilters();
@@ -112,6 +124,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   private suppressOutsideCloseUntil = 0;
   private searchDebounceHandle?: ReturnType<typeof setTimeout>;
   private readonly defaultFilterValues: ScrapeSourceFilterFormValues = this.createDefaultFilterValues();
+  private pendingPageScroll = false;
 
   constructor(
     private http: HttpService,
@@ -204,6 +217,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     this.loading = true;
     const trimmedSearch = this.searchTerm.trim();
     this.http.getScrapingSourcePage(this.page + 1, {
+      rows: this.pageSize,
       search: trimmedSearch.length > 0 ? trimmedSearch : undefined,
       filters: this.buildFilterPayload(this.appliedFilters),
     }).subscribe({
@@ -217,6 +231,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
         this.syncSelectionWithData();
         this.loading = false;
         this.hasLoaded = true;
+        this.applyPendingPageScroll();
         const shouldShowEmptyState = this.totalItems === 0 && sources.length === 0;
         this.showAddScrapeSourceMessage.emit(shouldShowEmptyState);
       },
@@ -224,6 +239,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
         this.notification.showError("Could not get scraping sources" + err.error.message);
         this.loading = false;
         this.hasLoaded = true;
+        this.applyPendingPageScroll();
         this.showAddScrapeSourceMessage.emit(false);
       }
     });
@@ -256,6 +272,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     const shouldFetch = newPage !== this.page || newPageSize !== this.pageSize;
 
     this.page = newPage;
+    this.pageJumpValue = newPage + 1;
     this.pageSize = newPageSize;
     this.sortField = nextSortField;
     this.sortOrder = nextSortOrder;
@@ -266,8 +283,58 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
     }
 
     if (shouldFetch) {
+      this.pendingPageScroll = true;
       this.getAndSetScrapeSourcesList();
     }
+  }
+
+  get totalPages(): number {
+    if (!Number.isFinite(this.totalItems) || !Number.isFinite(this.pageSize) || this.pageSize <= 0) {
+      return 1;
+    }
+
+    return Math.max(1, Math.ceil(this.totalItems / this.pageSize));
+  }
+
+  get pageScrollTargetIcon(): string {
+    return this.pageScrollTarget === 'top' ? 'pi-arrow-up' : 'pi-arrow-down';
+  }
+
+  get pageScrollTargetLabel(): string {
+    return this.pageScrollTarget === 'top'
+      ? 'Page changes scroll to top'
+      : 'Page changes stay at bottom';
+  }
+
+  togglePageScrollTarget(): void {
+    this.pageScrollTarget = this.pageScrollTarget === 'top' ? 'bottom' : 'top';
+  }
+
+  onPageJumpSubmit(event: Event): void {
+    event.preventDefault();
+    this.commitPageJump();
+  }
+
+  commitPageJump(): void {
+    const rawPage = Number(this.pageJumpValue);
+    if (!Number.isFinite(rawPage)) {
+      this.pageJumpValue = this.page + 1;
+      return;
+    }
+
+    const nextPage = Math.min(this.totalPages, Math.max(1, Math.floor(rawPage)));
+    this.pageJumpValue = nextPage;
+
+    if (nextPage === this.page + 1) {
+      return;
+    }
+
+    this.onLazyLoad({
+      first: (nextPage - 1) * this.pageSize,
+      rows: this.pageSize,
+      sortField: this.sortField,
+      sortOrder: this.sortOrder,
+    });
   }
 
   // Helper method to get selection count
@@ -312,7 +379,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
     this.searchTerm = value;
     this.searchDebounceHandle = setTimeout(() => {
-      this.page = 0;
+      this.resetPaginatorToFirstPage();
       this.refreshList();
     }, 300);
   }
@@ -345,7 +412,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
 
   applyFilters(): void {
     this.appliedFilters = this.buildFiltersFromForm();
-    this.page = 0;
+    this.resetPaginatorToFirstPage();
     this.refreshList();
     this.filterPanelOpen = false;
   }
@@ -353,7 +420,7 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   clearFilters(): void {
     this.filterForm.reset(this.defaultFilterValues);
     this.appliedFilters = this.createDefaultAppliedFilters();
-    this.page = 0;
+    this.resetPaginatorToFirstPage();
     this.refreshList();
   }
 
@@ -415,12 +482,12 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
   }
 
   onScrapeSourcesAdded(): void {
-    this.page = 0;
+    this.resetPaginatorToFirstPage();
     this.refreshList();
   }
 
   onScrapeSourcesDeleted(): void {
-    this.page = 0;
+    this.resetPaginatorToFirstPage();
     this.refreshList();
   }
 
@@ -502,6 +569,73 @@ export class ScrapeSourceListComponent implements OnInit, OnDestroy {
       urlHead: head,
       urlTail: tail,
     };
+  }
+
+  private resetPaginatorToFirstPage(): void {
+    this.page = 0;
+    this.pageJumpValue = 1;
+  }
+
+  private applyPendingPageScroll(): void {
+    if (!this.pendingPageScroll) {
+      return;
+    }
+
+    this.pendingPageScroll = false;
+    setTimeout(() => this.scrollToPageTarget(), 0);
+  }
+
+  private scrollToPageTarget(): void {
+    const root = this.scrapeSourceTableRoot?.nativeElement;
+    if (!root || typeof window === 'undefined') {
+      return;
+    }
+
+    const innerScroller = root.querySelector<HTMLElement>('.p-datatable-wrapper');
+    if (innerScroller && innerScroller.scrollHeight > innerScroller.clientHeight) {
+      innerScroller.scrollTo({
+        top: this.pageScrollTarget === 'top' ? 0 : innerScroller.scrollHeight,
+        behavior: 'auto',
+      });
+    }
+
+    const scrollContainer = this.getScrollContainer(root);
+    if (!scrollContainer) {
+      window.scrollTo({
+        top: this.pageScrollTarget === 'top'
+          ? root.getBoundingClientRect().top + window.scrollY
+          : root.getBoundingClientRect().bottom + window.scrollY - window.innerHeight,
+        left: 0,
+        behavior: 'auto',
+      });
+      return;
+    }
+
+    const rootRect = root.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const currentTop = scrollContainer.scrollTop;
+    const targetTop = this.pageScrollTarget === 'top'
+      ? currentTop + rootRect.top - containerRect.top
+      : currentTop + rootRect.bottom - containerRect.bottom;
+
+    scrollContainer.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: 'auto',
+    });
+  }
+
+  private getScrollContainer(start: HTMLElement): HTMLElement | null {
+    let parent = start.parentElement;
+    while (parent) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      const canScroll = /(auto|scroll)/.test(overflowY) && parent.scrollHeight > parent.clientHeight;
+      if (canScroll) {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+    return null;
   }
 
   private createDefaultFilterValues(): ScrapeSourceFilterFormValues {

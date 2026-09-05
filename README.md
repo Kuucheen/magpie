@@ -293,3 +293,25 @@ Run the two deployments sequentially so each starts from the latest branch.
 
 Magpie is distributed under the GNU Affero General Public License v3.0. See
 [`LICENSE`](LICENSE) for the complete license.
+
+### Scraper fetching modes
+
+New sources use HTTP fetching. Enable **Requires JavaScript** when adding a
+source or in its detail page to render it in Chromium. This setting belongs to
+the active workspace. Existing sources retain browser rendering after migration.
+
+Run the normal `--migrate-only` upgrade step before starting this backend version.
+The migration adds fetching mode and last-scrape status fields to workspace
+source associations. Upgrade all backend replicas together so older workers do
+not keep scraping HTTP sources through Chromium.
+
+Chromium starts only for browser sources. `SCRAPER_PAGE_POOL_MAX_CAPACITY`
+limits concurrent browser scrapes per instance, defaults to 4, and accepts 1–64.
+The former minimum page-pool setting no longer preallocates idle pages.
+`SCRAPER_POST_PROCESS_QUEUE_CAPACITY` defaults to 16 to limit queued HTML memory.
+
+New sources are eligible immediately and workers drain them at configured
+concurrency. Browser capacity failures, outages, timeouts, HTTP 429 and HTTP 5xx
+retry after 30 seconds or the scrape interval, whichever is shorter. Other
+failures use the normal interval. The source list and detail page show the last
+scrape outcome separately from proxy health.

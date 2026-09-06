@@ -325,3 +325,10 @@ concurrency. Browser capacity failures, outages, timeouts, HTTP 429 and HTTP 5xx
 retry after 30 seconds or the scrape interval, whichever is shorter. Other
 failures use the normal interval. The source list and detail page show the last
 scrape outcome separately from proxy health.
+
+If a scrape logs `extended protocol limited to 65535 parameters`, upgrade to a
+backend build with the proxy-ingestion batching fix and retry the source. Older
+builds could exceed PostgreSQL's per-statement limit when saving workspace
+associations or looking up large proxy lists. Inserts now use a separate batch
+size for each table, and large hash lookups are split. This fix requires no
+additional schema migration or environment setting.

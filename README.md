@@ -156,6 +156,16 @@ The included Compose configuration is intended for local and self-hosted
 deployments. Internet-exposed production deployments should harden secrets,
 database and Redis access, TLS termination, registration policy, and backups.
 
+## API client upgrade note
+
+GraphQL clients must omit `scrapingSources` from `UpdateUserSettingsInput`.
+That input previously reported success without saving sources and now returns a
+validation error. Sources remain readable through GraphQL; use the REST
+scrape-source endpoints to manage them. Settings mutations now reject negative
+or oversized checker integers and refresh the checker judge cache after saving.
+No additional environment variables or database migration are needed for these
+API corrections.
+
 ## Component image versions
 
 Frontend and backend releases can be selected independently in `.env`:

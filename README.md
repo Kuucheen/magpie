@@ -382,6 +382,37 @@ The backend must be configured to use PostgreSQL at `localhost:5434` and Redis
 at `localhost:8946` when those services are started from this Compose file.
 Each component repository contains its own build, test, and development details.
 
+To populate three development accounts, stop the backend and run:
+
+```bash
+./scripts/seed-dev-data.sh --dry-run
+./scripts/seed-dev-data.sh --reset
+cd ../magpie-backend
+DEVELOPMENT_FIXTURES=true go run ./cmd/magpie
+```
+
+The reset preserves existing logins and account roles, replaces their workspaces
+with five fixture workspaces, and adds 5,000 routes plus 30 days of check history.
+It also populates sources, tags, rotating proxies, alerts, invitations, and
+usage. Run it again to restore the fixtures with current dates. A workspace
+shared with an unselected account blocks the reset.
+
+The script uses the sibling backend repository and its `.env`; override the
+path with `MAGPIE_BACKEND_REPO`. Use `--accounts` to select three accounts,
+`--proxies-per-workspace` to change the route count, and `--history-days` or
+`--seed` to change the generated history. New accounts require
+`MAGPIE_DEV_PASSWORD`; existing passwords remain unchanged. Run the normal
+backend migration command first on a fresh database.
+
+`DEVELOPMENT_FIXTURES=true` disables background jobs and rotating listeners so
+simulated data stays intact. Rotators created through the API are saved without
+opening TCP or UDP listeners. Restart with fixture mode disabled to activate
+them. Set it in the backend's local `.env`, or in this
+repository's `.env` when using a backend container built from the updated
+source. Fixture mode and seeding are rejected in production. The
+[local development guide](https://magpie.tools/docs/getting-started/local-development)
+describes the fixture accounts and reset options.
+
 Run backend tests and benchmarks against disposable PostgreSQL and Redis
 instances. Keep their Redis databases separate from the running development
 stack and from each other; queue concurrency fixtures flush their test database.

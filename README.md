@@ -161,6 +161,13 @@ accounts. Accepting an invitation does not change the account's default
 workspace. SMTP is optional; pending invitations remain available in the app
 when email delivery is disabled.
 
+The legacy `proxy_limits.max_per_user` setting seeds active-route capacity for
+new workspaces when limits are enabled. Scrape sources and manual imports
+retain overflow as paused proxies, so stored totals can exceed the active
+limit. Editing this global default or its administrator exclusion does not
+change existing workspace allowances. The workspace page shows the current
+active limit and stored count.
+
 The included Compose configuration is intended for local and self-hosted
 deployments. Internet-exposed production deployments should harden secrets,
 database and Redis access, TLS termination, registration policy, and backups.

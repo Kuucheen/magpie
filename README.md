@@ -154,6 +154,19 @@ PostgreSQL foreign keys. Existing resources remain available through the new
 default workspace. The migration is not compatible with older backend images;
 rollback requires the coordinated PostgreSQL and Redis backups.
 
+Longevity maintenance adds replay-floor storage, a sortable statistics-ledger key,
+and lifetime check totals. Run `--migrate-only` with old backend instances stopped;
+moving large DEFAULT-partition history can extend the migration window. Keep
+PostgreSQL and Redis backups coordinated. Daily compaction preserves all-time
+counts, and partition precreation continues with `DB_AUTO_MIGRATE=false`.
+
+Each backend checks the queue marker every ten seconds and reconstructs lost
+queues from PostgreSQL. `/readyz` returns 503 after detection until reconstruction
+completes. Orphan cleanup drains repeated batches with a 45-second budget and a
+one-minute retry after interruption. `.env.example` lists retention, cleanup,
+tunnel-limit, and certificate controls. Monitor maintenance success/failure
+metrics and the statistics replay floor; an old pending event delays retirement.
+
 API clients may select a workspace with `X-Workspace-ID`. When omitted, the
 backend uses the authenticated account's default workspace membership.
 Workspace access is offered through expiring invitations for existing Magpie

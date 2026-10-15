@@ -23,6 +23,12 @@ $envExampleUrl = if ($env:MAGPIE_ENV_EXAMPLE_URL) {
   "https://raw.githubusercontent.com/$repoOwner/$repoName/$repoRefPath/.env.example"
 }
 
+$productionComposeUrl = if ($env:MAGPIE_PRODUCTION_COMPOSE_URL) {
+  $env:MAGPIE_PRODUCTION_COMPOSE_URL
+} else {
+  "https://raw.githubusercontent.com/$repoOwner/$repoName/$repoRefPath/docker-compose.production.yml"
+}
+
 function Test-Command([string]$name) {
   return $null -ne (Get-Command $name -ErrorAction SilentlyContinue)
 }
@@ -123,6 +129,9 @@ function Download-File([string]$url, [string]$dest) {
 Write-Host "Downloading docker-compose.yml..."
 Download-File $composeUrl (Join-Path $installDir "docker-compose.yml")
 
+Write-Host "Downloading production Compose configuration..."
+Download-File $productionComposeUrl (Join-Path $installDir "docker-compose.production.yml")
+
 Write-Host "Downloading .env.example..."
 try {
   Download-File $envExampleUrl (Join-Path $installDir ".env.example")
@@ -184,7 +193,7 @@ if ($key.Contains("`n") -or $key.Contains("`r")) { throw "PROXY_ENCRYPTION_KEY m
 if ($env:JWT_SECRET) {
   $jwtSecret = $env:JWT_SECRET
 } else {
-  $jwtSecret = ""
+  $jwtSecret = New-RandomAlnum -length 64 -alphabet "0123456789abcdef"
 }
 
 $jwtSecret = $jwtSecret.Trim()
@@ -244,9 +253,7 @@ $escapedFrontendTag = if ($frontendTag) { Escape-DotenvValue $frontendTag } else
 
 $envLines = @()
 $envLines += "PROXY_ENCRYPTION_KEY=""$escapedKey"""
-if (-not [string]::IsNullOrEmpty($jwtSecret)) {
-  $envLines += "JWT_SECRET=""$escapedJWTSecret"""
-}
+$envLines += "JWT_SECRET=""$escapedJWTSecret"""
 $envLines += "DB_NAME=""$escapedDBName"""
 $envLines += "DB_USERNAME=""$escapedDBUsername"""
 $envLines += "DB_PASSWORD=""$escapedDBPassword"""

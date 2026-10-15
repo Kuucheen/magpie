@@ -1,0 +1,42 @@
+name: Release validation
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      backend_image:
+        description: Backend image and immutable tag to validate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  tooling:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    env:
+      MAGPIE_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+      MAGPIE_TEST_DOCKER_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - run: pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+      - run: docker pull alpine:3.23
+      - run: find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - run: python3 -m unittest discover -s scripts/tests -v
+      - run: docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.production.yml config --quiet
+  container-startup:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_IMAGE: ${{ inputs.backend_image }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker pull "$BACKEND_IMAGE"
+      - run: scripts/validate-container-startup.sh "$BACKEND_IMAGE"

@@ -42,7 +42,7 @@ read_log_stream() {
   local source="$1"
   case "${source}" in
     compose)
-      "${COMPOSE_CMD[@]}" logs --since "${LOG_SINCE}" --no-color backend 2>/dev/null || true
+      "${COMPOSE_CMD[@]}" logs --since "${LOG_SINCE}" --no-color backend
       ;;
     file)
       cat "${BACKEND_LOG_FILE}"
@@ -60,10 +60,10 @@ case "${DROP_SOURCE}" in
     elif [ -n "${BACKEND_LOG_FILE}" ] && [ -f "${BACKEND_LOG_FILE}" ]; then
       resolved_source="file"
     else
-      echo "WARN: skipping dropped-statistics budget check; no backend log source found." >&2
+      echo "FAIL: no backend log source found for the dropped-statistics budget." >&2
       echo "To enforce this check with local 'go run', set PERF_BACKEND_LOG_FILE=/path/to/backend.log." >&2
       echo "To enforce against compose backend logs, run backend service in compose or set PERF_DROP_BUDGET_SOURCE=compose." >&2
-      exit 0
+      exit 1
     fi
     ;;
   compose)
@@ -84,6 +84,10 @@ case "${DROP_SOURCE}" in
     resolved_source="file"
     ;;
   skip)
+    if [ "${PERF_GATE_MODE:-release}" != "smoke" ]; then
+      echo "Release validation cannot skip the dropped-statistics budget." >&2
+      exit 1
+    fi
     echo "Skipping dropped-statistics budget check (PERF_DROP_BUDGET_SOURCE=skip)."
     exit 0
     ;;
@@ -94,6 +98,10 @@ case "${DROP_SOURCE}" in
 esac
 
 log_output="$(read_log_stream "${resolved_source}")"
+if [ -z "${log_output}" ]; then
+  echo "FAIL: backend log source is empty; no drop-budget evidence." >&2
+  exit 1
+fi
 
 max_dropped="0"
 while IFS= read -r line; do

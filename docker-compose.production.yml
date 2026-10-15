@@ -1,0 +1,14 @@
+# Use with: docker compose -f docker-compose.yml -f docker-compose.production.yml ...
+services:
+  backend:
+    command:
+      - -production
+      - -rod=bin=/usr/lib/chromium/chromium
+    environment:
+      - MAGPIE_ENV=production
+      - STRICT_SECRET_VALIDATION=true
+      - ALLOW_INSECURE_REGISTRATION_DEFAULTS=false
+      - DISABLE_PUBLIC_REGISTRATION=true
+      - ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=${ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP:-false}
+      - ALLOW_PUBLIC_OBSERVABILITY_ENDPOINTS=false
+      - DB_AUTO_MIGRATE=false

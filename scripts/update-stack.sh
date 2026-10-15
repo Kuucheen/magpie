@@ -53,18 +53,7 @@ if [ "$stash_applied" -eq 1 ]; then
   fi
 fi
 
-echo "Pulling component and infrastructure images..."
-"${compose_cmd[@]}" pull
-
-echo "Migration safety: confirm you have coordinated PostgreSQL and Redis backups."
-echo "Workspace migrations change resource ownership columns; rollback requires those backups."
-echo "Stopping backend for database migration..."
-"${compose_cmd[@]}" stop backend
-
-echo "Running database migration..."
-"${compose_cmd[@]}" run --rm backend --migrate-only
-
-echo "Applying the updated stack..."
-"${compose_cmd[@]}" up -d --remove-orphans
+# Use the same Compose selection and migration path as installer deployments.
+MAGPIE_INSTALL_DIR="${REPO_ROOT}" bash "${SCRIPT_DIR}/update.sh" --local-config
 
 echo "Done. Frontend is available at http://localhost:5050 and backend API at http://localhost:5656/api"

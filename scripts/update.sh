@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The Git updater already refreshed the configuration in its checkout.
+local_config=false
+case "${1:-}" in
+  --local-config) local_config=true ;;
+  "") ;;
+  *) echo "Usage: update.sh [--local-config]" >&2; exit 1 ;;
+esac
+
 REPO_OWNER="${MAGPIE_REPO_OWNER:-Magpie-Tools}"
 REPO_NAME="${MAGPIE_REPO_NAME:-magpie}"
 REPO_REF="${MAGPIE_REPO_REF:-master}"
@@ -13,6 +21,7 @@ fi
 INSTALL_DIR="${MAGPIE_INSTALL_DIR:-magpie}"
 COMPOSE_URL="${MAGPIE_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF_PATH}/docker-compose.yml}"
 ENV_EXAMPLE_URL="${MAGPIE_ENV_EXAMPLE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF_PATH}/.env.example}"
+PRODUCTION_COMPOSE_URL="${MAGPIE_PRODUCTION_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF_PATH}/docker-compose.production.yml}"
 
 if [[ -z "${INSTALL_DIR}" || "${INSTALL_DIR}" == "/" ]]; then
   echo "MAGPIE_INSTALL_DIR must not be empty or '/'." >&2
@@ -145,31 +154,104 @@ else
   fi
 fi
 
-tmp_compose="docker-compose.yml.new.$$"
+# Discover independently of Compose's inferred project name: an overlay may
+# supply name:, or the original deployment may have used -p. Match containers
+# by their recorded working directory or this installation's base file.
+install_path="$(pwd -P)"
+compose_update_cmd=("${compose_cmd[@]}")
+backend_ids="$("${docker_cmd[@]}" ps -a -q --filter label=com.docker.compose.service=backend)"
+selected_files=""
+selected_project=""
+selected_directory=""
+for backend_id in ${backend_ids}; do
+  metadata="$("${docker_cmd[@]}" inspect --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}{{println}}{{index .Config.Labels "com.docker.compose.project"}}{{println}}{{index .Config.Labels "com.docker.compose.project.working_dir"}}{{println}}{{index .Config.Labels "com.docker.compose.oneoff"}}' "${backend_id}")"
+  {
+    IFS= read -r files
+    IFS= read -r project
+    IFS= read -r directory
+    IFS= read -r oneoff
+  } <<<"${metadata}"
+  case "${oneoff}" in True|true) continue ;; esac
 
-echo "Downloading latest docker-compose.yml..."
-download "${COMPOSE_URL}" "${tmp_compose}"
+  belongs_to_install=false
+  if [ -d "${directory}" ] && [ "$(cd "${directory}" && pwd -P)" = "${install_path}" ]; then
+    belongs_to_install=true
+  fi
+  if [ -n "${files}" ]; then
+    IFS=',' read -r -a candidate_files <<<"${files}"
+    for file in "${candidate_files[@]}"; do
+      if [ "${file}" = "${install_path}/docker-compose.yml" ] || [ "${file}" -ef "${install_path}/docker-compose.yml" ]; then
+        belongs_to_install=true
+      fi
+    done
+  fi
+  if [ "${belongs_to_install}" = false ]; then
+    continue
+  fi
 
-if [ -f docker-compose.yml ]; then
-  cp -f docker-compose.yml "docker-compose.yml.bak"
+  if [ -z "${files}" ] || [ "${files}" = "<no value>" ] || [ -z "${project}" ] || [ "${project}" = "<no value>" ] || [ ! -d "${directory}" ]; then
+    echo "Cannot determine the existing backend's Compose project and files. Update aborted." >&2
+    exit 1
+  fi
+  if [ -n "${selected_files}" ] && { [ "${selected_files}" != "${files}" ] || [ "${selected_project}" != "${project}" ] || [ "${selected_directory}" != "${directory}" ]; }; then
+    echo "Multiple Compose configurations match this installation. Update aborted." >&2
+    exit 1
+  fi
+  selected_files="${files}"
+  selected_project="${project}"
+  selected_directory="${directory}"
+done
+
+if [ -n "${selected_files}" ]; then
+  compose_update_cmd+=(-p "${selected_project}" --project-directory "${selected_directory}")
+  IFS=',' read -r -a files <<<"${selected_files}"
+  for file in "${files[@]}"; do
+    file="${file%$'\r'}"
+    if [ ! -f "${file}" ]; then
+      echo "Existing Compose file is missing: ${file}. Update aborted." >&2
+      exit 1
+    fi
+    compose_update_cmd+=(-f "${file}")
+  done
+  echo "Preserving Compose project ${selected_project} and files: ${selected_files}"
 fi
-mv -f "${tmp_compose}" docker-compose.yml
 
-echo "Refreshing .env.example (optional)..."
-download "${ENV_EXAMPLE_URL}" ".env.example" || true
+if [ "${local_config}" = false ]; then
+  tmp_compose="docker-compose.yml.new.$$"
+  echo "Downloading latest docker-compose.yml..."
+  download "${COMPOSE_URL}" "${tmp_compose}"
+
+  if [ -f docker-compose.yml ]; then
+    cp -f docker-compose.yml "docker-compose.yml.bak"
+  fi
+  mv -f "${tmp_compose}" docker-compose.yml
+
+  echo "Downloading production Compose configuration..."
+  download "${PRODUCTION_COMPOSE_URL}" "docker-compose.production.yml.new.$$"
+  mv -f "docker-compose.production.yml.new.$$" docker-compose.production.yml
+
+  echo "Refreshing .env.example (optional)..."
+  download "${ENV_EXAMPLE_URL}" ".env.example" || true
+fi
+
+"${compose_update_cmd[@]}" config --quiet
 
 echo "Pulling images..."
-"${compose_cmd[@]}" -f docker-compose.yml pull
+"${compose_update_cmd[@]}" pull
 
 echo "Migration safety: confirm you have coordinated PostgreSQL and Redis backups."
 echo "Workspace migrations change resource ownership columns; rollback requires those backups."
 echo "Stopping backend for database migration..."
-"${compose_cmd[@]}" -f docker-compose.yml stop backend
+"${compose_update_cmd[@]}" stop backend
 
 echo "Running database migration..."
-"${compose_cmd[@]}" -f docker-compose.yml run --rm backend --migrate-only
+"${compose_update_cmd[@]}" run --rm backend --migrate-only
 
 echo "Applying update..."
-"${compose_cmd[@]}" -f docker-compose.yml up -d
+up_args=(up -d)
+if [ "${local_config}" = true ]; then
+  up_args+=(--remove-orphans)
+fi
+"${compose_update_cmd[@]}" "${up_args[@]}"
 
 echo "Done."

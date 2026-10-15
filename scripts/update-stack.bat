@@ -76,54 +76,12 @@ if "%STASHED%"=="1" (
   )
 )
 
-echo Pulling component and infrastructure images...
-if "%COMPOSE_ARGS%"=="" (
-  call "%COMPOSE_EXE%" pull
-) else (
-  call "%COMPOSE_EXE%" %COMPOSE_ARGS% pull
-)
-
+rem Reuse the updater's Compose selection without downloading over the checkout.
+set "MAGPIE_INSTALL_DIR=%CD%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\update.ps1" -LocalConfig
 if errorlevel 1 (
   popd
-  exit /b %ERRORLEVEL%
-)
-
-echo Migration safety: confirm you have coordinated PostgreSQL and Redis backups.
-echo Workspace migrations change resource ownership columns; rollback requires those backups.
-echo Stopping backend for database migration...
-if "%COMPOSE_ARGS%"=="" (
-  call "%COMPOSE_EXE%" stop backend
-) else (
-  call "%COMPOSE_EXE%" %COMPOSE_ARGS% stop backend
-)
-
-if errorlevel 1 (
-  popd
-  exit /b %ERRORLEVEL%
-)
-
-echo Running database migration...
-if "%COMPOSE_ARGS%"=="" (
-  call "%COMPOSE_EXE%" run --rm backend --migrate-only
-) else (
-  call "%COMPOSE_EXE%" %COMPOSE_ARGS% run --rm backend --migrate-only
-)
-
-if errorlevel 1 (
-  popd
-  exit /b %ERRORLEVEL%
-)
-
-echo Applying the updated stack...
-if "%COMPOSE_ARGS%"=="" (
-  call "%COMPOSE_EXE%" up -d --remove-orphans
-) else (
-  call "%COMPOSE_EXE%" %COMPOSE_ARGS% up -d --remove-orphans
-)
-
-if errorlevel 1 (
-  popd
-  exit /b %ERRORLEVEL%
+  exit /b 1
 )
 
 echo Done. Frontend is available at http://localhost:5050 and backend API at http://localhost:5656/api

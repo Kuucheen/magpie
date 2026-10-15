@@ -11,3 +11,4 @@ Thumbs.db
 
 docker-compose.yml.bak
 artifacts/
+__pycache__/

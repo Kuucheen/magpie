@@ -9,7 +9,7 @@ This folder provides a runnable validation harness for million-scale readiness:
 
 ## Backend toolchain and dependency checks
 
-Backend source builds use Go `1.27.1`. Before releasing a toolchain or
+Backend source builds use Go `1.27.2`. Before releasing a toolchain or
 dependency upgrade, run these checks from the sibling `magpie-backend`
 repository:
 
@@ -213,12 +213,16 @@ cd scripts/perf
 ./run-gate.sh
 ```
 
-By default this runs read + write suites and skips long soak.
+By default this runs 30-minute read and write suites plus a required 24-hour
+mixed soak. Release mode rejects shorter soaks and missing drop-budget logs.
+For a short functional check, use `PERF_GATE_MODE=smoke ./run-gate.sh`. Smoke
+mode defaults to one minute per read/write suite and two minutes of mixed load;
+it does not establish production capacity.
 
-To include soak:
+For an extended release soak:
 
 ```bash
-PERF_SOAK_DURATION=24h ./run-gate.sh
+PERF_SOAK_DURATION=72h ./run-gate.sh
 ```
 
 If your running stack is in another directory (for example installer-created `~/magpie`), point the scripts to that Compose/env pair:
@@ -233,21 +237,26 @@ MAGPIE_ENV_FILE=~/magpie/.env \
 
 - `capture-snapshot.sh`
   - collects:
-    - `proxy_queue` depth
-    - `scrapesite_queue` depth
+    - legacy `proxy_queue` plus supported proxy queue shards `0` through `127`
+    - legacy `scrapesite_queue` plus supported scrape queue shards `0` through `63`
     - `proxies` row count
     - `proxy_statistics` row count
     - `proxy_statistics.response_body` non-empty row count
-    - table/database byte sizes
+    - table/database byte sizes, including every statistics partition and its indexes
 - `assert-snapshot-delta.sh <start> <end>`
   - checks growth deltas against configured budgets
 - `check-drop-budget.sh`
   - parses backend logs for `dropped_total` from proxy-statistics queue drops
   - log source controls:
-    - `PERF_DROP_BUDGET_SOURCE=auto` (default): compose backend logs if available, else `PERF_BACKEND_LOG_FILE` if set, else skip with warning
+    - `PERF_DROP_BUDGET_SOURCE=auto` (default): compose backend logs if available, else `PERF_BACKEND_LOG_FILE` if set, else fail
     - `PERF_DROP_BUDGET_SOURCE=compose`: require compose backend logs
     - `PERF_DROP_BUDGET_SOURCE=file`: require `PERF_BACKEND_LOG_FILE`
-    - `PERF_DROP_BUDGET_SOURCE=skip`: skip drop-budget check
+    - `PERF_DROP_BUDGET_SOURCE=skip`: available only with `PERF_GATE_MODE=smoke`
+
+Queue collection uses 194 fixed `ZCARD` reads in a short atomic aggregate. It
+includes shards left over from earlier shard counts and performs no keyspace
+scan. Its Redis work stays constant as proxy payload keys grow. Keep the shard
+bounds in sync with the backend's supported limits when increasing those limits.
 
 ## Budget env overrides
 
@@ -260,7 +269,7 @@ You can tune gate budgets for your infra:
 - `PERF_MAX_PROXY_STATISTICS_BYTES_DELTA` (default `16106127360`)
 - `PERF_MAX_DATABASE_BYTES_DELTA` (default `21474836480`)
 - `PERF_PROXY_STAT_DROPS_BUDGET` (default `0`)
-- `PERF_DROP_LOG_SINCE` (default `24h`)
+- `PERF_DROP_LOG_SINCE` (gate default: start timestamp; standalone default: `24h`)
 - `PERF_DROP_BUDGET_SOURCE` (default `auto`)
 - `PERF_BACKEND_LOG_FILE` (used when drop-budget source is `file` or `auto` fallback)
 
@@ -283,3 +292,9 @@ go run ./cmd/magpie 2>&1 | tee /tmp/magpie-backend.log
 cd scripts/perf
 PERF_BACKEND_LOG_FILE=/tmp/magpie-backend.log ./run-gate.sh
 ```
+
+The artifact directory contains start/end snapshots and JSON summaries from all
+three k6 suites. Keep backend logs for the complete run, including rotated logs,
+and record hardware, route count, shard count, tenant sharing, checker/scraper
+settings and maintenance settings with the results. A passing small dataset
+does not establish throughput for millions of proxies.

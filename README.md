@@ -181,9 +181,46 @@ limit. Editing this global default or its administrator exclusion does not
 change existing workspace allowances. The workspace page shows the current
 active limit and stored count.
 
-The included Compose configuration is intended for local and self-hosted
-deployments. Internet-exposed production deployments should harden secrets,
-database and Redis access, TLS termination, registration policy, and backups.
+The installers generate a unique JWT signing secret and save it in `.env`.
+Manual Compose starts with an empty `JWT_SECRET` generate and persist a key in
+`backend_data` at `/app/data/jwt_secret`. Custom secrets remain unchanged.
+The backend replaces the old published Compose JWT default with a generated
+key, so existing sessions using that default must sign in again. Keep
+`PROXY_ENCRYPTION_KEY` unchanged across upgrades.
+
+Compose binds the API to `127.0.0.1` by default. Set `BACKEND_BIND_ADDRESS` to
+change it. The frontend remains available on port 5050. The volume initializer
+repairs settings/cache ownership for UID 65532 before the backend starts.
+
+For production, use the production overlay for migration and startup:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.production.yml run --rm backend --migrate-only
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+```
+
+This enables production mode, strict secret validation and protected
+observability endpoints. Public registration and first-admin bootstrap are
+disabled. For a fresh installation, enable `ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP`
+only while you create the first account through a restricted frontend, then
+set it back to false and recreate the backend. Configure TLS termination,
+Redis authentication, database access and backups for your deployment.
+
+The container waits up to 90 seconds on stop. The API drains for up to 20
+seconds, then background jobs stop and usage/statistics consumers finish their
+bounded flushes before Redis closes. Increase `BACKEND_STOP_GRACE_PERIOD` if
+you raise either shutdown timeout.
+
+Before releasing a backend image, run the fresh/repaired-volume production
+startup check:
+
+```bash
+scripts/validate-container-startup.sh kuuchen/magpie-backend:YOUR_TAG
+```
+
+It uses disposable services and volumes and also verifies that the generated
+JWT key survives restart. Run the release performance gate on representative
+hardware before making capacity claims.
 
 ## Alerts setup
 
@@ -348,6 +385,30 @@ scripts\update-stack.bat
 
 These helpers pull distribution changes and published images; they no longer
 build frontend or backend source from this repository.
+
+All update helpers discover this installation's backend through Docker labels
+and preserve its project name, working directory and ordered Compose file list.
+This includes names selected by an overlay's `name:`, `-p` or
+`COMPOSE_PROJECT_NAME`, and stopped backends after a failed migration. Production
+mode and the existing project's volumes and networks remain selected even when
+downloaded files change the name. Unrelated projects and one-off migration
+containers are ignored. Missing files, unreadable metadata or multiple matching
+configurations abort the update before the backend is stopped.
+
+If you remove the containers with `docker compose down`, keep the selection in
+`.env` so Compose and the helpers can recover it without container metadata:
+
+```dotenv
+COMPOSE_FILE=docker-compose.yml:docker-compose.production.yml
+# If you use a custom project name:
+# COMPOSE_PROJECT_NAME=magpie-production
+```
+
+Use `;` instead of `:` on Windows. Include any custom overlays in the same
+order and persist a custom project name with `COMPOSE_PROJECT_NAME`. With no
+existing backend, helpers use Compose's settings from the shell or `.env`, or
+its normal default files. Setting
+`MAGPIE_ENV=production` in `.env` also enables backend production defaults.
 
 ## Proxy export timeouts
 

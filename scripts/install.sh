@@ -13,6 +13,7 @@ fi
 INSTALL_DIR="${MAGPIE_INSTALL_DIR:-magpie}"
 COMPOSE_URL="${MAGPIE_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF_PATH}/docker-compose.yml}"
 ENV_EXAMPLE_URL="${MAGPIE_ENV_EXAMPLE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF_PATH}/.env.example}"
+PRODUCTION_COMPOSE_URL="${MAGPIE_PRODUCTION_COMPOSE_URL:-https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_REF_PATH}/docker-compose.production.yml}"
 
 if [[ -z "${INSTALL_DIR}" || "${INSTALL_DIR}" == "/" ]]; then
   echo "MAGPIE_INSTALL_DIR must not be empty or '/'." >&2
@@ -128,6 +129,9 @@ generate_random_hex() {
 echo "Downloading docker-compose.yml..."
 download "${COMPOSE_URL}" "${INSTALL_DIR}/docker-compose.yml"
 
+echo "Downloading production Compose configuration..."
+download "${PRODUCTION_COMPOSE_URL}" "${INSTALL_DIR}/docker-compose.production.yml"
+
 echo "Downloading .env.example..."
 if ! download "${ENV_EXAMPLE_URL}" "${INSTALL_DIR}/.env.example"; then
   : # best-effort; we'll still proceed
@@ -185,7 +189,7 @@ fi
 if [ -n "${JWT_SECRET:-}" ]; then
   jwt_secret="${JWT_SECRET}"
 else
-  jwt_secret=""
+  jwt_secret="$(generate_random_hex 32)"
 fi
 
 if [[ "${jwt_secret}" == *$'\n'* || "${jwt_secret}" == *$'\r'* ]]; then
@@ -266,9 +270,7 @@ escaped_frontend_tag="${escaped_frontend_tag//\"/\\\"}"
 umask 077
 {
   printf "PROXY_ENCRYPTION_KEY=\"%s\"\n" "${escaped_key}"
-  if [ -n "${jwt_secret}" ]; then
-    printf "JWT_SECRET=\"%s\"\n" "${escaped_jwt_secret}"
-  fi
+  printf "JWT_SECRET=\"%s\"\n" "${escaped_jwt_secret}"
   printf "DB_NAME=\"%s\"\n" "${escaped_db_name}"
   printf "DB_USERNAME=\"%s\"\n" "${escaped_db_username}"
   printf "DB_PASSWORD=\"%s\"\n" "${escaped_db_password}"

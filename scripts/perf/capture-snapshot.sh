@@ -43,8 +43,31 @@ ensure_service_running() {
 ensure_service_running redis
 ensure_service_running postgres
 
-proxy_queue_depth="$("${COMPOSE_CMD[@]}" exec -T redis redis-cli --raw ZCARD proxy_queue | tr -d '\r')"
-scrapesite_queue_depth="$("${COMPOSE_CMD[@]}" exec -T redis redis-cli --raw ZCARD scrapesite_queue | tr -d '\r')"
+# Include legacy queues and all supported shards, even from older shard layouts.
+# Keep these bounds aligned with backend maxQueueShards/maxScrapeQueueShards.
+# Exactly 194 O(1) cardinality reads, independent of the proxy payload keyspace.
+queue_snapshot="$("${COMPOSE_CMD[@]}" exec -T redis sh -ec '
+export REDISCLI_AUTH="${REDIS_PASSWORD:-}"
+exec redis-cli --raw EVAL "$1" 0
+' sh '
+local proxy = redis.call("ZCARD", "proxy_queue")
+local scrape = redis.call("ZCARD", "scrapesite_queue")
+for shard = 0, 127 do
+  proxy = proxy + redis.call("ZCARD", "proxy_queue:" .. shard)
+end
+for shard = 0, 63 do
+  scrape = scrape + redis.call("ZCARD", "scrapesite_queue:" .. shard)
+end
+return {proxy, scrape}
+' | tr -d '\r')"
+{
+  IFS= read -r proxy_queue_depth
+  IFS= read -r scrapesite_queue_depth
+} <<<"${queue_snapshot}"
+if ! [[ "${proxy_queue_depth}" =~ ^[0-9]+$ && "${scrapesite_queue_depth}" =~ ^[0-9]+$ ]]; then
+  echo "Redis queue measurement failed: ${queue_snapshot}" >&2
+  exit 1
+fi
 
 db_snapshot="$("${COMPOSE_CMD[@]}" exec -T postgres sh -lc '
 psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -F "|" <<'"'"'SQL'"'"'
@@ -52,7 +75,11 @@ SELECT
   (SELECT COUNT(*) FROM proxies),
   (SELECT COUNT(*) FROM proxy_statistics),
   (SELECT COUNT(*) FROM proxy_statistics WHERE response_body IS NOT NULL AND response_body <> '"'"''"'"'),
-  (SELECT pg_total_relation_size('"'"'proxy_statistics'"'"')),
+  (WITH RECURSIVE relations(oid) AS (
+    SELECT '"'"'proxy_statistics'"'"'::regclass::oid
+    UNION ALL
+    SELECT child.inhrelid FROM pg_inherits child JOIN relations parent ON child.inhparent = parent.oid
+  ) SELECT COALESCE(SUM(pg_total_relation_size(oid)), 0) FROM relations),
   (SELECT pg_database_size(current_database()));
 SQL
 ')"

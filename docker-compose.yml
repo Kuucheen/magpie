@@ -5,16 +5,32 @@ x-logging: &default-logging
     max-file: "${DOCKER_LOG_MAX_FILE:-3}"
 
 services:
+  backend-volume-init:
+    image: alpine:3.23
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        chown -R 65532:65532 /app/data /browser-cache
+        chmod 700 /app/data /browser-cache
+    volumes:
+      - backend_data:/app/data
+      - backend_browser_cache:/browser-cache
+    restart: "no"
+
   backend:
     image: ${MAGPIE_BACKEND_IMAGE:-kuuchen/magpie-backend}:${MAGPIE_BACKEND_TAG:-${MAGPIE_IMAGE_TAG:-latest}}
     container_name: magpie_backend
     command:
       - -rod=bin=/usr/lib/chromium/chromium
     ports:
-      - "5656:5656"
+      - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:5656:5656"
       - "20000-20100:20000-20100"
       - "20000-20100:20000-20100/udp"
     environment:
+      - MAGPIE_ENV=${MAGPIE_ENV:-development}
+      - STRICT_SECRET_VALIDATION=${STRICT_SECRET_VALIDATION:-}
       - DEVELOPMENT_FIXTURES=${DEVELOPMENT_FIXTURES:-false}
       - PROXY_ENCRYPTION_KEY=${PROXY_ENCRYPTION_KEY:?Set PROXY_ENCRYPTION_KEY in .env}
       - PROXY_QUEUE_ENCRYPT_CREDENTIALS=${PROXY_QUEUE_ENCRYPT_CREDENTIALS:-false}
@@ -41,7 +57,22 @@ services:
       - PROXY_REPUTATION_REFRESH_INTERVAL_SECONDS=${PROXY_REPUTATION_REFRESH_INTERVAL_SECONDS:-1}
       - SCRAPE_SOURCE_STATS_REFRESH_INTERVAL_SECONDS=${SCRAPE_SOURCE_STATS_REFRESH_INTERVAL_SECONDS:-30}
       - SCRAPE_SOURCE_STATS_REFRESH_BATCH_SIZE=${SCRAPE_SOURCE_STATS_REFRESH_BATCH_SIZE:-100}
-      - JWT_SECRET=${JWT_SECRET:-magpie-local-compose-jwt-secret-2026}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_TTL_MINUTES=${JWT_TTL_MINUTES:-10080}
+      - ALLOW_PUBLIC_OBSERVABILITY_ENDPOINTS=${ALLOW_PUBLIC_OBSERVABILITY_ENDPOINTS:-false}
+      - OBSERVABILITY_TOKEN=${OBSERVABILITY_TOKEN:-}
+      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-}
+      - SERVER_READ_TIMEOUT_SECONDS=${SERVER_READ_TIMEOUT_SECONDS:-30}
+      - SERVER_READ_HEADER_TIMEOUT_SECONDS=${SERVER_READ_HEADER_TIMEOUT_SECONDS:-10}
+      - SERVER_WRITE_TIMEOUT_SECONDS=${SERVER_WRITE_TIMEOUT_SECONDS:-30}
+      - SERVER_IDLE_TIMEOUT_SECONDS=${SERVER_IDLE_TIMEOUT_SECONDS:-120}
+      - SERVER_SHUTDOWN_TIMEOUT_SECONDS=${SERVER_SHUTDOWN_TIMEOUT_SECONDS:-20}
+      - BACKGROUND_SHUTDOWN_TIMEOUT_SECONDS=${BACKGROUND_SHUTDOWN_TIMEOUT_SECONDS:-60}
+      - READYZ_ALLOW_REDIS_DEGRADED=${READYZ_ALLOW_REDIS_DEGRADED:-false}
+      - API_UPLOAD_MAX_BODY_BYTES=${API_UPLOAD_MAX_BODY_BYTES:-10485760}
+      - API_JSON_MAX_BODY_BYTES=${API_JSON_MAX_BODY_BYTES:-1048576}
+      - API_MULTIPART_MEMORY_BYTES=${API_MULTIPART_MEMORY_BYTES:-1048576}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - redisUrl=${REDIS_URL:-redis://redis:6379}
       - REDIS_MODE=${REDIS_MODE:-single}
       - REDIS_MASTER_NAME=${REDIS_MASTER_NAME:-magpie-master}
@@ -69,9 +100,12 @@ services:
       - PASSWORD_RESET_TOKEN_TTL_MINUTES=${PASSWORD_RESET_TOKEN_TTL_MINUTES:-}
       - WORKSPACE_INVITATION_TTL_HOURS=${WORKSPACE_INVITATION_TTL_HOURS:-168}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5050,http://127.0.0.1:5050,http://localhost:4200,http://127.0.0.1:4200}
-      - DISABLE_PUBLIC_REGISTRATION=${DISABLE_PUBLIC_REGISTRATION:-false}
-      - ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=${ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP:-true}
+      - DISABLE_PUBLIC_REGISTRATION=${DISABLE_PUBLIC_REGISTRATION:-}
+      - ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP=${ENABLE_PUBLIC_FIRST_ADMIN_BOOTSTRAP:-}
+      - ALLOW_INSECURE_REGISTRATION_DEFAULTS=${ALLOW_INSECURE_REGISTRATION_DEFAULTS:-true}
     depends_on:
+      backend-volume-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -89,6 +123,7 @@ services:
           memory: "${BACKEND_MEMORY_RESERVATION:-256M}"
     logging: *default-logging
     restart: unless-stopped
+    stop_grace_period: ${BACKEND_STOP_GRACE_PERIOD:-90s}
 
   frontend:
     image: ${MAGPIE_FRONTEND_IMAGE:-kuuchen/magpie-frontend}:${MAGPIE_FRONTEND_TAG:-${MAGPIE_IMAGE_TAG:-latest}}

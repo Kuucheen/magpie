@@ -1,3 +1,5 @@
+param([switch]$LocalConfig)
+
 $ErrorActionPreference = "Stop"
 
 $repoOwner = if ($env:MAGPIE_REPO_OWNER) { $env:MAGPIE_REPO_OWNER } else { "Magpie-Tools" }
@@ -27,6 +29,12 @@ $envExampleUrl = if ($env:MAGPIE_ENV_EXAMPLE_URL) {
   "https://raw.githubusercontent.com/$repoOwner/$repoName/$repoRefPath/.env.example"
 }
 
+$productionComposeUrl = if ($env:MAGPIE_PRODUCTION_COMPOSE_URL) {
+  $env:MAGPIE_PRODUCTION_COMPOSE_URL
+} else {
+  "https://raw.githubusercontent.com/$repoOwner/$repoName/$repoRefPath/docker-compose.production.yml"
+}
+
 function Test-Command([string]$name) {
   return $null -ne (Get-Command $name -ErrorAction SilentlyContinue)
 }
@@ -48,7 +56,7 @@ function Invoke-NativeCommand {
     if ($Quiet) {
       & $FilePath @Arguments 1>$null 2>$null
     } else {
-      & $FilePath @Arguments
+      & $FilePath @Arguments | Out-Host
     }
     return $LASTEXITCODE
   } finally {
@@ -140,34 +148,99 @@ function Download-File([string]$url, [string]$dest) {
   Invoke-WebRequest @params
 }
 
-Write-Host "Downloading latest docker-compose.yml..."
-$tmpCompose = "docker-compose.yml.new.$PID"
-Download-File $composeUrl $tmpCompose
-
-if (Test-Path -LiteralPath "docker-compose.yml") {
-  Copy-Item -LiteralPath "docker-compose.yml" -Destination "docker-compose.yml.bak" -Force
+# Discover through Docker rather than the project inferred from the base file.
+# An overlay's name:, -p or COMPOSE_PROJECT_NAME may have selected another name.
+$installPath = (Get-Location).ProviderPath
+$pathComparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+$backendIds = @(& docker ps -a -q --filter "label=com.docker.compose.service=backend")
+if ($LASTEXITCODE -ne 0) {
+  throw "Cannot find the existing backend configuration. Update aborted."
 }
-Move-Item -LiteralPath $tmpCompose -Destination "docker-compose.yml" -Force
-
-Write-Host "Refreshing .env.example (optional)..."
-try {
-  Download-File $envExampleUrl ".env.example"
-} catch {
-  # best-effort
+$selectedFiles = $null
+$selectedProject = $null
+$selectedDirectory = $null
+foreach ($backendId in $backendIds) {
+  # A quote-free template also works with Windows PowerShell's native argument
+  # passing. Read only labels rather than inspecting secret environment values.
+  $labelsJson = (& docker inspect --format '{{json .Config.Labels}}' $backendId | Out-String).Trim()
+  if ($LASTEXITCODE -ne 0) {
+    throw "Cannot inspect the existing backend. Update aborted."
+  }
+  $labels = $labelsJson | ConvertFrom-Json
+  if ($labels.'com.docker.compose.oneoff' -eq 'True') { continue }
+  $files = $labels.'com.docker.compose.project.config_files'
+  $project = $labels.'com.docker.compose.project'
+  $directory = $labels.'com.docker.compose.project.working_dir'
+  $belongsToInstall = -not [string]::IsNullOrWhiteSpace($directory) -and [string]::Equals($directory, $installPath, $pathComparison)
+  foreach ($file in @($files -split ',')) {
+    if ([string]::Equals($file, (Join-Path $installPath 'docker-compose.yml'), $pathComparison)) {
+      $belongsToInstall = $true
+    }
+  }
+  if (-not $belongsToInstall) { continue }
+  if ([string]::IsNullOrWhiteSpace($files) -or [string]::IsNullOrWhiteSpace($project) -or
+      -not (Test-Path -LiteralPath $directory -PathType Container)) {
+    throw "Cannot determine the existing backend's Compose project and files. Update aborted."
+  }
+  if ($null -ne $selectedFiles -and ($selectedFiles -cne $files -or $selectedProject -cne $project -or $selectedDirectory -cne $directory)) {
+    throw "Multiple Compose configurations match this installation. Update aborted."
+  }
+  $selectedFiles = $files
+  $selectedProject = $project
+  $selectedDirectory = $directory
 }
+$composeFileArgs = @()
+if ($null -ne $selectedFiles) {
+  $composeFileArgs += @("-p", $selectedProject, "--project-directory", $selectedDirectory)
+  foreach ($file in $selectedFiles.Split(',')) {
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+      throw "Existing Compose file is missing: $file. Update aborted."
+    }
+    $composeFileArgs += @("-f", $file)
+  }
+  Write-Host "Preserving Compose project $selectedProject and files: $selectedFiles"
+}
+$composeUpdateArgs = @($composeBaseArgs + $composeFileArgs)
+
+if (-not $LocalConfig) {
+  Write-Host "Downloading latest docker-compose.yml..."
+  $tmpCompose = "docker-compose.yml.new.$PID"
+  Download-File $composeUrl $tmpCompose
+
+  if (Test-Path -LiteralPath "docker-compose.yml") {
+    Copy-Item -LiteralPath "docker-compose.yml" -Destination "docker-compose.yml.bak" -Force
+  }
+  Move-Item -LiteralPath $tmpCompose -Destination "docker-compose.yml" -Force
+
+  Write-Host "Downloading production Compose configuration..."
+  $tmpProductionCompose = "docker-compose.production.yml.new.$PID"
+  Download-File $productionComposeUrl $tmpProductionCompose
+  Move-Item -LiteralPath $tmpProductionCompose -Destination "docker-compose.production.yml" -Force
+
+  Write-Host "Refreshing .env.example (optional)..."
+  try {
+    Download-File $envExampleUrl ".env.example"
+  } catch {
+    # best-effort
+  }
+}
+
+Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeUpdateArgs + @("config", "--quiet")) -What "Compose configuration validation"
 
 Write-Host "Pulling images..."
-Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeBaseArgs + @("-f", "docker-compose.yml", "pull")) -What "docker compose pull"
+Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeUpdateArgs + @("pull")) -What "docker compose pull"
 
 Write-Host "Migration safety: confirm you have coordinated PostgreSQL and Redis backups."
 Write-Host "Workspace migrations change resource ownership columns; rollback requires those backups."
 Write-Host "Stopping backend for database migration..."
-Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeBaseArgs + @("-f", "docker-compose.yml", "stop", "backend")) -What "docker compose stop backend"
+Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeUpdateArgs + @("stop", "backend")) -What "docker compose stop backend"
 
 Write-Host "Running database migration..."
-Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeBaseArgs + @("-f", "docker-compose.yml", "run", "--rm", "backend", "--migrate-only")) -What "backend database migration"
+Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeUpdateArgs + @("run", "--rm", "backend", "--migrate-only")) -What "backend database migration"
 
 Write-Host "Applying update..."
-Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeBaseArgs + @("-f", "docker-compose.yml", "up", "-d")) -What "docker compose up"
+$upArgs = @("up", "-d")
+if ($LocalConfig) { $upArgs += "--remove-orphans" }
+Invoke-NativeOrThrow -FilePath $composeFile -Arguments @($composeUpdateArgs + $upArgs) -What "docker compose up"
 
 Write-Host "Done."

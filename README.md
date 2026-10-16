@@ -208,8 +208,10 @@ Redis authentication, database access and backups for your deployment.
 
 The container waits up to 90 seconds on stop. The API drains for up to 20
 seconds, then background jobs stop and usage/statistics consumers finish their
-bounded flushes before Redis closes. Increase `BACKEND_STOP_GRACE_PERIOD` if
-you raise either shutdown timeout.
+bounded flushes. After statistics and reputation writers stop, read models
+refresh proxy filters, then drain all queued scrape-source statistics batches
+before Redis closes. Increase `BACKEND_STOP_GRACE_PERIOD` if you raise either
+shutdown timeout.
 
 Before releasing a backend image, run the fresh/repaired-volume production
 startup check:
@@ -551,6 +553,9 @@ Chromium starts only for browser sources. `SCRAPER_PAGE_POOL_MAX_CAPACITY`
 limits concurrent browser scrapes per instance, defaults to 4, and accepts 1–64.
 The former minimum page-pool setting no longer preallocates idle pages.
 `SCRAPER_POST_PROCESS_QUEUE_CAPACITY` defaults to 16 to limit queued HTML memory.
+Network failures for optional resources such as images leave valid proxy HTML
+and concurrent browser scrapes usable. Main-document failures and outbound
+policy violations still fail the scrape.
 
 New sources are eligible immediately and workers drain them at configured
 concurrency. Browser capacity failures, outages, timeouts, HTTP 429 and HTTP 5xx

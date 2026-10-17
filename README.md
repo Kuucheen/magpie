@@ -169,6 +169,13 @@ metrics and the statistics replay floor; an old pending event delays retirement.
 
 API clients may select a workspace with `X-Workspace-ID`. When omitted, the
 backend uses the authenticated account's default workspace membership.
+
+The notification bell shows the five latest invitations, workspace alerts, and
+releases. Its badge counts unread items in that list. Opening an item saves a
+per-account read receipt in PostgreSQL, shared across browsers. The normal
+`--migrate-only` update creates `notification_reads`; deploy the updated backend
+and frontend together. No new environment setting or volume is required.
+
 Workspace access is offered through expiring invitations for existing Magpie
 accounts. Accepting an invitation does not change the account's default
 workspace. SMTP is optional; pending invitations remain available in the app

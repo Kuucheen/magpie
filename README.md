@@ -288,6 +288,19 @@ webhooks are required; it also affects other application outbound requests.
 See the [alerts guide](https://magpie.tools/docs/user-guide/alerts) for incident,
 retry, and retention behavior.
 
+## Rotator creation and checker settings
+
+Rotators can be created with any supported upstream protocol even when all
+Default checker protocols are disabled or no healthy proxies are available.
+The frontend shows a warning when Default has no enabled protocols. To serve
+traffic, the rotator still needs active upstream proxies with current successful
+TCP checks for its selected protocol. Enable checks in Default settings or
+matching tag rules.
+
+Deploy the updated frontend and backend together. Older backends reject rotator
+creation for protocols disabled in Default settings. This change needs no schema
+migration or new environment setting.
+
 ## Tag checker settings upgrade
 
 Update the frontend and all backend replicas together. Run the migration with

@@ -578,10 +578,22 @@ and concurrent browser scrapes usable. Main-document failures and outbound
 policy violations still fail the scrape.
 
 New sources are eligible immediately and workers drain them at configured
-concurrency. Browser capacity failures, outages, timeouts, HTTP 429 and HTTP 5xx
-retry after 30 seconds or the scrape interval, whichever is shorter. Other
-failures use the normal interval. The source list and detail page show the last
-scrape outcome separately from proxy health.
+concurrency. Every completed fetch, successful or failed, waits the configured
+scrape interval before its next attempt. Repeated failures never increase that
+interval. A valid provider `Retry-After` can postpone the next attempt further.
+Browser capacity or startup problems leave that mode pending, without recording
+a failed scrape or fetching an already completed HTTP mode again. Local pending
+work is retried after 30 seconds or the scrape interval, whichever is shorter.
+The detail page shows the next scrape time and scheduling reason alongside the
+last scrape outcome. Manual requeues also respect provider retry deadlines and
+join an attempt that is already running. Workers renew their leases during long
+fetches and processing waits so completed work keeps its configured interval.
+
+Upgrade all backend replicas together to stop older workers from performing
+rapid upstream retries. Deploy the matching frontend to show scheduling details.
+This scheduling change needs no new environment settings or database migration.
+Redis holds shared mode progress and provider deadlines; losing Redis state
+reconstructs sources as immediately eligible during normal queue recovery.
 
 If a scrape logs `extended protocol limited to 65535 parameters`, upgrade to a
 backend build with the proxy-ingestion batching fix and retry the source. Older
